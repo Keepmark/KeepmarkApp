@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import { decryptData, deriveKey, encryptData } from '../src/shared/crypto';
+import { SyncClientVersion } from '../src/shared/constants';
+import { BookmarkContainer } from '../src/shared/bookmarks';
+import {
+  countNodes,
+  exportBackup,
+  importBackup,
+  validateTree,
+} from '../src/shared/backup';
+import {
+  deleteByIds,
+  getDuplicateGroups,
+  normalizeUrl,
+  planDuplicateDeletion,
+} from '../src/shared/duplicates';
+import { switchService } from '../src/shared/sync';
+import type { XSyncApiClient } from '../src/shared/api';
+import type { BookmarkNode } from '../src/shared/models';
+import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
+
+const tree: BookmarkNode[] = [
+  {
+    title: BookmarkContainer.Other,
+    children: [
+      { id: 1, title: 'A', url: 'https://a.test/' },
+      { id: 2, title: 'A dup', url: 'HTTPS://A.TEST' },
+      { id: 3, title: 'A third', url: 'https://a.test' },
+      { id: 4, title: 'B', url: 'https://b.test' },
+    ],
+  },
+];
+
+describe('backup envelope', () => {
+  it('round-trips through export/import', async () => {
+    const json = await exportBackup(tree, 'backup-password');
+    const parsed = JSON.parse(json);
+    expect(parsed.app).toBe('KeepmarkApp');
+    expect(parsed.format).toBe(1);
+    const back = await importBackup(json, 'backup-password');
+    expect(back).toEqual(tree);
+  });
+
+  it('rejects short passwords', async () => {
+    await expect(exportBackup(tree, 'short')).rejects.toThrow(/at least 8/);
+    await expect(importBackup('{}', 'short')).rejects.toThrow(/at least 8/);
+  });
+
+  it('rejects wrong password and bad format', async () => {
+    const json = await exportBackup(tree, 'backup-password');
+    await expect(importBackup(json, 'wrong-password')).rejects.toThrow(/Wrong backup password/);
+    await expect(importBackup('{"format":999}', 'backup-password')).rejects.toThrow(/Unsupported backup/);
+    await expect(importBackup('not json', 'backup-password')).rejects.toThrow(/valid JSON/);
+  });
+
+  it('validateTree rejects null nodes and counts nodes', () => {
+    expect(countNodes(tree)).toBe(5);
+    expect(() => validateTree([null as never])).toThrow(/invalid node/);
+    expect(() => validateTree('nope' as never)).toThrow(/bookmark tree/);
+  });
+
+  it('blob is opaque without the password (uses crypto envelope)', async () => {
+    const json = await exportBackup(tree, 'backup-password');
+    const { blob, salt } = JSON.parse(json);
+    const otherKey = await deriveKey('other-password', salt, SyncClientVersion);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(decryptData(blob, otherKey)).rejects.toBeInstanceOf(InvalidCredentialsException);
+    // Sanity: blob really encrypts the tree, not plaintext.
+    expect(blob).not.toContain('https');
+  });
+});
+
+describe('duplicates', () => {
+  it('groups by normalized url, sorted by size', () => {
+    const groups = getDuplicateGroups(tree);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].url).toBe('https://a.test');
+    expect(groups[0].entries.map((e) => e.id)).toEqual([1, 2, 3]);
+    expect(normalizeUrl('HTTPS://X.test/')).toBe('https://x.test');
+  });
+
+  it('plan locks the last copy', () => {
+    const groups = getDuplicateGroups(tree);
+    expect(planDuplicateDeletion(groups)).toEqual([1, 2]);
+    expect(planDuplicateDeletion(groups, new Set([2, 3]))).toEqual([2]); // 3 locked
+  });
+
+  it('deleteByIds removes a new tree', () => {
+    const out = deleteByIds(tree, new Set([1, 2]));
+    expect(out[0].children!.map((b) => b.id)).toEqual([3, 4]);
+    expect(tree[0].children).toHaveLength(4); // input untouched
+  });
+});
+
+describe('switchService', () => {
+  it('creates on the new service and uploads the tree', async () => {
+    const seen: { blob: string } = { blob: '' };
+    const newApi = {
+      createSync: async () => ({ id: 'moved-id', lastUpdated: 'm0', version: SyncClientVersion }),
+      updateBookmarks: async (_id: string, blob: string, _lu: string, _v: boolean) => {
+        seen.blob = blob;
+        return { lastUpdated: 'm1' };
+      },
+    } as unknown as XSyncApiClient;
+    const store = new Store(new MemoryBackend());
+    const { id } = await switchService(newApi, store, tree, 'new-password', 'https://new.example/');
+    expect(id).toBe('moved-id');
+    const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
+    expect(info).toMatchObject({ id: 'moved-id', serviceUrl: 'https://new.example/' });
+    const derived = await deriveKey('new-password', 'moved-id', SyncClientVersion);
+    expect(JSON.parse(await decryptData(seen.blob, derived))).toEqual(tree);
+    expect(await encryptData(JSON.stringify(tree), derived)).not.toBe('');
+  });
+});

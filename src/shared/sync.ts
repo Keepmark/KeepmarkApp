@@ -60,8 +60,9 @@ async function saveSyncState(
   info: SyncInfo,
   lastUpdated: string,
   encrypted: string,
+  serviceUrl?: string,
 ): Promise<void> {
-  await store.set(StoreKey.SyncInfo, info);
+  await store.set(StoreKey.SyncInfo, serviceUrl ? { ...info, serviceUrl } : info);
   await store.set(StoreKey.LastUpdated, lastUpdated);
   await store.set(StoreKey.Bookmarks, encrypted);
   await store.set(StoreKey.SyncEnabled, true);
@@ -71,7 +72,11 @@ async function saveSyncState(
  * New sync: POST create → derive key → read native tree → encrypt → PUT.
  * Mirrors first-sync Remote with !syncEnabled.
  */
-export async function createNewSync(deps: SyncDeps, password: string): Promise<{ id: string }> {
+export async function createNewSync(
+  deps: SyncDeps,
+  password: string,
+  serviceUrl?: string,
+): Promise<{ id: string }> {
   const { api, store, bookmarksApi, idMapper, log, syncToolbar } = deps;
   const created = await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
@@ -91,6 +96,7 @@ export async function createNewSync(deps: SyncDeps, password: string): Promise<{
     { id: created.id, password: derived, version: created.version },
     updated.lastUpdated!,
     encrypted,
+    serviceUrl,
   );
   log.log(XbsLogLevel.Info, 'sync', 'New sync created and native bookmarks uploaded');
   return { id: created.id };
@@ -106,6 +112,7 @@ export async function pullExistingSync(
   deps: SyncDeps,
   syncId: string,
   password: string,
+  serviceUrl?: string,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
   const { api, store, bookmarksApi, idMapper, log, syncToolbar } = deps;
   const versionRes = await api.getVersion(syncId);
@@ -141,6 +148,7 @@ export async function pullExistingSync(
     { id: syncId, password: derived, version: remoteVersion ?? undefined },
     res.lastUpdated!,
     res.bookmarks ?? '',
+    serviceUrl,
   );
   log.log(XbsLogLevel.Info, 'sync', 'Remote bookmarks pulled into native containers');
   return { bookmarks, lastUpdated: res.lastUpdated!, updateRemote };
@@ -162,4 +170,34 @@ export async function pushBookmarks(
   await store.set(StoreKey.LastUpdated, res.lastUpdated);
   await store.set(StoreKey.Bookmarks, encrypted);
   return res.lastUpdated!;
+}
+
+/**
+ * Move-service wizard (mirrors Keepmark SwitchService): create a fresh sync
+ * on the new service and upload the current tree. The caller passes the
+ * decrypted current tree (safety-backup of the old side is the caller's job).
+ */
+export async function switchService(
+  newApi: XSyncApiClient,
+  store: Store,
+  bookmarks: BookmarkNode[],
+  newPassword: string,
+  newServiceUrl: string,
+): Promise<{ id: string }> {
+  const created = await newApi.createSync();
+  if (!created.id || !created.lastUpdated || !created.version) {
+    const { UnexpectedResponseException } = await import('./errors.js');
+    throw new UnexpectedResponseException('Unexpected response from the service.');
+  }
+  const derived = await deriveKey(newPassword, created.id, created.version);
+  const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
+  const updated = await newApi.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
+  await saveSyncState(
+    store,
+    { id: created.id, password: derived, version: created.version },
+    updated.lastUpdated!,
+    encrypted,
+    newServiceUrl,
+  );
+  return { id: created.id };
 }
