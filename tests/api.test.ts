@@ -60,6 +60,31 @@ describe('api client', () => {
     expect(seenVersion).toBe('1.1.13');
   });
 
+  it('default fetch stays detached-safe (Firefox rejects unbound window fetch)', async () => {
+    // Regression: the default fetchFn must be a wrapper, never the bare
+    // global reference. Firefox throws "'fetch' called on an object that
+    // does not implement interface Window" when fetch runs with a non-Window
+    // receiver (e.g. called as a method on our client).
+    const log = new InMemoryLogger();
+    const api = new XSyncApiClient('https://example.test/', log);
+    expect((api as unknown as { fetchFn: unknown }).fetchFn).not.toBe(globalThis.fetch);
+
+    const realFetch = globalThis.fetch;
+    let observedThis: unknown = 'not-called';
+    globalThis.fetch = function (this: unknown) {
+      observedThis = this;
+      return Promise.resolve(jsonResponse(200, { status: 1, version: '1.1.13', maxSyncSize: 1 }));
+    } as typeof fetch;
+    try {
+      await api.getInfo();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    // Direct call shape: in a browser the receiver is the Window (works);
+    // the old code called the bare reference as a client method (throws).
+    expect(observedThis).toBeUndefined();
+  });
+
   it('network failure becomes ServiceOffline with the cause attached', async () => {
     const log = new InMemoryLogger();
     const api = new XSyncApiClient('https://example.test/', log, (async () => {

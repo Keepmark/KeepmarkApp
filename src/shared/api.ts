@@ -65,7 +65,10 @@ export class XSyncApiClient {
   constructor(
     serviceUrl: string,
     private log: IXbsLogger,
-    private fetchFn: FetchFn = fetch,
+    // NOTE: never default to the bare `fetch` reference — called detached it
+    // loses its Window receiver and Firefox throws "'fetch' called on an
+    // object that does not implement interface Window". The wrapper keeps it bound.
+    private fetchFn: FetchFn = (...args: Parameters<FetchFn>) => fetch(...args),
     private timeoutMs: number = DefaultHttpTimeoutMs,
   ) {
     this.baseUrl = `${serviceUrl.replace(/\/+$/, '')}/`;
