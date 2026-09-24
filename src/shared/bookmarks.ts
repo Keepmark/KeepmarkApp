@@ -204,9 +204,13 @@ export function nativeIsSeparator(node: NativeNode, newTabUrl: string): boolean 
 }
 
 /** Convert native nodes to synced bookmarks (no ids — assigned by dateAdded order). */
-export function nativeToSynced(nodes: NativeNode[], newTabUrl: string): BookmarkNode[] {
+export function nativeToSynced(
+  nodes: NativeNode[],
+  newTabUrl: string,
+  isSeparator: (node: NativeNode) => boolean = (n) => nativeIsSeparator(n, newTabUrl),
+): BookmarkNode[] {
   return nodes.map((native) => {
-    const url = nativeIsSeparator(native, newTabUrl) ? SeparatorUrl : native.url?.trim();
+    const url = isSeparator(native) ? SeparatorUrl : native.url?.trim();
     const node = newBookmark(native.title, url);
     if (native.children?.length) node.children = nativeToSynced(native.children, newTabUrl);
     else if (!url) node.children = [];

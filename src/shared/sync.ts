@@ -125,7 +125,27 @@ export async function pullExistingSync(
   const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
 
   const res = await api.getBookmarks(syncId);
-  const plain = await decryptData(res.bookmarks ?? '', derived);
+  return pullWithDerivedKey(deps, {
+    syncId,
+    derivedKey: derived,
+    blob: res.bookmarks ?? '',
+    lastUpdated: res.lastUpdated!,
+    remoteVersion: remoteVersion ?? undefined,
+  }, serviceUrl);
+}
+
+/**
+ * Local-pull core working from an already-derived key. Used by
+ * pullExistingSync and by the background queue (which stores the derived
+ * key, never the raw password).
+ */
+export async function pullWithDerivedKey(
+  deps: SyncDeps,
+  input: { syncId: string; derivedKey: string; blob: string; lastUpdated: string; remoteVersion?: string },
+  serviceUrl?: string,
+): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
+  const { store, bookmarksApi, idMapper, log, syncToolbar } = deps;
+  const plain = await decryptData(input.blob, input.derivedKey);
   let bookmarks = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
   let updateRemote = false;
 
@@ -145,13 +165,13 @@ export async function pullExistingSync(
   await idMapper.set(mappings);
   await saveSyncState(
     store,
-    { id: syncId, password: derived, version: remoteVersion ?? undefined },
-    res.lastUpdated!,
-    res.bookmarks ?? '',
+    { id: input.syncId, password: input.derivedKey, version: input.remoteVersion },
+    input.lastUpdated,
+    input.blob,
     serviceUrl,
   );
   log.log(XbsLogLevel.Info, 'sync', 'Remote bookmarks pulled into native containers');
-  return { bookmarks, lastUpdated: res.lastUpdated!, updateRemote };
+  return { bookmarks, lastUpdated: input.lastUpdated, updateRemote };
 }
 
 /** Encrypt the full tree and PUT it (optimistic lastUpdated; 409 → DataOutOfSync). */
