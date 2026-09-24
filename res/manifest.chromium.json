@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Keepmark",
+  "description": "Keepmark bookmark sync (xBrowserSync-compatible).",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Keepmark"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"],
+  "optional_host_permissions": ["http://*/", "https://*/"]
+}

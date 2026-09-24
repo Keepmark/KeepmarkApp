@@ -9,7 +9,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "build": "tsc --noEmit && vite build --config vite.firefox.ts"
+    "build": "npm run build:firefox && npm run build:chromium",
+    "build:firefox": "tsc --noEmit && vite build --config vite.firefox.ts",
+    "build:chromium": "tsc --noEmit && vite build --config vite.chromium.ts && vite build --config vite.chromium-sw.ts",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "lzutf8": "0.6.0",

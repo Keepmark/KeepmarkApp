@@ -8,7 +8,7 @@
 // Guards mirror BackupGuard: password >= 8 chars, .json suffix on paths,
 // 50MB / 200k nodes bounds, BFS tree validation.
 
-import { decryptData, deriveKey } from './crypto.js';
+import { decryptData, deriveKey, encryptData } from './crypto.js';
 import { SyncClientVersion } from './constants.js';
 import type { BookmarkNode } from './models.js';
 import { eachBookmark } from './bookmarks.js';
@@ -67,7 +67,6 @@ export async function exportBackup(nodes: BookmarkNode[], password: string): Pro
   validateTree(nodes);
   const salt = randomSalt();
   const key = await deriveKey(password, salt, SyncClientVersion);
-  const { encryptData } = await import('./crypto.js');
   const blob = await encryptData(JSON.stringify(nodes), key);
   const envelope: BackupEnvelope = { app: BackupAppName, format: BackupFormat, salt, blob };
   return JSON.stringify(envelope);

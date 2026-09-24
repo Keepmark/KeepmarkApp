@@ -118,3 +118,6 @@ export async function resolveParent(
 }
 
 export type { BookmarkApi, NativeNode };
+
+/** Build-config alias so the background entry stays platform-agnostic. */
+export const makeAdapter = makeChromiumAdapter;

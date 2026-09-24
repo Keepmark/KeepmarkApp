@@ -10,7 +10,11 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@platform/*": ["src/firefox/*"]
+    }
   },
   "include": ["src", "tests"]
 }

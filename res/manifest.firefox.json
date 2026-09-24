@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "name": "Keepmark",
+  "description": "Keepmark bookmark sync (xBrowserSync-compatible).",
+  "version": "0.1.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{keepmark-firefox@proton.me}",
+      "strict_min_version": "109.0"
+    }
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Keepmark"
+  },
+  "background": {
+    "page": "background.html"
+  },
+  "permissions": ["activeTab", "alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"],
+  "optional_permissions": ["http://*/", "https://*/"],
+  "content_security_policy": "connect-src *; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';",
+  "incognito": "not_allowed"
+}

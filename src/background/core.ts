@@ -159,6 +159,11 @@ export class BackgroundCore {
 
   /** Enqueue through the real queue to keep FIFO order with native events. */
   private async queueSync(type: SyncJobType, bookmarks?: BookmarkNode[]): Promise<{ queued: boolean }> {
+    // "Sync now" semantics for manual remote syncs: pull first when the
+    // remote moved, then push — a single round trip from the popup.
+    if (type === 'remote') {
+      await this.checkForUpdates();
+    }
     this.queue.enqueue(type, false, bookmarks);
     const err = await this.drain();
     if (err) throw err;

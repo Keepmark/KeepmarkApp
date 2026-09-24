@@ -1,0 +1,174 @@
+:root {
+  color-scheme: light dark;
+  --bg: Canvas;
+  --fg: CanvasText;
+  --accent: #2f6fed;
+  --danger: #c0392b;
+  --muted: GrayText;
+  --border: ButtonBorder;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  max-height: 560px;
+  margin: 0;
+  padding: 10px 12px 14px;
+  font: 13px/1.4 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  overflow-y: auto;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+h1 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+h2 {
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+.state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+label {
+  display: block;
+  margin: 6px 0;
+}
+
+input[type="text"],
+input[type="url"],
+input[type="password"],
+input[type="search"],
+select {
+  width: 100%;
+  padding: 5px 6px;
+  margin-top: 2px;
+  font: inherit;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+button {
+  font: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+.error {
+  color: var(--danger);
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.toolbar input {
+  flex: 1;
+  margin: 0;
+}
+
+#results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#results li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px dotted var(--border);
+}
+
+#results .link {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+#results .path {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#results .del {
+  flex: none;
+}
+
+details {
+  margin-top: 10px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dup-group {
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.dup-group ul {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+.check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

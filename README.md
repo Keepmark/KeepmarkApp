@@ -1,4 +1,4 @@
-# KeepmarkApp — browser extension (Firefox first, then Chromium MV3)
+# KeepmarkApp — browser extension (Firefox MV2 + Chromium MV3)
 
 xBrowserSync-compatible bookmark sync. New codebase, inspired by `../app`
 (browser-extension logic) with the robustness rules of `../Keepmark`
@@ -6,8 +6,8 @@ xBrowserSync-compatible bookmark sync. New codebase, inspired by `../app`
 
 ## Stack
 
-TypeScript strict + `webextension-polyfill` + `lzutf8@0.6.0` + Vitest.
-No UI framework yet (popup comes in Fase 2/3).
+TypeScript strict + `webextension-polyfill` + `lzutf8@0.6.0` + Vitest + Vite.
+Popup is vanilla TS (no framework, for MV3 longevity).
 
 ## Interop contract (load-bearing)
 
@@ -24,17 +24,56 @@ No UI framework yet (popup comes in Fase 2/3).
 
 ```sh
 npm install
-npm test        # vitest run: crypto interop + api error mapping + versions
-npm run lint    # tsc --noEmit
+npm test              # vitest: crypto/api/bookmarks/sync/queue/reconcile/backup/core
+npm run lint          # tsc --noEmit
+npm run build         # both platforms -> build/firefox, build/chromium
+npm run build:firefox
+npm run build:chromium
+npm run package       # zips -> dist/ (system zip or python3 fallback)
 ```
 
 ## Layout
 
 - `src/shared/` — platform-agnostic core: `constants`, `errors`, `models`,
-  `bookmarks` (tree helpers), `crypto`, `api`, `logging`, `store`
-  (`StoreKey` + backends), `id-mapper`, `sync` (first-sync flows).
-- `src/firefox/` — `platform` (URL rules, root ids), `bookmarks`
-  (native service with injected `BookmarkApi`: read/clear/populate/mappings).
-- `tests/` — `crypto`, `api`, `bookmarks`, `firefox-bookmarks` (in-memory
-  `browser.bookmarks` mock), `sync` (create/pull/push flows), `vectors.json`.
-- Manifest MV2 + background queue + popup UI: Fase 3. Chromium MV3: dopo.
+  `bookmarks` (tree helpers), `native` (generic read/clear/populate/mappings),
+  `crypto`, `api`, `logging`, `store` (`StoreKey` + backends), `id-mapper`,
+  `sync` (first-sync flows), `sync-queue` (gated FIFO + failure policy),
+  `reconcile` (native→synced whole-tree pass), `messages` (popup↔background
+  protocol + error wire format), `backup`, `duplicates`.
+- `src/firefox/` — `platform` (about: rules, fixed roots), `bookmarks`
+  (3 containers, `type:'separator'`), `adapter` (NativeAdapter).
+- `src/chromium/` — `platform` (chrome:/edge: rules, roots 2/1),
+  `bookmarks` (Menu = folder in Other, bookmark-style separators), `adapter`.
+- `src/background/` — `core.ts` (queue owner: jobs, alarms, listeners,
+  all message handlers), `adapter.ts` (NativeAdapter interface),
+  `background.ts` (browser wiring; `@platform/adapter` alias per build).
+- `src/popup/` — connect / search+list / add / settings (status, toolbar
+  toggle, backup export-import, duplicates, move-service, unlink).
+- `src/popup.html`, `src/background.html` — vite entries (land at output root).
+- `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
+- `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.
+
+## Sync model
+
+- Whole-blob: every push uploads the full tree with optimistic `lastUpdated`.
+- Queue lives only in the background context; popup talks via messages.
+- Native edits (listener debounce, popup add/remove) reconcile native→synced
+  through stored id mappings (stable ids), then push.
+- 409: stash the uncommitted tree as a `keepmark-conflict-*.json` download,
+  notify, then pull latest. Never auto-merge, never drop silently.
+- Sync loss (401): queue cleared, credentials wiped, notification.
+- "Sync now" = pull-if-newer then push.
+
+## Platform differences (from the original client)
+
+- Firefox: roots `menu________/unfiled_____/toolbar_____`, all 3 containers,
+  native separators, `about:newtab`.
+- Chromium: roots Other=`2` + Toolbar=`1`, no Menu root (folder `[xbs] Menu`
+  inside Other), separators are `───` / `|` bookmarks, `chrome://newtab/`.
+
+## Install for testing
+
+- Firefox: `about:debugging → This Firefox → Load Temporary Add-on →
+  build/firefox/manifest.json`.
+- Chromium: `chrome://extensions → Developer mode → Load unpacked →
+  build/chromium`.

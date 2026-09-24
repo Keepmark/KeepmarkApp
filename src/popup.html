@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keepmark</title>
+  <link rel="stylesheet" href="./popup/popup.css" />
+</head>
+<body>
+  <header>
+    <h1>Keepmark</h1>
+    <div id="sync-state" class="state">…</div>
+  </header>
+
+  <section id="view-connect">
+    <h2>Connect</h2>
+    <label>Service URL
+      <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
+    </label>
+    <label>Sync ID <span class="hint">(existing sync only)</span>
+      <input id="sync-id" type="text" placeholder="optional for a new sync" />
+    </label>
+    <label>Password
+      <input id="password" type="password" autocomplete="current-password" />
+    </label>
+    <div id="connect-error" class="error" hidden></div>
+    <div class="row">
+      <button id="btn-new-sync">New sync</button>
+      <button id="btn-existing-sync">Use existing</button>
+    </div>
+  </section>
+
+  <section id="view-main" hidden>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Search bookmarks…" />
+      <button id="btn-sync-now" title="Sync now">⇅</button>
+      <button id="btn-settings" title="Settings">⚙</button>
+    </div>
+    <div id="main-error" class="error" hidden></div>
+    <ul id="results"></ul>
+    <details id="add-box">
+      <summary>Add bookmark</summary>
+      <label>Title <input id="add-title" type="text" /></label>
+      <label>URL <input id="add-url" type="url" /></label>
+      <label>Folder
+        <select id="add-container">
+          <option value="[xbs] Other">Other</option>
+          <option value="[xbs] Menu">[xbs] Menu</option>
+          <option value="[xbs] Toolbar">Toolbar</option>
+        </select>
+      </label>
+      <button id="btn-add">Add + sync</button>
+    </details>
+  </section>
+
+  <section id="view-settings" hidden>
+    <h2>Settings</h2>
+    <div id="settings-error" class="error" hidden></div>
+    <dl id="service-info"></dl>
+    <label class="check"><input id="opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
+    <div class="row">
+      <button id="btn-export">Export backup</button>
+      <button id="btn-import">Import backup</button>
+      <input id="import-file" type="file" accept=".json,application/json" hidden />
+    </div>
+    <details id="dup-box">
+      <summary>Duplicates <span id="dup-count"></span></summary>
+      <div id="dup-list"></div>
+    </details>
+    <details id="switch-box">
+      <summary>Move to another service</summary>
+      <label>New service URL <input id="switch-url" type="url" /></label>
+      <label>New password <input id="switch-password" type="password" /></label>
+      <button id="btn-switch">Move sync</button>
+    </details>
+    <div class="row">
+      <button id="btn-back">← Back</button>
+      <button id="btn-unlink" class="danger">Unlink</button>
+    </div>
+  </section>
+
+  <script type="module" src="./popup/popup.ts"></script>
+</body>
+</html>

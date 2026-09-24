@@ -15,6 +15,7 @@ import {
 import type { IXbsLogger } from './logging.js';
 import { XbsLogLevel } from './logging.js';
 import type { BookmarkNode, ServiceInfo } from './models.js';
+import { UnexpectedResponseException } from './errors.js';
 import { ServiceStatus } from './models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from './bookmarks.js';
 import type { XSyncApiClient } from './api.js';
@@ -74,7 +75,6 @@ export async function createNewSync(
   const { api, store, native, idMapper, log, syncToolbar } = deps;
   const created = await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
-    const { UnexpectedResponseException } = await import('./errors.js');
     throw new UnexpectedResponseException('Unexpected response from the service.');
   }
   const derived = await deriveKey(password, created.id, created.version);
@@ -199,7 +199,6 @@ export async function switchService(
 ): Promise<{ id: string }> {
   const created = await newApi.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
-    const { UnexpectedResponseException } = await import('./errors.js');
     throw new UnexpectedResponseException('Unexpected response from the service.');
   }
   const derived = await deriveKey(newPassword, created.id, created.version);

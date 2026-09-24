@@ -4,7 +4,7 @@
 // Accept-Version header pinned, bodies never logged.
 
 import { ApiVersion, DefaultHttpTimeoutMs, SyncClientVersion } from './constants.js';
-import { errorForStatus, UnexpectedResponseException, XbsException } from './errors.js';
+import { errorForStatus, ServiceOfflineException, UnexpectedResponseException, XbsException } from './errors.js';
 import type { IXbsLogger } from './logging.js';
 import { XbsLogLevel } from './logging.js';
 import { sanitizePath } from './logging.js';
@@ -190,7 +190,6 @@ export class XSyncApiClient {
         'net',
         aborted ? `← TIMEOUT ${label}` : `← FAIL ${label}: ${(err as Error)?.name ?? 'fetch'}`,
       );
-      const { ServiceOfflineException } = await import('./errors.js');
       throw new ServiceOfflineException(tr('ErrServiceOffline'), { cause: err });
     } finally {
       clearTimeout(timer);
