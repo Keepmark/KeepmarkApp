@@ -10,7 +10,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "{keepmark-firefox@proton.me}",
+      "id": "keepmark-firefox@proton.me",
       "strict_min_version": "109.0"
     }
   },
