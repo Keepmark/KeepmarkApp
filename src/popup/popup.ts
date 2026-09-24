@@ -183,6 +183,12 @@ async function initConnect(): Promise<void> {
   };
   $('btn-new-sync').addEventListener('click', () => void connect(false));
   $('btn-existing-sync').addEventListener('click', () => void connect(true));
+  $('btn-open-tab').addEventListener('click', () => {
+    // Popups close on focus loss (by design) — a full tab stays open while
+    // copying credentials from a vault. State carries over via storage.
+    const url = browser.runtime.getURL('popup.html?fullpage=1');
+    void browser.tabs.create({ url }).then(() => window.close());
+  });
 }
 
 function initMain(): void {
@@ -354,6 +360,9 @@ function initSettings(): void {
 }
 
 async function init(): Promise<void> {
+  if (new URLSearchParams(location.search).has('fullpage')) {
+    document.body.classList.add('fullpage');
+  }
   await initConnect();
   initMain();
   initSettings();

@@ -23,6 +23,14 @@ body {
   overflow-y: auto;
 }
 
+/* Full-tab mode (?fullpage=1): centered column instead of popup box. */
+body.fullpage {
+  width: auto;
+  max-height: none;
+  max-width: 560px;
+  margin: 24px auto;
+}
+
 header {
   display: flex;
   align-items: baseline;
