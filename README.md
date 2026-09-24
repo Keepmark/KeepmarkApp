@@ -31,6 +31,10 @@ npm run lint    # tsc --noEmit
 ## Layout
 
 - `src/shared/` — platform-agnostic core: `constants`, `errors`, `models`,
-  `crypto`, `api`, `logging`. Edit here for cross-platform logic.
-- `tests/` — `crypto.test.ts`, `api.test.ts`, `vectors.json`.
-- Firefox MV2 manifest + background + popup: Fase 2. Chromium MV3: Fase 6.
+  `bookmarks` (tree helpers), `crypto`, `api`, `logging`, `store`
+  (`StoreKey` + backends), `id-mapper`, `sync` (first-sync flows).
+- `src/firefox/` — `platform` (URL rules, root ids), `bookmarks`
+  (native service with injected `BookmarkApi`: read/clear/populate/mappings).
+- `tests/` — `crypto`, `api`, `bookmarks`, `firefox-bookmarks` (in-memory
+  `browser.bookmarks` mock), `sync` (create/pull/push flows), `vectors.json`.
+- Manifest MV2 + background queue + popup UI: Fase 3. Chromium MV3: dopo.
