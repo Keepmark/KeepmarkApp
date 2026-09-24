@@ -10,12 +10,15 @@
 import { DataOutOfSyncException, IncompleteSyncInfoException, ServiceOfflineException, SyncNotFoundException } from './errors.js';
 import type { IXbsLogger } from './logging.js';
 import { XbsLogLevel } from './logging.js';
+import type { BookmarkNode } from './models.js';
 import type { SyncJobType } from './messages.js';
 
 export interface SyncJob {
   id: number;
   type: SyncJobType;
   run?: boolean;
+  /** Full tree for localAndRemote (restore) jobs. */
+  bookmarks?: BookmarkNode[];
 }
 
 export class SyncQueue {
@@ -43,8 +46,8 @@ export class SyncQueue {
   }
 
   /** Enqueue a job; cancel-type clears the queue first (mirrors SyncType.Cancel). */
-  enqueue(type: SyncJobType, run = true): number {
-    const job: SyncJob = { id: this.nextId++, type, run };
+  enqueue(type: SyncJobType, run = true, bookmarks?: SyncJob['bookmarks']): number {
+    const job: SyncJob = { id: this.nextId++, type, run, bookmarks };
     this.jobs.push(job);
     if (run) void this.execute();
     return job.id;

@@ -6,29 +6,48 @@ import type { XSyncApiClient } from '../src/shared/api';
 import { BookmarkIdMapper } from '../src/shared/id-mapper';
 import { InMemoryLogger } from '../src/shared/logging';
 import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
+import {
+  buildIdMappings,
+  clearNativeBookmarks,
+  createNativeBookmarksFromBookmarks,
+  getNativeBookmarksAsBookmarks,
+} from '../src/firefox/bookmarks';
 import { makeMockApi } from './firefox-bookmarks.test';
 
-function makeDeps(api: Partial<XSyncApiClient>, syncToolbar = true): { deps: SyncDeps; store: Store } {
+type MockBookmarksApi = ReturnType<typeof makeMockApi>;
+
+function makeDeps(
+  api: Partial<XSyncApiClient>,
+  syncToolbar = true,
+): { deps: SyncDeps; store: Store; mockApi: MockBookmarksApi } {
   const store = new Store(new MemoryBackend());
+  const mockApi = makeMockApi();
   const deps: SyncDeps = {
     api: api as XSyncApiClient,
     store,
-    bookmarksApi: makeMockApi(),
+    native: {
+      readAll: (t) => getNativeBookmarksAsBookmarks(mockApi, t),
+      clearAndPopulate: async (b, t) => {
+        await clearNativeBookmarks(mockApi, t);
+        await createNativeBookmarksFromBookmarks(mockApi, b, t);
+      },
+      rebuildMappings: (b, t) => buildIdMappings(mockApi, b, t),
+    },
     idMapper: new BookmarkIdMapper(store),
     log: new InMemoryLogger(),
     syncToolbar,
   };
-  return { deps, store };
+  return { deps, store, mockApi };
 }
 
 describe('first-sync flows', () => {
   it('createNewSync uploads the native tree and stores credentials', async () => {
     const password = 'correct horse battery staple';
-    const { deps, store } = makeDeps({
+    const { deps, store, mockApi } = makeDeps({
       createSync: async () => ({ id: 'new-id', lastUpdated: 't0', version: SyncClientVersion }),
       updateBookmarks: async () => ({ lastUpdated: 't1' }),
     });
-    await deps.bookmarksApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
+    await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
 
     const { id } = await createNewSync(deps, password);
     expect(id).toBe('new-id');
@@ -46,7 +65,7 @@ describe('first-sync flows', () => {
     const derived = await deriveKey(password, syncId, SyncClientVersion);
     const remote = [{ id: 1, title: '[xbs] Other', children: [{ id: 2, title: 'R', url: 'https://r.test' }] }];
     const blob = await encryptData(JSON.stringify(remote), derived);
-    const { deps, store } = makeDeps({
+    const { deps, store, mockApi } = makeDeps({
       getVersion: async () => ({ version: SyncClientVersion }),
       getBookmarks: async () => ({ bookmarks: blob, version: SyncClientVersion, lastUpdated: 't9' }),
     });
@@ -54,7 +73,7 @@ describe('first-sync flows', () => {
     const res = await pullExistingSync(deps, syncId, password);
     expect(res.updateRemote).toBe(true); // Menu/Toolbar containers added
     expect(res.lastUpdated).toBe('t9');
-    const children = await deps.bookmarksApi.getChildren('unfiled_____');
+    const children = await mockApi.getChildren('unfiled_____');
     expect(children.map((c) => c.title)).toContain('R');
     expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
   });

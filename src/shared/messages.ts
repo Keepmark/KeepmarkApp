@@ -21,6 +21,9 @@ import type { BookmarkNode } from './models.js';
 export enum MessageCommand {
   SyncBookmarks = 'sync-bookmarks',
   RestoreBookmarks = 'restore-bookmarks',
+  ConnectNew = 'connect-new',
+  ConnectExisting = 'connect-existing',
+  AddBookmark = 'add-bookmark',
   DisableSync = 'disable-sync',
   GetStatus = 'get-status',
   GetDuplicates = 'get-duplicates',
@@ -63,6 +66,9 @@ export interface DuplicateGroup {
 export type MessagePayload =
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
+  | { command: MessageCommand.ConnectNew; serviceUrl: string; password: string }
+  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string }
+  | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
   | { command: MessageCommand.GetDuplicates }

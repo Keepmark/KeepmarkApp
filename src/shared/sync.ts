@@ -20,18 +20,12 @@ import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '.
 import type { XSyncApiClient } from './api.js';
 import { Store, StoreKey, type SyncInfo } from './store.js';
 import { BookmarkIdMapper } from './id-mapper.js';
-import {
-  buildIdMappings,
-  clearNativeBookmarks,
-  createNativeBookmarksFromBookmarks,
-  getNativeBookmarksAsBookmarks,
-  type BookmarkApi,
-} from '../firefox/bookmarks.js';
+import type { NativeOps } from './native.js';
 
 export interface SyncDeps {
   api: XSyncApiClient;
   store: Store;
-  bookmarksApi: BookmarkApi;
+  native: NativeOps;
   idMapper: BookmarkIdMapper;
   log: IXbsLogger;
   syncToolbar: boolean;
@@ -77,7 +71,7 @@ export async function createNewSync(
   password: string,
   serviceUrl?: string,
 ): Promise<{ id: string }> {
-  const { api, store, bookmarksApi, idMapper, log, syncToolbar } = deps;
+  const { api, store, native, idMapper, log, syncToolbar } = deps;
   const created = await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
     const { UnexpectedResponseException } = await import('./errors.js');
@@ -85,11 +79,11 @@ export async function createNewSync(
   }
   const derived = await deriveKey(password, created.id, created.version);
 
-  const bookmarks = await getNativeBookmarksAsBookmarks(bookmarksApi, syncToolbar);
+  const bookmarks = await native.readAll(syncToolbar);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
   const updated = await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
 
-  const mappings = await buildIdMappings(bookmarksApi, bookmarks, syncToolbar);
+  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
   await idMapper.set(mappings);
   await saveSyncState(
     store,
@@ -114,7 +108,7 @@ export async function pullExistingSync(
   password: string,
   serviceUrl?: string,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
-  const { api, store, bookmarksApi, idMapper, log, syncToolbar } = deps;
+  const { api, store, native, idMapper, log, syncToolbar } = deps;
   const versionRes = await api.getVersion(syncId);
   const remoteVersion = versionRes.version;
   if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
@@ -144,7 +138,7 @@ export async function pullWithDerivedKey(
   input: { syncId: string; derivedKey: string; blob: string; lastUpdated: string; remoteVersion?: string },
   serviceUrl?: string,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
-  const { store, bookmarksApi, idMapper, log, syncToolbar } = deps;
+  const { store, native, idMapper, log, syncToolbar } = deps;
   const plain = await decryptData(input.blob, input.derivedKey);
   let bookmarks = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
   let updateRemote = false;
@@ -159,9 +153,8 @@ export async function pullWithDerivedKey(
     updateRemote = true;
   }
 
-  await clearNativeBookmarks(bookmarksApi, syncToolbar);
-  await createNativeBookmarksFromBookmarks(bookmarksApi, bookmarks, syncToolbar);
-  const mappings = await buildIdMappings(bookmarksApi, bookmarks, syncToolbar);
+  await native.clearAndPopulate(bookmarks, syncToolbar);
+  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
   await idMapper.set(mappings);
   await saveSyncState(
     store,

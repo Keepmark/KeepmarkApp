@@ -53,6 +53,23 @@ export class ContainerNotFoundError extends Error {
   }
 }
 
+/** Platform-native operations injected per browser (firefox/chromium adapters). */
+export interface NativeOps {
+  readAll(syncToolbar: boolean): Promise<BookmarkNode[]>;
+  clearAndPopulate(bookmarks: BookmarkNode[], syncToolbar: boolean): Promise<void>;
+  rebuildMappings(bookmarks: BookmarkNode[], syncToolbar: boolean): Promise<BookmarkIdMapping[]>;
+}
+
+export function makeNativeOps(api: BookmarkApi, ids: ContainerIds, opts: NativeOpts): NativeOps {
+  return {
+    readAll: (syncToolbar) => readAll(api, ids, opts, syncToolbar),
+    clearAndPopulate: async (bookmarks, syncToolbar) => {
+      await clearAll(api, ids, syncToolbar);
+      await populate(api, ids, bookmarks, opts, syncToolbar);
+    },
+    rebuildMappings: (bookmarks, syncToolbar) => buildMappings(api, ids, bookmarks, opts, syncToolbar),
+  };
+}
 /** Chromium separator rule: dashes-only title without children, or legacy titles + newtab url. */
 export function chromiumIsSeparator(node: NativeNode, newTabUrl: string): boolean {
   if (!node || node.title === undefined) return false;
