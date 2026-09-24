@@ -1,5 +1,5 @@
 // Shared vite bits: '@platform' alias selects the firefox|chromium adapter,
-// 'copy-manifest' drops the right manifest.json into the output dir.
+// 'copy-static' drops manifest.json + assets/ into the output dir.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpSync, mkdirSync } from 'node:fs';
@@ -13,12 +13,13 @@ export function platformAlias(platform: 'firefox' | 'chromium') {
   };
 }
 
-export function copyManifest(platform: 'firefox' | 'chromium', outDir: string): Plugin {
+export function copyStatic(platform: 'firefox' | 'chromium', outDir: string): Plugin {
   return {
-    name: 'copy-manifest',
+    name: 'copy-static',
     closeBundle() {
       mkdirSync(outDir, { recursive: true });
       cpSync(path.join(root, 'res', `manifest.${platform}.json`), path.join(outDir, 'manifest.json'));
+      cpSync(path.join(root, 'res', 'assets'), path.join(outDir, 'assets'), { recursive: true });
     },
   };
 }

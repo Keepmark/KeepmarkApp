@@ -1,6 +1,6 @@
 // Chromium MV3 build, part 1: popup page.
 import { defineConfig } from 'vite';
-import { copyManifest, platformAlias, root } from './vite.shared';
+import { copyStatic, platformAlias, root } from './vite.shared';
 
 const outDir = `${root}/build/chromium`;
 
@@ -19,5 +19,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [copyManifest('chromium', outDir)],
+  plugins: [copyStatic('chromium', outDir)],
 });

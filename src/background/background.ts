@@ -55,7 +55,11 @@ async function main(): Promise<void> {
 function ports(): CorePorts {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const action = ((browser as any).action ?? (browser as any).browserAction) as
-    | { setBadgeText(details: { text: string }): Promise<void>; setTitle(details: { title: string }): Promise<void> }
+    | {
+        setBadgeText(details: { text: string }): Promise<void>;
+        setTitle(details: { title: string }): Promise<void>;
+        setIcon(details: { path: string }): Promise<void>;
+      }
     | undefined;
   return {
     alarms: {
@@ -84,12 +88,13 @@ function ports(): CorePorts {
     chrome: {
       setBadge: async (text, title) => {
         if (!action) return;
+        await action.setIcon({ path: text === '!' ? 'assets/notsynced32.png' : 'assets/icon32.png' }).catch(() => undefined);
         await action.setBadgeText({ text }).catch(() => undefined);
         await action.setTitle({ title }).catch(() => undefined);
       },
       notify: async (title, message) => {
         await browser.notifications
-          .create({ type: 'basic', title, message })
+          .create({ type: 'basic', title, message, iconUrl: 'assets/icon48.png' })
           .then(() => undefined)
           .catch(() => undefined);
       },
