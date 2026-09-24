@@ -190,7 +190,10 @@ export class XSyncApiClient {
         'net',
         aborted ? `← TIMEOUT ${label}` : `← FAIL ${label}: ${(err as Error)?.name ?? 'fetch'}`,
       );
-      throw new ServiceOfflineException(tr('ErrServiceOffline'), { cause: err });
+      throw new ServiceOfflineException(
+        `${tr('ErrServiceOffline')}${err instanceof Error ? ` (${err.name}: ${err.message})` : ''}`,
+        { cause: err },
+      );
     } finally {
       clearTimeout(timer);
     }

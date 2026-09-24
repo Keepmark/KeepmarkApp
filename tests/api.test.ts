@@ -60,12 +60,23 @@ describe('api client', () => {
     expect(seenVersion).toBe('1.1.13');
   });
 
-  it('network failure becomes ServiceOffline', async () => {
+  it('network failure becomes ServiceOffline with the cause attached', async () => {
     const log = new InMemoryLogger();
     const api = new XSyncApiClient('https://example.test/', log, (async () => {
       throw new TypeError('fetch failed');
     }) as typeof fetch);
-    await expect(api.getInfo()).rejects.toBeInstanceOf(ServiceOfflineException);
+    const err = await api.getInfo().catch((e: Error) => e);
+    expect(err).toBeInstanceOf(ServiceOfflineException);
+    expect(err.message).toContain('fetch failed');
+  });
+
+  it('unmapped HTTP status is reported with its code', async () => {
+    const log = new InMemoryLogger();
+    const api = new XSyncApiClient('https://example.test/', log, (async () =>
+      jsonResponse(418, { message: '' })) as typeof fetch);
+    const err = await api.getInfo().catch((e: Error) => e);
+    expect(err).toBeInstanceOf(ServiceOfflineException);
+    expect(err.message).toContain('418');
   });
 });
 

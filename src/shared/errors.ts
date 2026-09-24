@@ -50,8 +50,10 @@ export class UnexpectedResponseException extends XbsException {}
 
 /** Map an HTTP status to the matching typed error (shared by api client + tests). */
 export function errorForStatus(status: number, serverMessage: string, local: (key: string) => string): XbsException {
-  const withServer = (msg: string): string =>
-    serverMessage.trim() ? `${msg} (server: ${serverMessage.trim()})` : msg;
+  const withServer = (msg: string): string => {
+    const suffix = serverMessage.trim() ? ` (server: ${serverMessage.trim()})` : ` (HTTP ${status})`;
+    return `${msg}${suffix}`;
+  };
   switch (status) {
     case 401:
       return new SyncNotFoundException(withServer(local('ErrSyncNotFound')));

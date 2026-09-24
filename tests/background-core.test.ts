@@ -311,6 +311,20 @@ describe('background core', () => {
     expect(status.syncId).toBe(SYNC_ID);
     expect(status.queueLength).toBe(0);
   });
+
+  it('get-logs exposes background entries without secrets', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const entries = (await core.handleMessage({ command: MessageCommand.GetLogs })) as {
+      timestamp: string;
+      level: number;
+      tag: string;
+      message: string;
+    }[];
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.some((e) => e.tag === 'sync')).toBe(true);
+    expect(JSON.stringify(entries)).not.toContain(PASSWORD);
+  });
 });
 
 async function store_blob(core: BackgroundCore): Promise<string> {

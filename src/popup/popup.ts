@@ -357,6 +357,20 @@ function initSettings(): void {
       showError('settings', (err as Error).message);
     }
   });
+  $('btn-logs').addEventListener('click', async () => {
+    clearErrors();
+    try {
+      const entries = await send<{ timestamp: string; level: number; tag: string; message: string }[]>({
+        command: MessageCommand.GetLogs,
+      });
+      const names = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'VERBOSE'];
+      $('log-list').textContent = entries
+        .map((e) => `${e.timestamp} [${names[e.level] ?? e.level}] ${e.tag}: ${e.message}`)
+        .join('\n');
+    } catch (err) {
+      showError('settings', (err as Error).message);
+    }
+  });
 }
 
 async function init(): Promise<void> {

@@ -26,6 +26,7 @@ export enum MessageCommand {
   AddBookmark = 'add-bookmark',
   DisableSync = 'disable-sync',
   GetStatus = 'get-status',
+  GetLogs = 'get-logs',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -71,6 +72,7 @@ export type MessagePayload =
   | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
+  | { command: MessageCommand.GetLogs }
   | { command: MessageCommand.GetDuplicates }
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }

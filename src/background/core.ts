@@ -131,6 +131,8 @@ export class BackgroundCore {
         return this.disableSync();
       case MessageCommand.GetStatus:
         return this.getStatus();
+      case MessageCommand.GetLogs:
+        return this.getLogs();
       case MessageCommand.GetDuplicates:
         return this.getDuplicates();
       case MessageCommand.ExportBackup:
@@ -405,8 +407,17 @@ export class BackgroundCore {
 
   // ---------------------------------------------------------------- status
 
-  private async getStatus(): Promise<StatusResponse> {
-    const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
+  /** Last background log entries for the popup log viewer (no secrets by design). */
+  private async getLogs(): Promise<{ timestamp: string; level: number; tag: string; message: string }[]> {
+    return this.log.entries.slice(-200).map((e) => ({
+      timestamp: e.timestamp,
+      level: e.level as number,
+      tag: e.tag,
+      message: e.message,
+    }));
+  }
+
+  private async getStatus(): Promise<StatusResponse> {    const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     return {

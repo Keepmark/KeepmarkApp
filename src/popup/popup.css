@@ -148,6 +148,15 @@ button.danger {
   flex: none;
 }
 
+#log-list {
+  font-size: 11px;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+}
+
 details {
   margin-top: 10px;
 }
