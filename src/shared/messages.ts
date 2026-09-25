@@ -29,6 +29,7 @@ export enum MessageCommand {
   GetLogs = 'get-logs',
   Ping = 'ping',
   SwitchPreview = 'switch-preview',
+  SetVerbosity = 'set-verbosity',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -57,6 +58,8 @@ export interface StatusResponse {
   usedBytes?: number;
   /** Nodes in the cached tree (for action summaries). */
   bookmarkCount?: number;
+  /** Stored log verbosity (XbsLogLevel). */
+  logLevel?: number;
 }
 
 /** Move-service target. Nothing syncs until the popup submits this choice. */
@@ -121,6 +124,7 @@ export type MessagePayload =
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
+  | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =

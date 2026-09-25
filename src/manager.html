@@ -16,6 +16,7 @@
       <button data-section="move">Move service</button>
       <button data-section="logs">Logs</button>
       <button data-section="settings">Settings</button>
+      <button data-section="about">About</button>
     </nav>
     <main>
       <section id="sec-status">
@@ -42,6 +43,9 @@
           <button id="m-btn-sync-now">⇅ Sync now</button>
           <button id="m-btn-refresh">Refresh status</button>
         </div>
+        <h3>Danger zone</h3>
+        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
+        <div id="status-result" class="result" hidden></div>
       </section>
 
       <section id="sec-backup" hidden>
@@ -98,8 +102,42 @@
         <div id="settings-error" class="error" hidden></div>
         <dl id="m-service-info"></dl>
         <label class="check"><input id="m-opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
-        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
+        <label>Log verbosity
+          <select id="m-opt-verbosity">
+            <option value="0">Error</option>
+            <option value="1">Warning</option>
+            <option value="2">Info</option>
+            <option value="3">Debug</option>
+            <option value="4">Verbose</option>
+          </select>
+        </label>
         <div id="settings-result" class="result" hidden></div>
+      </section>
+
+      <section id="sec-about" hidden>
+        <h2>About</h2>
+        <p><strong>Keepmark</strong> <span id="about-version">…</span></p>
+        <p>An independent, private bookmark sync client. Not affiliated with xBrowserSync.</p>
+        <h3>Compatibility</h3>
+        <ul>
+          <li>Works with any <strong>xBrowserSync API <span id="about-api">…</span></strong> service
+            (official, self-hosted or community), API <span id="about-minapi">…</span>+ required.</li>
+          <li>Sync format <strong><span id="about-syncver">…</span></strong>: syncs created here
+            open in the official xBrowserSync apps, and vice versa.</li>
+          <li>Same end-to-end encryption (PBKDF2-SHA256 + AES-GCM): only your password
+            unlocks the data — the service operator cannot read it.</li>
+        </ul>
+        <h3>References</h3>
+        <ul>
+          <li><a href="https://www.xbrowsersync.org/" target="_blank" rel="noreferrer">xBrowserSync project</a> (GPL-3.0)</li>
+          <li><a href="https://github.com/xbrowsersync/api" target="_blank" rel="noreferrer">Official API service source</a></li>
+          <li><a href="https://github.com/xbrowsersync/app" target="_blank" rel="noreferrer">Official client source</a></li>
+          <li><a href="https://www.xbrowsersync.org/privacypolicy" target="_blank" rel="noreferrer">Official service privacy policy</a></li>
+        </ul>
+        <h3>License</h3>
+        <p>This client is free software under the <strong>GNU GPL v3</strong>.</p>
+        <h3>Contact</h3>
+        <p>keepmark@proton.me</p>
       </section>
     </main>
   </div>

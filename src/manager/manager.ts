@@ -3,6 +3,7 @@
 // popup via ../popup/ui.js. Display only; mutations go through background.
 
 import browser from 'webextension-polyfill';
+import { ApiVersion, MinApiVersion, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
   copyText,
@@ -41,13 +42,14 @@ function showSection(name: string): void {
   document.querySelectorAll('#sidebar button').forEach((b) => {
     b.classList.toggle('active', (b as HTMLElement).dataset.section === name);
   });
-  for (const sec of ['status', 'backup', 'duplicates', 'move', 'logs', 'settings']) {
+  for (const sec of ['status', 'backup', 'duplicates', 'move', 'logs', 'settings', 'about']) {
     ($(`sec-${sec}`) as HTMLElement).hidden = sec !== name;
   }
   if (name === 'status') void refreshStatus();
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
+  if (name === 'about') renderAbout();
 }
 
 async function refreshStatus(): Promise<void> {
@@ -94,6 +96,20 @@ function initStatusSection(): void {
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
   });
+  $('m-btn-unlink').addEventListener('click', () =>
+    withBusy('m-btn-unlink', 'Unlinking…', async () => {
+      hideErrors();
+      try {
+        await send({ command: MessageCommand.DisableSync });
+        showResult('status-result', 'Unlinked. Native bookmarks are untouched.');
+        status = undefined;
+        ping = undefined;
+        await refreshStatus();
+      } catch (err) {
+        sectionError('status-error', (err as Error).message);
+      }
+    }),
+  );
 }
 
 function showResult(id: string, text: string): void {
@@ -370,26 +386,31 @@ async function renderSettings(): Promise<void> {
   const toolbar = await browser.storage.local.get(StoreKey.SyncBookmarksToolbar);
   (input('m-opt-toolbar') as HTMLInputElement).checked =
     (toolbar[StoreKey.SyncBookmarksToolbar] as boolean | undefined) ?? true;
+  const level = st?.logLevel ?? 2;
+  ($('m-opt-verbosity') as HTMLSelectElement).value = String(level);
 }
 
 function initSettingsSection(): void {
   (input('m-opt-toolbar') as HTMLInputElement).addEventListener('change', (e) => {
     void browser.storage.local.set({ [StoreKey.SyncBookmarksToolbar]: (e.target as HTMLInputElement).checked });
   });
-  $('m-btn-unlink').addEventListener('click', () =>
-    withBusy('m-btn-unlink', 'Unlinking…', async () => {
-      hideErrors();
-      try {
-        await send({ command: MessageCommand.DisableSync });
-        showResult('settings-result', 'Unlinked. Native bookmarks are untouched.');
-        status = undefined;
-        ping = undefined;
-        await refreshStatus();
-      } catch (err) {
-        sectionError('settings-error', (err as Error).message);
-      }
-    }),
-  );
+  ($('m-opt-verbosity') as HTMLSelectElement).addEventListener('change', async (e) => {
+    hideErrors();
+    const level = Number((e.target as HTMLSelectElement).value);
+    try {
+      await send({ command: MessageCommand.SetVerbosity, level });
+      showResult('settings-result', `Log verbosity set to ${['Error', 'Warning', 'Info', 'Debug', 'Verbose'][level]}.`);
+    } catch (err) {
+      sectionError('settings-error', (err as Error).message);
+    }
+  });
+}
+
+function renderAbout(): void {
+  $('about-version').textContent = `v${browser.runtime.getManifest().version}`;
+  $('about-api').textContent = `v${ApiVersion}`;
+  $('about-minapi').textContent = `v${MinApiVersion}`;
+  $('about-syncver').textContent = `v${SyncClientVersion}`;
 }
 
 function init(): void {
@@ -402,5 +423,4 @@ function init(): void {
   initSettingsSection();
   void refreshStatus();
 }
-
 void init();

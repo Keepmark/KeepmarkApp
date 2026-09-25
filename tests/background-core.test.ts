@@ -476,8 +476,7 @@ describe('background core', () => {
     expect(info!.serviceUrl).toBe('https://x.test/');
   });
 
-  it('switch preview reports unreachable target', async () => {
-    const store = new Store(new MemoryBackend());
+  it('switch preview reports unreachable target', async () => {    const store = new Store(new MemoryBackend());
     const ports = makePorts();
     const core = new BackgroundCore(
       store,
@@ -499,6 +498,24 @@ describe('background core', () => {
       mode: 'new',
     })) as { reachable: boolean };
     expect(preview.reachable).toBe(false);
+  });
+
+  it('verbosity persists and filters the log', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const res = (await core.handleMessage({ command: MessageCommand.SetVerbosity, level: 0 })) as {
+      level: number;
+    };
+    expect(res.level).toBe(0);
+    expect(await store.get(StoreKey.LogVerbosity)).toBe(0);
+    const status = (await core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      logLevel?: number;
+    };
+    expect(status.logLevel).toBe(0);
+    const { UnexpectedResponseException } = await import('../src/shared/errors');
+    await expect(core.handleMessage({ command: MessageCommand.SetVerbosity, level: 9 })).rejects.toBeInstanceOf(
+      UnexpectedResponseException,
+    );
   });
 });
 

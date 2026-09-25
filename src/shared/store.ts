@@ -20,6 +20,7 @@ export enum StoreKey {
   InstallationId = 'installationId',
   LastUpdated = 'lastUpdated',
   LastUpgradeVersion = 'lastUpgradeVersion',
+  LogVerbosity = 'logVerbosity',
   RemovedSync = 'removedSync',
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',

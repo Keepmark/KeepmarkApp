@@ -150,6 +150,8 @@ export class BackgroundCore {
         return this.switchService(msg.switch);
       case MessageCommand.SwitchPreview:
         return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
+      case MessageCommand.SetVerbosity:
+        return this.setVerbosity(msg.level);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
     }
@@ -518,6 +520,22 @@ export class BackgroundCore {
     }));
   }
 
+  /** Persisted log verbosity (XbsLogLevel 0..4, default Info). */
+  private async setVerbosity(level: number): Promise<{ level: number }> {
+    if (!Number.isInteger(level) || level < XbsLogLevel.Error || level > XbsLogLevel.Verbose) {
+      throw new UnexpectedResponseException(`Invalid log level: ${level}`);
+    }
+    await this.store.set(StoreKey.LogVerbosity, level);
+    this.log.minLevel = level as XbsLogLevel;
+    return { level };
+  }
+
+  private async applyVerbosity(): Promise<void> {
+    const level = await this.store.get<number>(StoreKey.LogVerbosity);
+    if (level !== undefined && level >= XbsLogLevel.Error && level <= XbsLogLevel.Verbose) {
+      this.log.minLevel = level as XbsLogLevel;
+    }
+  }
   private async getStatus(): Promise<StatusResponse> {
     const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
@@ -532,6 +550,7 @@ export class BackgroundCore {
       syncing: this.queue.syncing || this.connecting,
       usedBytes: blob?.length ?? 0,
       bookmarkCount: info ? await this.countCached(info).catch(() => undefined) : undefined,
+      logLevel: this.log.minLevel as number,
     };
   }
 
@@ -585,8 +604,9 @@ export class BackgroundCore {
     }
   }
 
-  /** First-run / startup: snapshot install backup, resume polling when linked. */
+  /** First-run / startup: verbosity, snapshot install backup, resume polling when linked. */
   async startup(): Promise<void> {
+    await this.applyVerbosity();
     try {
       const snapshot = await this.adapter.readAll(true);
       await this.store.set(StoreKey.InstallBackup, JSON.stringify(snapshot));
