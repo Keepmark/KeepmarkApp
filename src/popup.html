@@ -34,69 +34,27 @@
   <section id="view-main" hidden>
     <div class="card">
       <div class="status-row">
-        <span id="pill" class="pill">…</span>
-        <span id="service-badge" class="badge"></span>
+        <span id="p-pill" class="pill">…</span>
+        <span id="p-service-badge" class="badge"></span>
       </div>
       <dl class="status-grid">
         <dt>Server</dt>
-        <dd id="st-server">…</dd>
+        <dd id="p-server">…</dd>
         <dt>Sync ID</dt>
-        <dd><code id="st-syncid">…</code> <button id="btn-copy-id" class="mini">Copy</button></dd>
+        <dd><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini">Copy</button></dd>
         <dt>Last sync</dt>
-        <dd id="st-last">…</dd>
+        <dd id="p-last">…</dd>
         <dt>Space used</dt>
         <dd>
-          <div class="meter"><div id="space-fill"></div></div>
-          <span id="st-space">…</span>
+          <div class="meter"><div id="p-space-fill"></div></div>
+          <span id="p-space">…</span>
         </dd>
       </dl>
     </div>
     <div id="main-error" class="error" hidden></div>
     <div class="row">
       <button id="btn-sync-now">⇅ Sync now</button>
-      <button id="btn-settings">⚙ Manage</button>
-    </div>
-  </section>
-
-  <section id="view-settings" hidden>
-    <h2>Service</h2>
-    <div id="settings-error" class="error" hidden></div>
-    <dl id="service-info"></dl>
-    <h2>Sync</h2>
-    <label class="check"><input id="opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
-    <div class="row">
-      <button id="btn-export">Export backup</button>
-      <button id="btn-import">Import backup</button>
-      <input id="import-file" type="file" accept=".json,application/json" hidden />
-    </div>
-    <details id="dup-box">
-      <summary>Duplicates <span id="dup-count"></span></summary>
-      <div id="dup-list"></div>
-    </details>
-    <details id="switch-box">
-      <summary>Move to another service</summary>
-      <p class="hint">Nothing syncs until you confirm below. A safety backup of the current side is downloaded first.</p>
-      <label>New service URL <input id="switch-url" type="url" /></label>
-      <label class="check"><input type="radio" name="switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
-      <label class="check"><input type="radio" name="switch-mode" value="existing" /> Use existing sync</label>
-      <label id="switch-id-row" hidden>Sync ID <input id="switch-id" type="text" /></label>
-      <div id="switch-direction-row" hidden>
-        <label class="check"><input type="radio" name="switch-direction" value="push" checked /> Overwrite remote with my bookmarks</label>
-        <label class="check"><input type="radio" name="switch-direction" value="pull" /> Replace local with remote</label>
-      </div>
-      <label>New password <input id="switch-password" type="password" /></label>
-      <label id="switch-confirm-row">Confirm password <input id="switch-confirm" type="password" /></label>
-      <div id="switch-summary" class="hint"></div>
-      <button id="btn-switch">Move sync</button>
-    </details>
-    <details id="log-box">
-      <summary>Logs</summary>
-      <div class="row"><button id="btn-logs">Refresh logs</button></div>
-      <pre id="log-list"></pre>
-    </details>
-    <div class="row">
-      <button id="btn-back">← Back</button>
-      <button id="btn-unlink" class="danger">Unlink</button>
+      <button id="btn-manage">⚙ Manage</button>
     </div>
   </section>
 

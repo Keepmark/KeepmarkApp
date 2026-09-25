@@ -28,6 +28,7 @@ export enum MessageCommand {
   GetStatus = 'get-status',
   GetLogs = 'get-logs',
   Ping = 'ping',
+  SwitchPreview = 'switch-preview',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -69,6 +70,19 @@ export interface SwitchTarget {
   direction: 'push' | 'pull';
 }
 
+/** Read-only preflight for the move wizard. Never mutates anything. */
+export interface SwitchPreviewResult {
+  reachable: boolean;
+  serviceVersion?: string;
+  versionCompatible?: boolean;
+  serviceStatus?: ServiceStatus;
+  maxSyncSize?: number;
+  /** existing mode only: whether the target sync id exists + its lastUpdated. */
+  remoteExists?: boolean;
+  remoteLastUpdated?: string;
+  localCount?: number;
+}
+
 /** Live server probe result (fast timeout, never throws). */
 export interface PingResponse {
   reachable: boolean;
@@ -106,6 +120,7 @@ export type MessagePayload =
   | { command: MessageCommand.ExportBackup; password: string }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
+  | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =

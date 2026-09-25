@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         popup: `${root}/src/popup.html`,
         background: `${root}/src/background.html`,
+        manager: `${root}/src/manager.html`,
       },
     },
   },

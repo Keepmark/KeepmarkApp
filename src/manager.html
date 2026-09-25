@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keepmark — Manager</title>
+  <link rel="stylesheet" href="./manager/manager.css" />
+</head>
+<body>
+  <div class="layout">
+    <nav id="sidebar">
+      <div class="brand"><img src="./assets/icon32.png" alt="" width="24" height="24" /> Keepmark</div>
+      <button data-section="status" class="active">Status</button>
+      <button data-section="backup">Backup</button>
+      <button data-section="duplicates">Duplicates <span id="nav-dup-count"></span></button>
+      <button data-section="move">Move service</button>
+      <button data-section="logs">Logs</button>
+      <button data-section="settings">Settings</button>
+    </nav>
+    <main>
+      <section id="sec-status">
+        <h2>Status</h2>
+        <div class="card">
+          <div class="status-row">
+            <span id="m-pill" class="pill">…</span>
+            <span id="m-service-badge" class="badge"></span>
+          </div>
+          <dl class="status-grid">
+            <dt>Server</dt><dd id="m-server">…</dd>
+            <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini">Copy</button></dd>
+            <dt>Bookmarks</dt><dd id="m-count">…</dd>
+            <dt>Last sync</dt><dd id="m-last">…</dd>
+            <dt>Space used</dt>
+            <dd>
+              <div class="meter"><div id="m-space-fill"></div></div>
+              <span id="m-space">…</span>
+            </dd>
+          </dl>
+        </div>
+        <div id="status-error" class="error" hidden></div>
+        <div class="row">
+          <button id="m-btn-sync-now">⇅ Sync now</button>
+          <button id="m-btn-refresh">Refresh status</button>
+        </div>
+      </section>
+
+      <section id="sec-backup" hidden>
+        <h2>Backup</h2>
+        <p class="hint">Encrypted backups protected by their own password (min 8 chars).</p>
+        <div id="backup-error" class="error" hidden></div>
+        <div class="row">
+          <button id="m-btn-export">Export backup</button>
+          <button id="m-btn-import">Import backup</button>
+          <input id="m-import-file" type="file" accept=".json,application/json" hidden />
+        </div>
+        <div id="backup-result" class="result" hidden></div>
+      </section>
+
+      <section id="sec-duplicates" hidden>
+        <h2>Duplicates</h2>
+        <div id="dup-error" class="error" hidden></div>
+        <div class="row"><button id="m-btn-duplicates">Scan now</button></div>
+        <div id="m-dup-list"></div>
+      </section>
+
+      <section id="sec-move" hidden>
+        <h2>Move to another service</h2>
+        <p class="hint">Nothing syncs until you confirm at step 2. A safety backup of the current side is downloaded first.</p>
+        <div id="move-error" class="error" hidden></div>
+        <h3>1. Target</h3>
+        <label>New service URL <input id="m-switch-url" type="url" /></label>
+        <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
+        <label class="check"><input type="radio" name="m-switch-mode" value="existing" /> Use existing sync</label>
+        <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" /></label>
+        <div id="m-switch-direction-row" hidden>
+          <label class="check"><input type="radio" name="m-switch-direction" value="push" checked /> Overwrite remote with my bookmarks</label>
+          <label class="check"><input type="radio" name="m-switch-direction" value="pull" /> Replace local with remote</label>
+        </div>
+        <div class="row"><button id="m-btn-preview">Check target</button></div>
+        <div id="move-preview" class="preview" hidden></div>
+        <h3>2. Confirm</h3>
+        <label>New password <input id="m-switch-password" type="password" /></label>
+        <label id="m-switch-confirm-row">Confirm password <input id="m-switch-confirm" type="password" /></label>
+        <div id="move-summary" class="hint"></div>
+        <div class="row"><button id="m-btn-switch" disabled>Move sync</button></div>
+        <div id="move-result" class="result" hidden></div>
+      </section>
+
+      <section id="sec-logs" hidden>
+        <h2>Logs</h2>
+        <div id="logs-error" class="error" hidden></div>
+        <div class="row"><button id="m-btn-logs">Refresh logs</button></div>
+        <pre id="m-log-list"></pre>
+      </section>
+
+      <section id="sec-settings" hidden>
+        <h2>Settings</h2>
+        <div id="settings-error" class="error" hidden></div>
+        <dl id="m-service-info"></dl>
+        <label class="check"><input id="m-opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
+        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
+        <div id="settings-result" class="result" hidden></div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="./manager/manager.ts"></script>
+</body>
+</html>

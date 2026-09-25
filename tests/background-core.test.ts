@@ -447,6 +447,59 @@ describe('background core', () => {
     };
     expect(pong.reachable).toBe(false);
   });
+
+  it('switch preview reports service + remote without mutating', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const preview = (await core.handleMessage({
+      command: MessageCommand.SwitchPreview,
+      newServiceUrl: 'https://new.test/',
+      mode: 'existing',
+      syncId: 'target-id',
+    })) as {
+      reachable: boolean;
+      serviceVersion?: string;
+      versionCompatible?: boolean;
+      remoteExists?: boolean;
+      remoteLastUpdated?: string;
+      localCount?: number;
+    };
+    expect(preview.reachable).toBe(true);
+    expect(preview.serviceVersion).toBe('1.1.13');
+    expect(preview.versionCompatible).toBe(true);
+    expect(preview.remoteExists).toBe(true);
+    expect(preview.remoteLastUpdated).toBe(state.remoteLastUpdated);
+    expect(preview.localCount).toBeGreaterThan(0);
+    // Nothing mutated by the preview: still linked to the old side.
+    const info = await store.get<{ id: string; serviceUrl?: string }>(StoreKey.SyncInfo);
+    expect(info!.id).toBe(SYNC_ID);
+    expect(info!.serviceUrl).toBe('https://x.test/');
+  });
+
+  it('switch preview reports unreachable target', async () => {
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      ports,
+      ((_url: string) => ({
+        getInfo: async () => {
+          throw new Error('down');
+        },
+      })) as unknown as (url: string) => XSyncApiClient,
+      { debounceMs: 5 },
+    );
+    await store.set(StoreKey.SyncInfo, { id: SYNC_ID, password: 'x' });
+    const preview = (await core.handleMessage({
+      command: MessageCommand.SwitchPreview,
+      newServiceUrl: 'https://down.test/',
+      mode: 'new',
+    })) as { reachable: boolean };
+    expect(preview.reachable).toBe(false);
+  });
 });
 
 async function store_blob(core: BackgroundCore): Promise<string> {

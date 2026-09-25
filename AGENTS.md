@@ -81,17 +81,19 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   storage/alarms/listeners/badge/notify/download ports, `onMessage` → wire
   `{ok,data}` / `{ok:false,errorName,message}`, `onInstalled/onStartup`.
   Adapter via `@platform/adapter` vite alias (NOT runtime detection).
-- `src/popup/` — vanilla TS popup (`popup.html` at `src/`, `popup.ts`,
-  `popup.css`): connect / search+list+delete / add (prefilled from active
-  tab) / settings (status, toolbar toggle, export/import, duplicates,
-  move-service, unlink). Display reads `storage.local` + decrypts locally;
-  ALL mutations go through background messages.
+- `src/popup/` — small popup (`popup.html` at `src/`, `popup.ts`, `popup.css`,
+  shared `ui.ts`): connect + status card + sync now + open manager. Display
+  only; mutations via messages.
+- `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
+  (Status, Backup, Duplicates, Move, Logs, Settings), each section with its
+  own contextual busy/error/result evidence; move wizard has a read-only
+  `SwitchPreview` preflight before confirm.
 
 ### Build
 
 - Entries at `src/` root so outputs land flat: `src/popup.html`,
   `src/background.html` (MV2 only).
-- `vite.firefox.ts` (popup+background page), `vite.chromium.ts` (popup),
+- `vite.firefox.ts` (popup+background page+manager), `vite.chromium.ts` (popup+manager),
   `vite.chromium-sw.ts` (service worker, single-file ESM lib build),
   `vite.shared.ts` (`platformAlias` + `copyStatic` manifest+assets plugin).
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;

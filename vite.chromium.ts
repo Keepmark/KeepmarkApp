@@ -16,6 +16,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: `${root}/src/popup.html`,
+        manager: `${root}/src/manager.html`,
       },
     },
   },

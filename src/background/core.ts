@@ -7,7 +7,7 @@
 
 import { XSyncApiClient } from '../shared/api.js';
 import { decryptData, deriveKey, encryptData } from '../shared/crypto.js';
-import { compareVersions, DefaultServiceUrl, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
+import { compareVersions, DefaultServiceUrl, MinApiVersion, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
@@ -29,6 +29,7 @@ import {
   type MessagePayload,
   type PingResponse,
   type StatusResponse,
+  type SwitchPreviewResult,
   type SwitchTarget,
   type SyncJobType,
 } from '../shared/messages.js';
@@ -147,6 +148,8 @@ export class BackgroundCore {
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.SwitchService:
         return this.switchService(msg.switch);
+      case MessageCommand.SwitchPreview:
+        return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
     }
@@ -462,6 +465,45 @@ export class BackgroundCore {
   private async getDuplicates(): Promise<DuplicateGroup[]> {
     const { info } = await this.requireCreds();
     return getDuplicateGroups(await this.cachedTree(info));
+  }
+
+  /**
+   * Read-only preflight for the move wizard: service info + version
+   * compatibility + (existing mode) remote existence/lastUpdated + local
+   * count. Never mutates state, never syncs.
+   */
+  private async switchPreview(
+    newServiceUrl: string,
+    mode: 'new' | 'existing',
+    syncId?: string,
+  ): Promise<SwitchPreviewResult> {
+    const { info } = await this.requireCreds();
+    const localCount = await this.countCached(info).catch(() => undefined);
+    const api = this.makeApi(newServiceUrl, ServiceProbeTimeoutMs);
+    let service;
+    try {
+      service = await api.getInfo();
+    } catch {
+      return { reachable: false, localCount };
+    }
+    const result: SwitchPreviewResult = {
+      reachable: true,
+      serviceVersion: service.version ?? undefined,
+      versionCompatible: !service.version || compareVersions(service.version, MinApiVersion) >= 0,
+      serviceStatus: service.status,
+      maxSyncSize: service.maxSyncSize,
+      localCount,
+    };
+    if (mode === 'existing' && syncId) {
+      try {
+        const remote = await api.getLastUpdated(syncId);
+        result.remoteExists = true;
+        result.remoteLastUpdated = remote.lastUpdated ?? undefined;
+      } catch {
+        result.remoteExists = false;
+      }
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------- status
