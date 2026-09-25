@@ -115,6 +115,22 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
   if (missing.length === 0 && missingIcons.length === 0) ok(`${platform} build coherent`);
 }
 
+// 7b. Chromium MV3 specifics: no Firefox-only keys, SW entry valid,
+// service worker bundle self-contained (no local chunk imports).
+{
+  const manifest = JSON.parse(readFileSync(path.join(root, 'res/manifest.chromium.json'), 'utf8'));
+  if (manifest.browser_specific_settings) fail('chromium manifest must not contain browser_specific_settings');
+  else ok('chromium manifest has no Firefox-only keys');
+  if (manifest.browser_action) fail('chromium MV3 manifest must not contain browser_action');
+  else ok('chromium manifest has no browser_action');
+  if (manifest.background?.service_worker !== 'background.js') fail('chromium service_worker entry wrong');
+  else ok('chromium service_worker entry ok');
+  const sw = readFileSync(path.join(root, 'build/chromium/background.js'), 'utf8');
+  const localImports = [...sw.matchAll(/(?:import|export)[^;'"]*from\s*['"](\.[^'"]+)['"]/g)].map((m) => m[1]);
+  if (localImports.length > 0) fail(`SW bundle has local imports: ${localImports.join(', ')}`);
+  else ok('chromium SW bundle self-contained');
+}
+
 // 8. Mozilla linter on the firefox zip (0 errors required).
 try {
   const out = execFileSync('npx', ['-y', 'addons-linter', 'dist/keepmark-firefox.zip', '--self-hosted'], {
