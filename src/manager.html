@@ -141,8 +141,11 @@
         <p><strong>Keepmark</strong> <span id="about-version">…</span></p>
         <h3>Compatibility</h3>
         <ul>
-          <li>Works with any <strong>xBrowserSync API <span id="about-api">…</span></strong> service
-            (official, self-hosted or community), API <span id="about-minapi">…</span>+ required.</li>
+          <li>Legacy contract <strong>xBrowserSync API <span id="about-api">…</span></strong> always supported
+            (official, self-hosted or community services, API <span id="about-minapi">…</span>+ required).</li>
+          <li>Extended contract <strong>Keepmark API <span id="about-api12">…</span></strong>
+            (revision CAS, conditional pull, server-side delete): used automatically when
+            the service advertises it; legacy services fall back to v1.1.</li>
           <li>Sync format <strong><span id="about-syncver">…</span></strong>: syncs created here
             open in the official xBrowserSync apps, and vice versa.</li>
           <li>Same end-to-end encryption (PBKDF2-SHA256 + AES-GCM): only your password

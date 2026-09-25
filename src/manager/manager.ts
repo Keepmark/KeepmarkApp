@@ -3,7 +3,7 @@
 // popup via ../popup/ui.js. Display only; mutations go through background.
 
 import browser from 'webextension-polyfill';
-import { ApiVersion, MinApiVersion, SyncClientVersion } from '../shared/constants.js';
+import { ApiVersion, ApiVersion12, MinApiVersion, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
   contractGate,
@@ -577,6 +577,7 @@ function initSettingsSection(): void {
 function renderAbout(): void {
   $('about-version').textContent = `v${browser.runtime.getManifest().version}`;
   $('about-api').textContent = `v${ApiVersion}`;
+  $('about-api12').textContent = `v${ApiVersion12}`;
   $('about-minapi').textContent = `v${MinApiVersion}`;
   $('about-syncver').textContent = `v${SyncClientVersion}`;
   // Registered on every section visit: guard so N visits stack a single handler.
@@ -587,7 +588,7 @@ function renderAbout(): void {
       const version = browser.runtime.getManifest().version;
       const subject = encodeURIComponent(`[Keepmark ${version}] Bug report`);
       const body = encodeURIComponent(
-        `App version: ${version}\nAPI version: ${ApiVersion}\nSync format: ${SyncClientVersion}\n\nDescribe the issue:\n`,
+        `App version: ${version}\nAPI version: ${ApiVersion} / ${ApiVersion12}\nSync format: ${SyncClientVersion}\n\nDescribe the issue:\n`,
       );
       location.href = `mailto:keepmark@proton.me?subject=${subject}&body=${body}`;
     });
