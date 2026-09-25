@@ -178,11 +178,12 @@ function initStatusSection(): void {
   );
   $('m-btn-delete-remote').addEventListener('click', () =>
     void (async () => {
+      // Defense in depth (checked BEFORE withBusy: the wrapper disables the
+      // button while running, so a check inside would always self-trigger).
+      // Disabled buttons don't fire clicks anyway; the background re-gates.
+      if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
       await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
         hideErrors();
-        // Defense in depth: the background re-gates, but a disabled button
-        // must never even reach the confirms.
-        if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
         // No undo exists for this (the server has no undelete): two explicit
         // confirms plus the automatic backup download in the background.
         if (
