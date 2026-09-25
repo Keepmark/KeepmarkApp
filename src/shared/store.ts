@@ -24,7 +24,9 @@ export enum StoreKey {
   RemovedSync = 'removedSync',
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',
+  SyncHash = 'syncHash',
   SyncInfo = 'syncInfo',
+  SyncRevision = 'syncRevision',
   TelemetryEnabled = 'telemetryEnabled',
   TraceLog = 'traceLog',
   UndoSlot = 'undoSlot',
@@ -36,6 +38,14 @@ export interface SyncInfo {
   password?: string;
   serviceUrl?: string;
   version?: string;
+  /** Last-known service API version (link-time probe, refreshed by ping). */
+  serviceVersion?: string;
+  /**
+   * Whether the linked service speaks the v1.2 extended contract (probed at
+   * link time, refreshed by ping/preview). Gates every v1.2-only feature in
+   * the UI — undefined means "not probed yet", treated as legacy.
+   */
+  supportsV12?: boolean;
 }
 
 /** Minimal async key/value backend. */

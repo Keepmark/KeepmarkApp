@@ -61,18 +61,68 @@ interface FakeApiState {
   remoteVersion: string;
   puts: { blob: string; lastUpdated: string }[];
   failNextPut409: boolean;
+  /** Service speaks the v1.2 extended contract (advertised capabilities). */
+  v12: boolean;
+  /** Extended endpoints still answer (false = downgraded mid-test -> 412). */
+  v12alive: boolean;
+  revision: number;
+  hash: string;
+  /** Revision-CAS pushes seen (v1.2 path only). */
+  v12puts: { blob: string; baseRevision: number }[];
+  deleted: string[];
+}
+
+async function unsupportedVersion(): Promise<never> {
+  const { UnsupportedVersionException } = await import('../src/shared/errors');
+  throw new UnsupportedVersionException('Not supported (requires service v1.2).');
+}
+
+function v12caps(): { revision: boolean; conditionalGet: boolean; delete: boolean } {
+  return { revision: true, conditionalGet: true, delete: true };
 }
 
 function makeFakeApi(state: FakeApiState): (url: string) => XSyncApiClient {
+  const bump = (): { revision: number; hash: string } => {
+    state.revision += 1;
+    state.hash = `h${state.revision}`;
+    return { revision: state.revision, hash: state.hash };
+  };
   return (_url: string) =>
     ({
       getInfo: async () => ({ ...state.info }),
+      getInfoV12: async () => ({ ...state.info, capabilities: state.v12 ? v12caps() : undefined }),
+      supportsV12: async () => state.v12,
       createSync: async () => ({ ...state.created }),
+      createSyncV12: async () => {
+        if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        state.revision = 1;
+        state.hash = 'h1';
+        return { ...state.created, meta: { revision: 1, hash: 'h1' } };
+      },
       getBookmarks: async () => ({
         bookmarks: state.remoteBlob,
         version: state.remoteVersion,
         lastUpdated: state.remoteLastUpdated,
       }),
+      getBookmarksV12: async () => {
+        if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        return {
+          bookmarks: state.remoteBlob,
+          version: state.remoteVersion,
+          lastUpdated: state.remoteLastUpdated,
+          meta: { revision: state.revision, hash: state.hash },
+        };
+      },
+      getBookmarksIfChanged: async (_id: string, knownHash: string) => {
+        if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        if (knownHash === state.hash) return null; // 304
+        return {
+          bookmarks: state.remoteBlob,
+          version: state.remoteVersion,
+          lastUpdated: state.remoteLastUpdated,
+          meta: { revision: state.revision, hash: state.hash },
+        };
+      },
       getLastUpdated: async () => ({ lastUpdated: state.remoteLastUpdated }),
       getVersion: async () => ({ version: state.remoteVersion }),
       updateBookmarks: async (_id: string, blob: string, lastUpdated: string) => {
@@ -84,7 +134,29 @@ function makeFakeApi(state: FakeApiState): (url: string) => XSyncApiClient {
         state.puts.push({ blob, lastUpdated });
         state.remoteBlob = blob;
         state.remoteLastUpdated = `${lastUpdated}+srv`;
+        if (state.v12) bump(); // the server bumps revision on every write, any contract
         return { lastUpdated: state.remoteLastUpdated };
+      },
+      updateBookmarksV12: async (_id: string, blob: string, baseRevision: number) => {
+        if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        if (state.failNextPut409) {
+          state.failNextPut409 = false;
+          const { DataOutOfSyncException } = await import('../src/shared/errors');
+          throw new DataOutOfSyncException('conflict');
+        }
+        if (baseRevision !== state.revision) {
+          const { DataOutOfSyncException } = await import('../src/shared/errors');
+          throw new DataOutOfSyncException('revision race');
+        }
+        state.v12puts.push({ blob, baseRevision });
+        const meta = bump();
+        state.remoteBlob = blob;
+        state.remoteLastUpdated = `t-rev${state.revision}`;
+        return { lastUpdated: state.remoteLastUpdated, meta };
+      },
+      deleteBookmarks: async (id: string) => {
+        if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        state.deleted.push(id);
       },
     }) as unknown as XSyncApiClient;
 }
@@ -124,7 +196,46 @@ function baseState(): FakeApiState {
     remoteVersion: SyncClientVersion,
     puts: [],
     failNextPut409: false,
+    v12: false,
+    v12alive: true,
+    revision: 0,
+    hash: '',
+    v12puts: [],
+    deleted: [],
   };
+}
+
+function v12State(): FakeApiState {
+  return {
+    ...baseState(),
+    info: { status: 1, version: '1.2.0', maxSyncSize: 512000 },
+    v12: true,
+  };
+}
+
+async function linkedV12Core(state: FakeApiState): Promise<{
+  core: BackgroundCore;
+  store: Store;
+  ports: ReturnType<typeof makePorts>;
+  derived: string;
+  mockApi: ReturnType<typeof makeMockApi>;
+}> {
+  const store = new Store(new MemoryBackend());
+  const ports = makePorts();
+  const mockApi = makeMockApi();
+  await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
+  const core = new BackgroundCore(
+    store,
+    new BookmarkIdMapper(store),
+    new InMemoryLogger(),
+    makeFirefoxAdapter(mockApi),
+    ports,
+    makeFakeApi(state),
+    { debounceMs: 5 },
+  );
+  const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+  await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
+  return { core, store, ports, derived, mockApi };
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -444,6 +555,9 @@ describe('background core', () => {
   it('ping never throws when the service is down', async () => {
     const store = new Store(new MemoryBackend());
     const ports = makePorts();
+    const down = async (): Promise<never> => {
+      throw new Error('down');
+    };
     const core = new BackgroundCore(
       store,
       new BookmarkIdMapper(store),
@@ -451,9 +565,9 @@ describe('background core', () => {
       makeFirefoxAdapter(makeMockApi()),
       ports,
       ((_url: string) => ({
-        getInfo: async () => {
-          throw new Error('down');
-        },
+        getInfo: down,
+        getInfoV12: down,
+        getLastUpdated: down,
       })) as unknown as (url: string) => XSyncApiClient,
       { debounceMs: 5 },
     );
@@ -494,6 +608,9 @@ describe('background core', () => {
 
   it('switch preview reports unreachable target', async () => {    const store = new Store(new MemoryBackend());
     const ports = makePorts();
+    const down = async (): Promise<never> => {
+      throw new Error('down');
+    };
     const core = new BackgroundCore(
       store,
       new BookmarkIdMapper(store),
@@ -501,9 +618,8 @@ describe('background core', () => {
       makeFirefoxAdapter(makeMockApi()),
       ports,
       ((_url: string) => ({
-        getInfo: async () => {
-          throw new Error('down');
-        },
+        getInfo: down,
+        getInfoV12: down,
       })) as unknown as (url: string) => XSyncApiClient,
       { debounceMs: 5 },
     );
@@ -641,6 +757,288 @@ describe('background core', () => {
     expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).not.toBeNull();
     await core.handleMessage({ command: MessageCommand.DismissUndo });
     expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
+  });
+
+  it('password change re-encrypts under the new key and is undoable', async () => {
+    const state = baseState();
+    const { core, store, derived } = await linkedCore(state);
+    const res = (await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: PASSWORD,
+      newPassword: 'brand new password',
+    })) as { lastUpdated: string };
+    expect(res.lastUpdated).toBeTruthy();
+    // Stored blob opens with the new key, no longer with the old one.
+    const blob = await store.get<string>(StoreKey.Bookmarks);
+    const newDerived = await deriveKey('brand new password', SYNC_ID, SyncClientVersion);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(decrypt_blob(blob!, derived)).rejects.toBeInstanceOf(InvalidCredentialsException);
+    expect(JSON.parse(await decrypt_blob(blob!, newDerived))).toBeTruthy();
+    const info = await store.get<{ password: string }>(StoreKey.SyncInfo);
+    expect(info!.password).toBe(newDerived);
+    // Undo puts the old blob back and restores the old key.
+    const undone = (await core.handleMessage({ command: MessageCommand.UndoLastLink })) as { undone: string };
+    expect(undone.undone).toBe('change-password');
+    const blobBack = await store.get<string>(StoreKey.Bookmarks);
+    expect(JSON.parse(await decrypt_blob(blobBack!, derived))).toBeTruthy();
+    const infoBack = await store.get<{ password: string }>(StoreKey.SyncInfo);
+    expect(infoBack!.password).toBe(derived);
+  });
+
+  it('password change requires current and new passwords', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const { IncompleteSyncInfoException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: PASSWORD, newPassword: '' }),
+    ).rejects.toBeInstanceOf(IncompleteSyncInfoException);
+    await expect(
+      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: '', newPassword: 'x' }),
+    ).rejects.toBeInstanceOf(IncompleteSyncInfoException);
+  });
+
+  it('password change with a wrong current password changes nothing', async () => {
+    const state = baseState();
+    const { core, store, ports, derived } = await linkedCore(state);
+    const before = await store.get<string>(StoreKey.Bookmarks);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: 'wrong password', newPassword: 'brand new password' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    // Nothing downloaded, pushed or stored: creds, blob and undo slot untouched.
+    expect(ports.downloads).toHaveLength(0);
+    expect(state.puts).toHaveLength(1); // only the connect-time push
+    expect(await store.get<string>(StoreKey.Bookmarks)).toBe(before);
+    const info = await store.get<{ password: string }>(StoreKey.SyncInfo);
+    expect(info!.password).toBe(derived);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).not.toBeNull(); // connect-new slot kept
+  });
+});
+
+describe('background core v1.2', () => {
+  it('connect-new on v1.2 stores the capability flag and revision', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    const info = await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo);
+    expect(info?.supportsV12).toBe(true);
+    expect(await store.get(StoreKey.SyncRevision)).toBe(2); // create rev1 -> upload rev2
+    expect(await store.get<string>(StoreKey.SyncHash)).toBe('h2');
+    const status = (await core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      supportsV12?: boolean;
+    };
+    expect(status.supportsV12).toBe(true);
+  });
+
+  it('connect-new on legacy stays v1.1 with no revision', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const info = await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo);
+    expect(info?.supportsV12).toBe(false);
+    expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
+    expect(await store.get(StoreKey.SyncHash)).toBeUndefined();
+    const status = (await core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      supportsV12?: boolean;
+    };
+    expect(status.supportsV12).toBe(false);
+  });
+
+  it('routine pushes on v1.2 use revision CAS', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    expect(state.v12puts).toHaveLength(1); // connect-time upload already went the V12 way
+    expect(state.puts).toHaveLength(0);
+    const base = await store.get(StoreKey.SyncRevision);
+    await core.handleMessage({
+      command: MessageCommand.AddBookmark,
+      container: BookmarkContainer.Other,
+      title: 'V12 probe',
+      url: 'https://v12.test',
+    });
+    expect(state.v12puts).toHaveLength(2);
+    expect(state.v12puts[1].baseRevision).toBe(base);
+    expect(await store.get(StoreKey.SyncRevision)).toBe((base as number) + 1);
+    expect(state.puts).toHaveLength(0); // never fell back to the timestamp path
+  });
+
+  it('revision race on v1.2 loses with 409 and stashes a conflict file', async () => {
+    const state = v12State();
+    const { core, ports } = await linkedV12Core(state);
+    state.revision += 5; // another device wrote first
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.AddBookmark,
+        container: BookmarkContainer.Other,
+        title: 'Racy',
+        url: 'https://racy.test',
+      }),
+    ).rejects.toThrow(/conflict|race/i);
+    expect(ports.downloads.some((d) => d.filename.startsWith('keepmark-conflict-'))).toBe(true);
+  });
+
+  it('conditional GET 304 skips the download when only the timestamp moved', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    const before = await store.get<string>(StoreKey.LastUpdated);
+    // Same content (same hash), new timestamp: e.g. a legacy client touched it.
+    state.remoteLastUpdated = 't-touched';
+    const putsBefore = state.v12puts.length;
+    await core.checkForUpdates();
+    expect(await store.get<string>(StoreKey.LastUpdated)).toBe(before);
+    expect(state.v12puts.length).toBe(putsBefore);
+  });
+
+  it('pull applies the new revision when the content actually changed', async () => {
+    const state = v12State();
+    const { core, store, derived } = await linkedV12Core(state);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Menu, children: [{ id: 2, title: 'V12', url: 'https://v12new.test' }] },
+      { id: 3, title: BookmarkContainer.Other, children: [] },
+      { id: 4, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+    state.revision += 1;
+    state.hash = 'h-new';
+    state.remoteLastUpdated = 't-new';
+    await core.checkForUpdates();
+    expect(await store.get<string>(StoreKey.LastUpdated)).toBe('t-new');
+    expect(await store.get(StoreKey.SyncRevision)).toBe(state.revision);
+    expect(await store.get<string>(StoreKey.SyncHash)).toBe('h-new');
+  });
+
+  it('delete on legacy is refused before touching anything', async () => {
+    const state = baseState();
+    const { core, store, ports } = await linkedCore(state);
+    await expect(core.handleMessage({ command: MessageCommand.DeleteRemoteSync })).rejects.toThrow(
+      /Not supported \(requires service v1\.2\)/,
+    );
+    expect(ports.downloads).toHaveLength(0);
+    expect(state.deleted).toHaveLength(0);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
+  });
+
+  it('delete on v1.2 backs up, deletes, unlinks, keeps natives', async () => {
+    const state = v12State();
+    const { core, store, ports, mockApi } = await linkedV12Core(state);
+    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
+    expect(ports.downloads).toHaveLength(1);
+    expect(ports.downloads[0].filename).toMatch(/^keepmark-server-backup-/);
+    expect(JSON.parse(ports.downloads[0].text)).toBeInstanceOf(Array);
+    expect(state.deleted).toEqual([SYNC_ID]);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+    expect(await store.get(StoreKey.SyncInfo)).toEqual({});
+    expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
+    expect(ports.notices.some((n) => n.title === 'Server copy deleted')).toBe(true);
+    // Natives untouched: the local bookmark survives the server wipe.
+    const children = await mockApi.getChildren('unfiled_____');
+    expect(children.map((c) => c.title)).toContain('A');
+  });
+
+  it('ping heals the capability flag after a server upgrade (no relink)', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(false);
+    state.v12 = true; // server upgraded under us
+    const pong = (await core.handleMessage({ command: MessageCommand.Ping })) as {
+      reachable: boolean;
+      supportsV12?: boolean;
+    };
+    expect(pong.reachable).toBe(true);
+    expect(pong.supportsV12).toBe(true);
+    expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(true);
+  });
+
+  it('downgraded service falls back to the legacy push without losing edits', async () => {
+    const state = v12State();
+    const { core, store, derived } = await linkedV12Core(state);
+    state.v12alive = false; // extended endpoints start 412-ing
+    await core.handleMessage({
+      command: MessageCommand.AddBookmark,
+      container: BookmarkContainer.Other,
+      title: 'After downgrade',
+      url: 'https://downgraded.test',
+    });
+    // Legacy PUT carried the edit through (connect-time upload went the V12 way).
+    expect(state.puts).toHaveLength(1);
+    const latest = JSON.parse(await decrypt_blob(state.puts[state.puts.length - 1].blob, derived));
+    expect(JSON.stringify(latest)).toContain('https://downgraded.test');
+    // And the link is honestly downgraded: no stale revision, flag cleared.
+    expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(false);
+    expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
+  });
+
+  it('switch preview advertises v1.2 support', async () => {
+    const state = v12State();
+    const { core } = await linkedV12Core(state);
+    const preview = (await core.handleMessage({
+      command: MessageCommand.SwitchPreview,
+      newServiceUrl: 'https://new.test/',
+      mode: 'new',
+    })) as { reachable: boolean; supportsV12?: boolean };
+    expect(preview.reachable).toBe(true);
+    expect(preview.supportsV12).toBe(true);
+  });
+
+  it('switch-service new onto v1.2 links with the flag set', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    const res = (await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'new',
+        newPassword: 'brand-new-password',
+        direction: 'push',
+      },
+    })) as { id: string };
+    expect(res.id).toBe(SYNC_ID);
+    expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(true);
+    expect(await store.get(StoreKey.SyncRevision)).toBe(2);
+  });
+
+  it('password change on v1.2 uses revision CAS and keeps the revision chain', async () => {
+    const state = v12State();
+    const { core, store, derived } = await linkedV12Core(state);
+    const base = await store.get(StoreKey.SyncRevision);
+    const res = (await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: PASSWORD,
+      newPassword: 'brand new password',
+    })) as { lastUpdated: string };
+    expect(res.lastUpdated).toBeTruthy();
+    expect(state.v12puts.length).toBeGreaterThan(1);
+    expect(state.v12puts[state.v12puts.length - 1].baseRevision).toBe(base);
+    expect(await store.get(StoreKey.SyncRevision)).toBe((base as number) + 1);
+    expect(state.puts).toHaveLength(0); // never fell back to the timestamp path
+    // New key opens the blob, old key does not.
+    const blob = await store.get<string>(StoreKey.Bookmarks);
+    const newDerived = await deriveKey('brand new password', SYNC_ID, SyncClientVersion);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(decrypt_blob(blob!, derived)).rejects.toBeInstanceOf(InvalidCredentialsException);
+    expect(JSON.parse(await decrypt_blob(blob!, newDerived))).toBeTruthy();
+  });
+
+  it('password change with a wrong current password changes nothing on v1.2 either', async () => {
+    const state = v12State();
+    const { core, store, ports } = await linkedV12Core(state);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: 'nope', newPassword: 'brand new password' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    expect(ports.downloads).toHaveLength(0);
+    expect(state.v12puts).toHaveLength(1); // only the connect-time upload
+  });
+
+  it('status carries the linked service version', async () => {
+    const legacy = await linkedCore(baseState());
+    const legacyStatus = (await legacy.core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      serviceVersion?: string;
+    };
+    expect(legacyStatus.serviceVersion).toBe('1.1.13');
+    const v12 = await linkedV12Core(v12State());
+    const v12Status = (await v12.core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      serviceVersion?: string;
+    };
+    expect(v12Status.serviceVersion).toBe('1.2.0');
   });
 });
 

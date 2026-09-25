@@ -28,6 +28,7 @@ npm run build         # both platforms -> build/firefox, build/chromium
 npm run build:firefox
 npm run build:chromium
 npm run package       # zips -> dist/ (system `zip`, else python3 fallback)
+npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser)
 ```
 
 No env vars, no DB, no devices needed. Node v22, npm 12 (see `.nvmrc` — none;
@@ -43,7 +44,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `errors.ts` | 13 typed errors + `errorForStatus(status)` mapping | `app/api-xbrowsersync.service.ts` via Keepmark `XbsErrors.cs` |
 | `models.ts` | `BookmarkNode` (camelCase wire), `SyncState`, `ServiceStatus`, `normalizeBookmarks` | Keepmark `Models.cs` |
 | `crypto.ts` | PBKDF2-SHA256/250k → AES-GCM-256, 16B IV prepended, lzutf8, base64; `deriveKey/encryptData/decryptData` | `app/crypto.service.ts` |
-| `api.ts` | `XSyncApiClient` v1.1.13, `Accept-Version` header, 12s timeout, bodies never logged | Keepmark `XSyncApiClient.cs` |
+| `api.ts` | `XSyncApiClient` dual-stack v1.1.13/v1.2.0 (`Accept-Version` per request, `SyncMeta`/`ApiCapabilities`, revision CAS, conditional GET, `DELETE`), 12s timeout, bodies never logged | Keepmark `XSyncApiClient.cs` |
 | `logging.ts` | Levels, ring `InMemoryLogger`, `LogSanitizer` (sync IDs truncated, secrets never logged) | Keepmark `Logging.cs` |
 | `bookmarks.ts` | Tree helpers: containers, `newBookmark/cleanBookmark`, ids, validate/repair, `nativeToSynced`, separator detection | `app/bookmark-helper.service.ts` |
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
@@ -110,9 +111,13 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    Keepmark, generated from original `app/crypto.service.ts` + lzutf8@0.6.0)
    MUST decrypt green after any `crypto.ts` change. Legacy version-less syncs
    rejected (open once in the original client).
-2. **API**: `Accept-Version: 1.1.13`, min service `1.1.9`, sync format `1.8.0`
-   (never lower — remote≤local version gate). Password never transmitted;
-   sync ID in URL is the bearer. 409 = pull-before-push, never merge.
+2. **API**: dual-stack `Accept-Version: 1.1.13` (legacy) + `1.2.0` (extended,
+   only after `capabilities.revision` probe; legacy answers 412), min service
+   `1.1.9`, sync format `1.8.0` (never lower — remote≤local version gate).
+   Password never transmitted; sync ID in URL is the bearer.
+   409 = pull-before-push, never merge. v1.2 uses revision CAS + conditional
+   GET; `DELETE /bookmarks/:id` is gated behind stored `supportsV12` (UI
+   disabled + "Not supported (requires service v1.2)" on legacy).
 3. **Sync model**: whole-blob pushes with optimistic `lastUpdated`; stored
    password field holds the DERIVED key, never raw. Queue lives ONLY in the
    background context. 409 → conflict file + notify + pull. 401 → wipe creds.

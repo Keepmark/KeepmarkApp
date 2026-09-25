@@ -10,6 +10,11 @@ export const MinApiVersion = '1.1.9';
 /** API version sent in the Accept-Version header. Must satisfy the server's ^1.1.3 route. */
 export const ApiVersion = '1.1.13';
 
+/** Extended contract (revision metadata, conditional GET, DELETE).
+ * Sent only after the server advertises capabilities — legacy servers
+ * answer 412 to it (or serve shapes without meta/capabilities). */
+export const ApiVersion12 = '1.2.0';
+
 /**
  * Sync format version advertised when creating/upgrading a sync.
  * Kept >= latest known client (1.8.0) so existing syncs are never rejected

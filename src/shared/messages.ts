@@ -14,6 +14,7 @@ import {
   UnexpectedResponseException,
   UnsupportedApiVersionException,
   UnsupportedSyncVersionException,
+  UnsupportedVersionException,
   XbsException,
 } from './errors.js';
 import type { BookmarkNode, ServiceStatus } from './models.js';
@@ -33,11 +34,13 @@ export enum MessageCommand {
   GetUndoState = 'get-undo-state',
   UndoLastLink = 'undo-last-link',
   DismissUndo = 'dismiss-undo',
+  ChangePassword = 'change-password',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
   ImportBackup = 'import-backup',
   SwitchService = 'switch-service',
+  DeleteRemoteSync = 'delete-remote-sync',
   DownloadFile = 'download-file',
 }
 
@@ -54,6 +57,8 @@ export interface StatusResponse {
   syncEnabled: boolean;
   syncId?: string;
   serviceUrl?: string;
+  /** Last-known service API version (refreshed on link + live ping). */
+  serviceVersion?: string;
   lastUpdated?: string;
   queueLength: number;
   syncing: boolean;
@@ -63,6 +68,8 @@ export interface StatusResponse {
   bookmarkCount?: number;
   /** Stored log verbosity (XbsLogLevel). */
   logLevel?: number;
+  /** True when the linked service speaks the v1.2 contract (gates v1.2-only UI). */
+  supportsV12?: boolean;
 }
 
 /** Move-service target. Nothing syncs until the popup submits this choice. */
@@ -87,6 +94,8 @@ export interface SwitchPreviewResult {
   remoteExists?: boolean;
   remoteLastUpdated?: string;
   localCount?: number;
+  /** True when the target speaks the v1.2 contract. */
+  supportsV12?: boolean;
 }
 
 /** Live server probe result (fast timeout, never throws). */
@@ -98,6 +107,8 @@ export interface PingResponse {
   message?: string;
   maxSyncSize?: number;
   remoteLastUpdated?: string;
+  /** True when the linked service speaks the v1.2 contract. */
+  supportsV12?: boolean;
 }
 
 /** One-slot undo for dangerous link operations. Snapshots are encrypted. */
@@ -108,6 +119,7 @@ export type UndoKind =
   | 'switch-new'
   | 'switch-pull'
   | 'switch-push'
+  | 'change-password'
   | 'import';
 
 export interface UndoState {
@@ -143,11 +155,13 @@ export type MessagePayload =
   | { command: MessageCommand.ExportBackup; password: string }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
+  | { command: MessageCommand.DeleteRemoteSync }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
   | { command: MessageCommand.DismissUndo }
+  | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =
@@ -166,6 +180,7 @@ const registry: Record<string, new (message: string) => Error> = {
   UnexpectedResponseException,
   UnsupportedApiVersionException,
   UnsupportedSyncVersionException,
+  UnsupportedVersionException,
   XbsException,
 };
 

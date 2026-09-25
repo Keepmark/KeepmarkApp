@@ -6,8 +6,10 @@ import browser from 'webextension-polyfill';
 import { ApiVersion, MinApiVersion, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
+  contractGate,
   copyText,
   describeUndo,
+  validatePasswordChange,
   validateSwitch,
   input,
   renderStatusCard,
@@ -71,6 +73,7 @@ async function refreshStatus(): Promise<void> {
     ping = undefined;
   }
   renderStatusCard('m', { status, ping });
+  updateDangerZone();
   await refreshUndoBanner();
 }
 
@@ -151,6 +154,49 @@ function initStatusSection(): void {
       }
     }),
   );
+  $('m-btn-delete-remote').addEventListener('click', () =>
+    withBusy('m-btn-delete-remote', 'Deleting…', async () => {
+      hideErrors();
+      // No undo exists for this (the server has no undelete): two explicit
+      // confirms plus the automatic backup download in the background.
+      if (
+        !window.confirm(
+          'Delete the SERVER copy of your sync? Local bookmarks stay, but the server copy is gone forever. A backup file is downloaded first.',
+        )
+      )
+        return;
+      if (!window.confirm('Last chance: confirm deletion of the server copy.')) return;
+      try {
+        await send({ command: MessageCommand.DeleteRemoteSync });
+        showResult('status-result', 'Server copy deleted. Device unlinked; local bookmarks untouched.');
+        status = undefined;
+        ping = undefined;
+        await refreshStatus();
+      } catch (err) {
+        sectionError('status-error', (err as Error).message);
+      }
+    }),
+  );
+}
+
+/**
+ * v1.2 gating for the danger zone: the delete button is enabled only when
+ * the linked service speaks v1.2 (live probe wins, stored flag as fallback
+ * when offline). Legacy services see the button disabled plus the reason.
+ */
+function updateDangerZone(): void {
+  const btn = $('m-btn-delete-remote') as HTMLButtonElement;
+  const hint = $('m-delete-v12-hint') as HTMLElement;
+  const contract = $('m-api-contract');
+  const gate = contractGate({
+    liveV12: ping?.supportsV12,
+    storedV12: status?.supportsV12,
+    syncEnabled: !!status?.syncEnabled,
+  });
+  btn.disabled = !gate.enabled;
+  btn.title = gate.title;
+  hint.hidden = gate.hintHidden;
+  contract.textContent = gate.badge;
 }
 
 function showResult(id: string, text: string): void {
@@ -408,6 +454,7 @@ async function renderSettings(): Promise<void> {
     ['Reachability', pg?.reachable ? 'Online' : 'Unreachable'],
     ['Service', st?.serviceUrl ?? '—'],
     ['API version', pg?.version ?? '—'],
+    ['API contract', pg?.supportsV12 ?? st?.supportsV12 ? 'v1.2 (revision sync + server delete)' : 'v1.1'],
     ['Sync ID', st?.syncId ?? '—'],
   ];
   for (const [k, v] of rows) {
@@ -438,6 +485,28 @@ function initSettingsSection(): void {
       sectionError('settings-error', (err as Error).message);
     }
   });
+  $('m-btn-password').addEventListener('click', () =>
+    withBusy('m-btn-password', 'Changing…', async () => {
+      hideErrors();
+      const current = input('m-current-password').value;
+      const next = input('m-new-password').value;
+      const invalid = validatePasswordChange({ current, next, confirm: input('m-new-password-confirm').value });
+      if (invalid) {
+        sectionError('pw-error', invalid);
+        return;
+      }
+      try {
+        await send({ command: MessageCommand.ChangePassword, currentPassword: current, newPassword: next });
+        input('m-current-password').value = '';
+        input('m-new-password').value = '';
+        input('m-new-password-confirm').value = '';
+        showResult('pw-result', 'Password changed. Update your other devices and vault now.');
+        await refreshStatus();
+      } catch (err) {
+        sectionError('pw-error', (err as Error).message);
+      }
+    }),
+  );
 }
 
 function renderAbout(): void {

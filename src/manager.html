@@ -28,6 +28,7 @@
           </div>
           <dl class="status-grid">
             <dt>Server</dt><dd id="m-server">…</dd>
+            <dt>Service version</dt><dd id="m-swversion">…</dd>
             <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini">Copy</button></dd>
             <dt>Bookmarks</dt><dd id="m-count">…</dd>
             <dt>Last sync</dt><dd id="m-last">…</dd>
@@ -50,6 +51,11 @@
         </div>
         <h3>Danger zone</h3>
         <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
+        <div class="row">
+          <button id="m-btn-delete-remote" class="danger">Delete server copy…</button>
+          <span id="m-api-contract" class="badge"></span>
+        </div>
+        <p id="m-delete-v12-hint" class="hint" hidden>Delete requires service v1.2 — not supported by this service.</p>
         <div id="status-result" class="result" hidden></div>
       </section>
 
@@ -116,6 +122,14 @@
             <option value="4">Verbose</option>
           </select>
         </label>
+        <h3>Change password</h3>
+        <p class="hint">Re-encrypts the sync with a new password. Your current password is verified first and never leaves this device. The old password stops working on all devices immediately — update your vault and other devices.</p>
+        <div id="pw-error" class="error" hidden></div>
+        <label>Current password <input id="m-current-password" type="password" autocomplete="current-password" /></label>
+        <label>New password <input id="m-new-password" type="password" autocomplete="new-password" /></label>
+        <label>Confirm new password <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
+        <div class="row"><button id="m-btn-password">Change password</button></div>
+        <div id="pw-result" class="result" hidden></div>
         <div id="settings-result" class="result" hidden></div>
       </section>
 
