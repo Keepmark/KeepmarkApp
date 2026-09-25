@@ -36,8 +36,10 @@ export function copyStatic(platform: 'firefox' | 'chromium', outDir: string): Pl
       ];
       if (manifest.action?.default_popup) referenced.push(manifest.action.default_popup);
       if (manifest.browser_action?.default_popup) referenced.push(manifest.browser_action.default_popup);
+      // NOTE: background.page is validated here; background.service_worker is
+      // produced by the separate SW build step (see vite.chromium-sw.ts),
+      // which validates its own output.
       if (manifest.background?.page) referenced.push(manifest.background.page);
-      if (manifest.background?.service_worker) referenced.push(manifest.background.service_worker);
       const missing = referenced.filter((f) => !existsSync(path.join(outDir, f)));
       if (missing.length > 0) {
         throw new Error(`copy-static: manifest references missing output files: ${missing.join(', ')}`);

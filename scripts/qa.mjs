@@ -165,10 +165,15 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
   else ok('chromium manifest has no browser_action');
   if (manifest.background?.service_worker !== 'background.js') fail('chromium service_worker entry wrong');
   else ok('chromium service_worker entry ok');
-  const sw = readFileSync(path.join(root, 'build/chromium/background.js'), 'utf8');
-  const localImports = [...sw.matchAll(/(?:import|export)[^;'"]*from\s*['"](\.[^'"]+)['"]/g)].map((m) => m[1]);
-  if (localImports.length > 0) fail(`SW bundle has local imports: ${localImports.join(', ')}`);
-  else ok('chromium SW bundle self-contained');
+  const swPath = path.join(root, 'build/chromium/background.js');
+  if (!existsSync(swPath)) {
+    fail('chromium background.js missing — run npm run build first');
+  } else {
+    const sw = readFileSync(swPath, 'utf8');
+    const localImports = [...sw.matchAll(/(?:import|export)[^;'"]*from\s*['"](\.[^'"]+)['"]/g)].map((m) => m[1]);
+    if (localImports.length > 0) fail(`SW bundle has local imports: ${localImports.join(', ')}`);
+    else ok('chromium SW bundle self-contained');
+  }
 }
 
 // 8. Mozilla linter on the firefox zip (0 errors required). Local binary,
