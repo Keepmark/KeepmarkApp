@@ -122,18 +122,39 @@ export async function createNewSync(
   v12 = false,
 ): Promise<{ id: string }> {
   const { api, store, native, idMapper, log, syncToolbar } = deps;
-  const created = await api.createSync();
+  const bookmarks = await native.readAll(syncToolbar);
+  const { id } = await createAndUpload(api, store, bookmarks, password, serviceUrl, v12);
+
+  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
+  await idMapper.set(mappings);
+  log.log(XbsLogLevel.Info, 'sync', 'New sync created and native bookmarks uploaded');
+  return { id };
+}
+
+/**
+ * Shared create+upload used by connect-new and move-service-new.
+ * v1.2 path speaks the extended contract throughout (create meta → revision
+ * CAS upload), so the stored revision/hash is populated from the start.
+ */
+export async function createAndUpload(
+  api: XSyncApiClient,
+  store: Store,
+  bookmarks: BookmarkNode[],
+  password: string,
+  serviceUrl: string | undefined,
+  v12: boolean,
+): Promise<{ id: string; lastUpdated: string }> {
+  const created = v12 ? await api.createSyncV12() : await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
     throw new UnexpectedResponseException('Unexpected response from the service.');
   }
   const derived = await deriveKey(password, created.id, created.version);
-
-  const bookmarks = await native.readAll(syncToolbar);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
-  const updated = await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
-
-  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
-  await idMapper.set(mappings);
+  // Pre-v1.2 syncs report revision 0: the first write bumps 0 -> 1.
+  const updated =
+    v12 && created.meta?.revision !== undefined
+      ? await api.updateBookmarksV12(created.id, encrypted, created.meta.revision, true)
+      : await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
   await saveSyncState(
     store,
     { id: created.id, password: derived, version: created.version },
@@ -143,8 +164,7 @@ export async function createNewSync(
     updated.meta,
     v12,
   );
-  log.log(XbsLogLevel.Info, 'sync', 'New sync created and native bookmarks uploaded');
-  return { id: created.id };
+  return { id: created.id, lastUpdated: updated.lastUpdated! };
 }
 
 /**
@@ -158,6 +178,7 @@ export async function pullExistingSync(
   syncId: string,
   password: string,
   serviceUrl?: string,
+  v12 = false,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
   const { api, store, native, idMapper, log, syncToolbar } = deps;
   const versionRes = await api.getVersion(syncId);
@@ -169,7 +190,21 @@ export async function pullExistingSync(
   }
   const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
 
-  const res = await api.getBookmarks(syncId);
+  // v1.2 links read the extended shape so meta flows; a 412 (downgraded
+  // service) falls back to the legacy shape instead of failing the link.
+  let res: import('./api.js').GetBookmarksResponse;
+  let effectiveV12 = v12;
+  if (v12) {
+    try {
+      res = await api.getBookmarksV12(syncId);
+    } catch (err) {
+      if (!(err instanceof UnsupportedVersionException)) throw err;
+      effectiveV12 = false;
+      res = await api.getBookmarks(syncId);
+    }
+  } else {
+    res = await api.getBookmarks(syncId);
+  }
   return pullWithDerivedKey(deps, {
     syncId,
     derivedKey: derived,
@@ -177,6 +212,7 @@ export async function pullExistingSync(
     lastUpdated: res.lastUpdated!,
     remoteVersion: remoteVersion ?? undefined,
     meta: res.meta,
+    supportsV12: effectiveV12,
   }, serviceUrl);
 }
 
@@ -292,21 +328,6 @@ export async function switchService(
   newServiceUrl: string,
   v12 = false,
 ): Promise<{ id: string }> {
-  const created = await newApi.createSync();
-  if (!created.id || !created.lastUpdated || !created.version) {
-    throw new UnexpectedResponseException('Unexpected response from the service.');
-  }
-  const derived = await deriveKey(newPassword, created.id, created.version);
-  const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
-  const updated = await newApi.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
-  await saveSyncState(
-    store,
-    { id: created.id, password: derived, version: created.version },
-    updated.lastUpdated!,
-    encrypted,
-    newServiceUrl,
-    updated.meta,
-    v12,
-  );
-  return { id: created.id };
+  const { id } = await createAndUpload(newApi, store, bookmarks, newPassword, newServiceUrl, v12);
+  return { id };
 }

@@ -14,6 +14,7 @@ import {
   SyncNotFoundException,
   UnexpectedResponseException,
   UnsupportedSyncVersionException,
+  UnsupportedVersionException,
 } from '../shared/errors.js';
 import type { IXbsLogger } from '../shared/logging.js';
 import { XbsLogLevel } from '../shared/logging.js';
@@ -40,9 +41,14 @@ import { Store, StoreKey, type SyncInfo } from '../shared/store.js';
 import {
   checkService,
   createNewSync,
+  deleteRemoteSync,
+  getStoredHash,
+  getStoredRevision,
+  persistMeta,
   pullWithDerivedKey,
   pushBookmarks,
   switchService,
+  v12Usable,
   type SyncDeps,
 } from '../shared/sync.js';
 import { SyncQueue, type SyncJob } from '../shared/sync-queue.js';
@@ -115,6 +121,12 @@ export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
   private connecting = false;
+  /**
+   * v1.2 capability per service URL (null = not probed yet). Probed via the
+   * extended /info contract; any failure means legacy. Invalidated on 412 so
+   * a downgraded service falls back to the timestamp path on retry.
+   */
+  private readonly v12cache = new Map<string, boolean>();
 
   constructor(
     private store: Store,
@@ -174,6 +186,8 @@ export class BackgroundCore {
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.SwitchService:
         return this.switchService(msg.switch);
+      case MessageCommand.DeleteRemoteSync:
+        return this.deleteRemoteSync();
       case MessageCommand.SwitchPreview:
         return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.SetVerbosity:
@@ -232,6 +246,45 @@ export class BackgroundCore {
   private async doLocalJob(): Promise<void> {
     const { info, syncToolbar } = await this.requireCreds();
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    const usable = v12Usable(info);
+    // v1.2: extended reads so meta flows (conditional GET when the hash is
+    // known, full V12 GET otherwise). A 412 drops to the legacy path.
+    if (usable) {
+      try {
+        const knownHash = await getStoredHash(this.store);
+        const full = knownHash
+          ? await api.getBookmarksIfChanged(info.id!, knownHash)
+          : await api.getBookmarksV12(info.id!);
+        if (full === null) {
+          this.log.log(XbsLogLevel.Info, 'sync', 'Pull: unchanged (304)');
+          return;
+        }
+        const deps = this.depsFor(api, syncToolbar);
+        const pulled = await this.withSuspended(() =>
+          pullWithDerivedKey(deps, {
+            syncId: info.id!,
+            derivedKey: info.password!,
+            blob: full.bookmarks ?? '',
+            lastUpdated: full.lastUpdated!,
+            remoteVersion: full.version ?? undefined,
+            meta: full.meta,
+            supportsV12: true,
+          }, info.serviceUrl),
+        );
+        if (pulled.updateRemote) {
+          const linked = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!;
+          await this.pushCurrent(api, linked, pulled.bookmarks);
+        }
+        return;
+      } catch (err) {
+        // Downgraded service: drop the v1.2 flag and retry on the legacy path.
+        if (err instanceof UnsupportedVersionException) {
+          await this.downgradeV12(info);
+        } else {
+          throw err;
+        }
+      }
+    }
     const res = await api.getBookmarks(info.id!);
     const deps = this.depsFor(api, syncToolbar);
     const pulled = await this.withSuspended(() =>
@@ -241,11 +294,61 @@ export class BackgroundCore {
         blob: res.bookmarks ?? '',
         lastUpdated: res.lastUpdated!,
         remoteVersion: res.version ?? undefined,
+        meta: res.meta,
+        supportsV12: false,
       }, info.serviceUrl),
     );
     if (pulled.updateRemote) {
-      await pushBookmarks(api, this.store, info.id!, info.password!, pulled.bookmarks);
+      const linked = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!;
+      await this.pushCurrent(api, linked, pulled.bookmarks);
     }
+  }
+
+  /**
+   * Capability probe, cached per service URL. Any failure means legacy —
+   * the caller stays on the v1.1 timestamp path.
+   */
+  private async isV12(serviceUrl: string): Promise<boolean> {
+    const cached = this.v12cache.get(serviceUrl);
+    if (cached !== undefined) return cached;
+    let probed = false;
+    try {
+      probed = await this.makeApi(serviceUrl).supportsV12();
+    } catch {
+      probed = false;
+    }
+    this.v12cache.set(serviceUrl, probed);
+    this.log.log(XbsLogLevel.Debug, 'sync', `Capabilities for ${serviceUrl}: v12=${probed}`);
+    return probed;
+  }
+
+  /** Forget a stale v1.2 flag after a 412 (downgraded service). */
+  private async downgradeV12(info: SyncInfo): Promise<void> {
+    this.v12cache.delete(info.serviceUrl ?? DefaultServiceUrl);
+    await this.store.set(StoreKey.SyncInfo, { ...info, supportsV12: false });
+    await this.store.remove(StoreKey.SyncRevision);
+    await this.store.remove(StoreKey.SyncHash);
+    this.log.log(XbsLogLevel.Info, 'sync', 'Service no longer speaks v1.2, back on the legacy path');
+  }
+
+  /**
+   * Push on the best available contract: revision CAS when the link is v1.2
+   * and a revision is stored, timestamp otherwise. A 412 (downgraded
+   * service) invalidates the flag and retries once on the legacy path.
+   */
+  private async pushCurrent(api: XSyncApiClient, info: SyncInfo, tree: BookmarkNode[]): Promise<string> {
+    if (v12Usable(info)) {
+      const baseRevision = await getStoredRevision(this.store);
+      if (baseRevision !== undefined) {
+        try {
+          return await pushBookmarks(api, this.store, info.id!, info.password!, tree, false, baseRevision);
+        } catch (err) {
+          if (!(err instanceof UnsupportedVersionException)) throw err;
+          await this.downgradeV12(info);
+        }
+      }
+    }
+    return pushBookmarks(api, this.store, info.id!, info.password!, tree);
   }
 
   /** Reconcile native -> synced and push when anything changed. */
@@ -274,7 +377,7 @@ export class BackgroundCore {
     await this.idMapper.set(mappings);
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     try {
-      await pushBookmarks(api, this.store, info.id!, info.password!, next);
+      await this.pushCurrent(api, info, next);
     } catch (err) {
       if (err instanceof DataOutOfSyncException) {
         // Remote moved under us: stash our uncommitted tree before the
@@ -300,7 +403,7 @@ export class BackgroundCore {
       await this.idMapper.set(mappings);
     });
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
-    await pushBookmarks(api, this.store, info.id!, info.password!, tree);
+    await this.pushCurrent(api, info, tree);
   }
 
   // ---------------------------------------------------------- native events
@@ -338,10 +441,11 @@ export class BackgroundCore {
     try {
       const api = this.makeApi(serviceUrl);
       await checkService(api, this.log);
+      const v12 = await this.isV12(serviceUrl);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       const prev = await this.capturePrev();
       const { id } = await this.withSuspended(() =>
-        createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl),
+        createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl, v12),
       );
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
       await this.saveUndo({
@@ -371,9 +475,10 @@ export class BackgroundCore {
     try {
       const api = this.makeApi(serviceUrl);
       await checkService(api, this.log);
+      const v12 = await this.isV12(serviceUrl);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       if (direction === 'push') {
-        await this.connectPushExisting(api, serviceUrl, syncId, password, syncToolbar);
+        await this.connectPushExisting(api, serviceUrl, syncId, password, syncToolbar, v12);
       } else {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
@@ -384,7 +489,22 @@ export class BackgroundCore {
         }
         const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
         const natives = await this.adapter.readAll(syncToolbar);
-        const res = await api.getBookmarks(syncId);
+        // v1.2 links read the extended shape so meta flows; a 412 falls back
+        // to the legacy shape instead of failing the link.
+        let res: import('../shared/api.js').GetBookmarksResponse;
+        let effectiveV12 = v12;
+        if (v12) {
+          try {
+            res = await api.getBookmarksV12(syncId);
+          } catch (err) {
+            if (!(err instanceof UnsupportedVersionException)) throw err;
+            effectiveV12 = false;
+            this.v12cache.set(serviceUrl, false);
+            res = await api.getBookmarks(syncId);
+          }
+        } else {
+          res = await api.getBookmarks(syncId);
+        }
         await this.saveUndo({
           kind: 'connect-pull',
           opDerivedKey: derived,
@@ -401,10 +521,13 @@ export class BackgroundCore {
             blob: res.bookmarks ?? '',
             lastUpdated: res.lastUpdated!,
             remoteVersion,
+            meta: res.meta,
+            supportsV12: effectiveV12,
           }, serviceUrl),
         );
         if (pulled.updateRemote) {
-          await pushBookmarks(api, this.store, syncId, derived, pulled.bookmarks);
+          const linked = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!;
+          await this.pushCurrent(api, linked, pulled.bookmarks);
         }
       }
       await this.afterLink();
@@ -428,6 +551,7 @@ export class BackgroundCore {
     syncId: string,
     password: string,
     syncToolbar: boolean,
+    v12: boolean,
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
@@ -437,7 +561,8 @@ export class BackgroundCore {
       );
     }
     const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
-    const remote = await api.getBookmarks(syncId);
+    // v1.2 links read the extended shape so the upload can use revision CAS.
+    const remote = v12 ? await api.getBookmarksV12(syncId) : await api.getBookmarks(syncId);
     const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
     const remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
     await this.ports.chrome.download(`keepmark-pre-push-${Date.now()}.json`, JSON.stringify(remoteTree));
@@ -456,7 +581,10 @@ export class BackgroundCore {
       return withIds;
     });
     const encrypted = await encryptData(JSON.stringify(localTree), derived);
-    const updated = await api.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+    const updated =
+      v12 && remote.meta?.revision !== undefined
+        ? await api.updateBookmarksV12(syncId, encrypted, remote.meta.revision, false)
+        : await api.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
     await this.withSuspended(async () => {
       const mappings = await this.adapter.rebuildMappings(localTree, syncToolbar);
       await this.idMapper.set(mappings);
@@ -466,9 +594,11 @@ export class BackgroundCore {
       password: derived,
       version: remoteVersion,
       serviceUrl,
+      supportsV12: v12,
     });
     await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
     await this.store.set(StoreKey.Bookmarks, encrypted);
+    await persistMeta(this.store, updated.meta);
     await this.store.set(StoreKey.SyncEnabled, true);
   }
 
@@ -556,10 +686,11 @@ export class BackgroundCore {
     await this.ports.chrome.download(`keepmark-safety-${Date.now()}.json`, JSON.stringify(tree));
     const newApi = this.makeApi(target.newServiceUrl);
     await checkService(newApi, this.log);
+    const v12 = await this.isV12(target.newServiceUrl);
 
     if (target.mode === 'new') {
       const prev = await this.capturePrev();
-      const { id } = await switchService(newApi, this.store, tree, target.newPassword, target.newServiceUrl);
+      const { id } = await switchService(newApi, this.store, tree, target.newPassword, target.newServiceUrl, v12);
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
       await this.saveUndo({
         kind: 'switch-new',
@@ -581,7 +712,7 @@ export class BackgroundCore {
       );
     }
     const derived = await deriveKey(target.newPassword, syncId, remoteVersion ?? SyncClientVersion);
-    const remote = await newApi.getBookmarks(syncId);
+    const remote = v12 ? await newApi.getBookmarksV12(syncId) : await newApi.getBookmarks(syncId);
     // Password check first: throws InvalidCredentials before anything is overwritten.
     await decryptData(remote.bookmarks ?? '', derived);
 
@@ -603,10 +734,14 @@ export class BackgroundCore {
           blob: remote.bookmarks ?? '',
           lastUpdated: remote.lastUpdated!,
           remoteVersion,
+          meta: remote.meta,
+          supportsV12: v12,
         }, target.newServiceUrl),
       );
     } else {
-      // Push the local tree onto the existing remote, based on its lastUpdated.
+      // Push the local tree onto the existing remote (revision CAS on v1.2,
+      // timestamp otherwise). A 409 surfaces honestly, nothing is lost: the
+      // safety backup above plus the undo slot hold the pre-push state.
       await this.saveUndo({
         kind: 'switch-push',
         opDerivedKey: derived,
@@ -617,7 +752,10 @@ export class BackgroundCore {
         localCount: countNodes(tree),
       });
       const encrypted = await encryptData(JSON.stringify(tree), derived);
-      const updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+      const updated =
+        v12 && remote.meta?.revision !== undefined
+          ? await newApi.updateBookmarksV12(syncId, encrypted, remote.meta.revision, false)
+          : await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
       await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
       await this.store.set(StoreKey.Bookmarks, encrypted);
       await this.store.set(StoreKey.SyncInfo, {
@@ -625,7 +763,9 @@ export class BackgroundCore {
         password: derived,
         version: remoteVersion,
         serviceUrl: target.newServiceUrl,
+        supportsV12: v12,
       });
+      await persistMeta(this.store, updated.meta);
       await this.store.set(StoreKey.SyncEnabled, true);
     }
     await this.afterLink();
@@ -635,6 +775,39 @@ export class BackgroundCore {
   private async getDuplicates(): Promise<DuplicateGroup[]> {
     const { info } = await this.requireCreds();
     return getDuplicateGroups(await this.cachedTree(info));
+  }
+
+  /**
+   * v1.2-only: delete the server copy of the linked sync, then unlink this
+   * device (natives are untouched). Gated behind the stored supportsV12 flag:
+   * on legacy services it throws UnsupportedVersionException and NOTHING is
+   * deleted. There is no server-side undelete, so the safety net is a
+   * plaintext backup download taken BEFORE the DELETE plus a double confirm
+   * in the UI — deliberately no undo slot (a PUT-back would 401).
+   */
+  private async deleteRemoteSync(): Promise<{ deleted: boolean }> {
+    const { info } = await this.requireCreds();
+    if (!v12Usable(info)) {
+      throw new UnsupportedVersionException('Not supported (requires service v1.2).');
+    }
+    const tree = await this.cachedTree(info);
+    await this.ports.chrome.download(`keepmark-server-backup-${Date.now()}.json`, JSON.stringify(tree));
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    try {
+      await deleteRemoteSync(api, info.id!);
+    } catch (err) {
+      if (err instanceof UnsupportedVersionException) {
+        // Raced a downgrade: persist the downgrade, report honestly.
+        await this.downgradeV12(info);
+      }
+      throw err;
+    }
+    this.log.log(XbsLogLevel.Info, 'sync', `Server copy ${info.id} deleted, unlinking device`);
+    await this.disableSync();
+    await this.ports.chrome
+      .notify('Server copy deleted', 'The sync was deleted from the service. This device is now unlinked; local bookmarks are untouched.')
+      .catch(() => undefined);
+    return { deleted: true };
   }
 
   /**
@@ -652,7 +825,11 @@ export class BackgroundCore {
     const api = this.makeApi(newServiceUrl, ServiceProbeTimeoutMs);
     let service;
     try {
-      service = await api.getInfo();
+      // Extended shape when the target speaks v1.2, legacy shape otherwise —
+      // either way no mutation, no sync.
+      service = await api.getInfoV12().catch((err: unknown) =>
+        err instanceof UnsupportedVersionException ? api.getInfo() : Promise.reject(err),
+      );
     } catch {
       return { reachable: false, localCount };
     }
@@ -663,6 +840,7 @@ export class BackgroundCore {
       serviceStatus: service.status,
       maxSyncSize: service.maxSyncSize,
       localCount,
+      supportsV12: service.capabilities?.revision === true,
     };
     if (mode === 'existing' && syncId) {
       try {
@@ -803,6 +981,7 @@ export class BackgroundCore {
       usedBytes: blob?.length ?? 0,
       bookmarkCount: info ? await this.countCached(info).catch(() => undefined) : undefined,
       logLevel: this.log.minLevel as number,
+      supportsV12: v12Usable(info),
     };
   }
 
@@ -816,17 +995,29 @@ export class BackgroundCore {
   /**
    * Fast live probe of the service (3s timeout, never throws): reachability,
    * service status/version/location/message/max size + remote lastUpdated.
-   * Powers the popup status card without touching sync state.
+   * Powers the popup status card without touching sync state. Also refreshes
+   * the stored v1.2 flag (server upgrades heal without relink); an offline
+   * probe leaves the flag untouched.
    */
   private async ping(): Promise<PingResponse> {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (!info?.id) return { reachable: false };
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl, ServiceProbeTimeoutMs);
     try {
-      const [service, remote] = await Promise.all([
+      const [service, remote, v12] = await Promise.all([
         api.getInfo(),
         api.getLastUpdated(info.id).catch(() => undefined),
+        // undefined = unknown (offline/mid-probe failure): never downgrades.
+        api
+          .getInfoV12()
+          .then((r) => r.capabilities?.revision === true)
+          .catch(() => undefined),
       ]);
+      if (v12 !== undefined && v12 !== (info.supportsV12 === true)) {
+        await this.store.set(StoreKey.SyncInfo, { ...info, supportsV12: v12 });
+        this.v12cache.set(info.serviceUrl ?? DefaultServiceUrl, v12);
+        this.log.log(XbsLogLevel.Info, 'sync', `Capability refresh for ${info.serviceUrl}: v12=${v12}`);
+      }
       return {
         reachable: true,
         status: service.status,
@@ -835,6 +1026,7 @@ export class BackgroundCore {
         message: service.message ?? undefined,
         maxSyncSize: service.maxSyncSize,
         remoteLastUpdated: remote?.lastUpdated ?? undefined,
+        supportsV12: v12 ?? v12Usable(info),
       };
     } catch {
       return { reachable: false };
@@ -847,6 +1039,8 @@ export class BackgroundCore {
     await this.store.remove(StoreKey.BookmarkIdMappings);
     await this.store.remove(StoreKey.Bookmarks);
     await this.store.remove(StoreKey.LastUpdated);
+    await this.store.remove(StoreKey.SyncRevision);
+    await this.store.remove(StoreKey.SyncHash);
     await this.store.set(StoreKey.SyncEnabled, false);
     await this.store.set(StoreKey.SyncInfo, {});
     await this.setBadge(false);

@@ -140,6 +140,18 @@ export class XSyncApiClient {
     );
   }
 
+  /** v1.2 create: the extended shape carries meta (revision starts at 1). */
+  async createSyncV12(): Promise<CreateSyncResponse> {
+    return this.send<CreateSyncResponse>(
+      'POST',
+      'bookmarks',
+      { version: SyncClientVersion },
+      (r) => !!r.id && !!r.lastUpdated && !!r.version,
+      undefined,
+      ApiVersion12,
+    );
+  }
+
   getBookmarks(syncId: string): Promise<GetBookmarksResponse> {
     return this.send<GetBookmarksResponse>(
       'GET',
@@ -147,6 +159,18 @@ export class XSyncApiClient {
       undefined,
       (r) => !!r.lastUpdated,
       syncId,
+    );
+  }
+
+  /** v1.2 GET: the extended shape carries meta (absent/zeroed for pre-v1.2 syncs). */
+  getBookmarksV12(syncId: string): Promise<GetBookmarksResponse> {
+    return this.send<GetBookmarksResponse>(
+      'GET',
+      `bookmarks/${syncId}`,
+      undefined,
+      (r) => !!r.lastUpdated,
+      syncId,
+      ApiVersion12,
     );
   }
 
