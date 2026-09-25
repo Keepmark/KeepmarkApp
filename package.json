@@ -12,7 +12,8 @@
     "build": "npm run build:firefox && npm run build:chromium",
     "build:firefox": "tsc --noEmit && vite build --config vite.firefox.ts",
     "build:chromium": "tsc --noEmit && vite build --config vite.chromium.ts && vite build --config vite.chromium-sw.ts",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "qa": "node scripts/qa.mjs"
   },
   "dependencies": {
     "lzutf8": "0.6.0",

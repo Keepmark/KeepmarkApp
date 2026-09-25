@@ -28,6 +28,7 @@ npm run build         # both platforms -> build/firefox, build/chromium
 npm run build:firefox
 npm run build:chromium
 npm run package       # zips -> dist/ (system `zip`, else python3 fallback)
+npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser)
 ```
 
 No env vars, no DB, no devices needed. Node v22, npm 12 (see `.nvmrc` — none;
