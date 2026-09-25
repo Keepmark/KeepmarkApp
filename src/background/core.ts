@@ -6,13 +6,14 @@
 // context; the popup talks to it exclusively through messages.
 
 import { XSyncApiClient } from '../shared/api.js';
-import { decryptData } from '../shared/crypto.js';
-import { DefaultServiceUrl, ServiceProbeTimeoutMs } from '../shared/constants.js';
+import { decryptData, deriveKey, encryptData } from '../shared/crypto.js';
+import { compareVersions, DefaultServiceUrl, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
   SyncNotFoundException,
   UnexpectedResponseException,
+  UnsupportedSyncVersionException,
 } from '../shared/errors.js';
 import type { IXbsLogger } from '../shared/logging.js';
 import { XbsLogLevel } from '../shared/logging.js';
@@ -28,6 +29,7 @@ import {
   type MessagePayload,
   type PingResponse,
   type StatusResponse,
+  type SwitchTarget,
   type SyncJobType,
 } from '../shared/messages.js';
 import { reconcileContainer } from '../shared/reconcile.js';
@@ -144,7 +146,7 @@ export class BackgroundCore {
       case MessageCommand.ImportBackup:
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.SwitchService:
-        return this.switchService(msg.newServiceUrl, msg.newPassword);
+        return this.switchService(msg.switch);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
     }
@@ -392,16 +394,69 @@ export class BackgroundCore {
     return { count };
   }
 
-  private async switchService(newServiceUrl: string, newPassword: string): Promise<{ id: string }> {
-    const { info } = await this.requireCreds();
+  /**
+   * Move-service wizard. NOTHING syncs until the popup submits an explicit
+   * SwitchTarget (mode + direction + passwords). Both branches start with a
+   * plaintext safety-backup download of the scrapped side; the existing
+   * branch verifies the password by decrypting BEFORE mutating anything.
+   */
+  private async switchService(target: SwitchTarget): Promise<{ id: string }> {
+    const { info, syncToolbar } = await this.requireCreds();
     const tree = await this.cachedTree(info);
+    if (!target.newPassword) throw new IncompleteSyncInfoException('A password is required.');
+    if (target.mode === 'existing' && !target.syncId) {
+      throw new IncompleteSyncInfoException('A sync ID is required for an existing sync.');
+    }
     // Safety-backup of the scrapped side before moving (plaintext, like Keepmark).
     await this.ports.chrome.download(`keepmark-safety-${Date.now()}.json`, JSON.stringify(tree));
-    const newApi = this.makeApi(newServiceUrl);
+    const newApi = this.makeApi(target.newServiceUrl);
     await checkService(newApi, this.log);
-    const { id } = await switchService(newApi, this.store, tree, newPassword, newServiceUrl);
+
+    if (target.mode === 'new') {
+      const { id } = await switchService(newApi, this.store, tree, target.newPassword, target.newServiceUrl);
+      await this.afterLink();
+      return { id };
+    }
+
+    const syncId = target.syncId!;
+    const versionRes = await newApi.getVersion(syncId);
+    const remoteVersion = versionRes.version ?? undefined;
+    if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(
+        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+      );
+    }
+    const derived = await deriveKey(target.newPassword, syncId, remoteVersion ?? SyncClientVersion);
+    const remote = await newApi.getBookmarks(syncId);
+    // Password check first: throws InvalidCredentials before anything is overwritten.
+    await decryptData(remote.bookmarks ?? '', derived);
+
+    if (target.direction === 'pull') {
+      await this.withSuspended(() =>
+        pullWithDerivedKey(this.depsFor(newApi, syncToolbar), {
+          syncId,
+          derivedKey: derived,
+          blob: remote.bookmarks ?? '',
+          lastUpdated: remote.lastUpdated!,
+          remoteVersion,
+        }, target.newServiceUrl),
+      );
+    } else {
+      // Push the local tree onto the existing remote, based on its lastUpdated.
+      const encrypted = await encryptData(JSON.stringify(tree), derived);
+      const updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+      await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
+      await this.store.set(StoreKey.Bookmarks, encrypted);
+      await this.store.set(StoreKey.SyncInfo, {
+        id: syncId,
+        password: derived,
+        version: remoteVersion,
+        serviceUrl: target.newServiceUrl,
+      });
+      await this.store.set(StoreKey.SyncEnabled, true);
+    }
     await this.afterLink();
-    return { id };
+    return { id: syncId };
   }
 
   private async getDuplicates(): Promise<DuplicateGroup[]> {
@@ -434,7 +489,15 @@ export class BackgroundCore {
       queueLength: this.queue.length,
       syncing: this.queue.syncing || this.connecting,
       usedBytes: blob?.length ?? 0,
+      bookmarkCount: info ? await this.countCached(info).catch(() => undefined) : undefined,
     };
+  }
+
+  private async countCached(info: SyncInfo): Promise<number | undefined> {
+    const blob = await this.store.get<string>(StoreKey.Bookmarks);
+    if (!blob || !info.password) return undefined;
+    const plain = await decryptData(blob, info.password);
+    return countNodes((plain ? JSON.parse(plain) : []) as BookmarkNode[]);
   }
 
   /**

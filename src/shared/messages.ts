@@ -54,6 +54,19 @@ export interface StatusResponse {
   syncing: boolean;
   /** Size of the stored encrypted blob in bytes (base64 chars). */
   usedBytes?: number;
+  /** Nodes in the cached tree (for action summaries). */
+  bookmarkCount?: number;
+}
+
+/** Move-service target. Nothing syncs until the popup submits this choice. */
+export interface SwitchTarget {
+  newServiceUrl: string;
+  /** 'new' = create sync + upload local; 'existing' = link + push or pull. */
+  mode: 'new' | 'existing';
+  syncId?: string;
+  newPassword: string;
+  /** existing mode only: overwrite remote with local, or local with remote. */
+  direction: 'push' | 'pull';
 }
 
 /** Live server probe result (fast timeout, never throws). */
@@ -92,7 +105,7 @@ export type MessagePayload =
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
-  | { command: MessageCommand.SwitchService; newServiceUrl: string; newPassword: string }
+  | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =

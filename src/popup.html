@@ -75,8 +75,18 @@
     </details>
     <details id="switch-box">
       <summary>Move to another service</summary>
+      <p class="hint">Nothing syncs until you confirm below. A safety backup of the current side is downloaded first.</p>
       <label>New service URL <input id="switch-url" type="url" /></label>
+      <label class="check"><input type="radio" name="switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
+      <label class="check"><input type="radio" name="switch-mode" value="existing" /> Use existing sync</label>
+      <label id="switch-id-row" hidden>Sync ID <input id="switch-id" type="text" /></label>
+      <div id="switch-direction-row" hidden>
+        <label class="check"><input type="radio" name="switch-direction" value="push" checked /> Overwrite remote with my bookmarks</label>
+        <label class="check"><input type="radio" name="switch-direction" value="pull" /> Replace local with remote</label>
+      </div>
       <label>New password <input id="switch-password" type="password" /></label>
+      <label id="switch-confirm-row">Confirm password <input id="switch-confirm" type="password" /></label>
+      <div id="switch-summary" class="hint"></div>
       <button id="btn-switch">Move sync</button>
     </details>
     <details id="log-box">

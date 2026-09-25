@@ -281,14 +281,96 @@ describe('background core', () => {
     const { core, store, ports } = await linkedCore(state);
     const res = (await core.handleMessage({
       command: MessageCommand.SwitchService,
-      newServiceUrl: 'https://new.test/',
-      newPassword: 'brand-new-password',
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'new',
+        newPassword: 'brand-new-password',
+        direction: 'push',
+      },
     })) as { id: string };
     expect(res.id).toBe(SYNC_ID);
     expect(ports.downloads).toHaveLength(1); // safety backup
     expect(ports.downloads[0].filename).toMatch(/^keepmark-safety-/);
     const info = await store.get<{ serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info!.serviceUrl).toBe('https://new.test/');
+  });
+
+  it('switch to existing sync with push uploads the local tree', async () => {
+    const state = baseState();
+    const { core, store, derived } = await linkedCore(state);
+    // Existing remote encrypted under the target password (proves ownership).
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    const stale: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [] },
+      { id: 2, title: BookmarkContainer.Menu, children: [] },
+      { id: 3, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(stale), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    state.puts.length = 0;
+    void derived;
+    const res = (await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'existing',
+        syncId: 'target-id',
+        newPassword: 'target-password',
+        direction: 'push',
+      },
+    })) as { id: string };
+    expect(res.id).toBe('target-id');
+    expect(state.puts).toHaveLength(1); // local tree uploaded onto the existing remote
+    const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
+    expect(info).toMatchObject({ id: 'target-id', serviceUrl: 'https://new.test/' });
+  });
+
+  it('switch to existing sync with pull replaces local with remote', async () => {
+    const state = baseState();
+    const { core, mockApi } = await linkedCore(state);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'FromNew', url: 'https://new.test/x' }] },
+      { id: 3, title: BookmarkContainer.Menu, children: [] },
+      { id: 4, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    state.remoteBlob = await encryptData(JSON.stringify(remote), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    const res = (await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'existing',
+        syncId: 'target-id',
+        newPassword: 'target-password',
+        direction: 'pull',
+      },
+    })) as { id: string };
+    expect(res.id).toBe('target-id');
+    const children = await mockApi.getChildren('unfiled_____');
+    expect(children.map((c) => c.title)).toContain('FromNew');
+  });
+
+  it('switch to existing sync with wrong password aborts before mutating', async () => {
+    const state = baseState();
+    const { core, store, mockApi } = await linkedCore(state);
+    const before = await mockApi.getChildren('unfiled_____');
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.SwitchService,
+        switch: {
+          newServiceUrl: 'https://new.test/',
+          mode: 'existing',
+          syncId: 'target-id',
+          newPassword: 'wrong-password',
+          direction: 'pull',
+        },
+      }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    expect(await mockApi.getChildren('unfiled_____')).toEqual(before);
+    const info = await store.get<{ id: string }>(StoreKey.SyncInfo);
+    expect(info!.id).toBe(SYNC_ID); // still linked to the old side
   });
 
   it('disable-sync clears credentials and stops polling', async () => {

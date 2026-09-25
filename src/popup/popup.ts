@@ -57,8 +57,21 @@ function showView(name: 'connect' | 'main' | 'settings'): void {
   ($('view-settings') as HTMLElement).hidden = name !== 'settings';
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+/** Disable a button with a busy label while an async action runs. */
+async function withBusy(buttonId: string, busyLabel: string, fn: () => Promise<void>): Promise<void> {
+  const btn = $(buttonId) as HTMLButtonElement;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyLabel;
+  try {
+    await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+export function formatBytes(bytes: number): string {  if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
@@ -152,8 +165,12 @@ async function initConnect(): Promise<void> {
       showError('connect', (err as Error).message);
     }
   };
-  $('btn-new-sync').addEventListener('click', () => void connect(false));
-  $('btn-existing-sync').addEventListener('click', () => void connect(true));
+  $('btn-new-sync').addEventListener('click', () =>
+    withBusy('btn-new-sync', 'Connecting…', () => connect(false)),
+  );
+  $('btn-existing-sync').addEventListener('click', () =>
+    withBusy('btn-existing-sync', 'Connecting…', () => connect(true)),
+  );
   $('btn-open-tab').addEventListener('click', () => {
     // Popups close on focus loss (by design) — a full tab stays open while
     // copying credentials from a vault. State carries over via storage.
@@ -165,13 +182,15 @@ async function initConnect(): Promise<void> {
 function initMain(): void {
   $('btn-sync-now').addEventListener('click', async () => {
     clearErrors();
-    try {
-      await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
+    await withBusy('btn-sync-now', 'Syncing…', async () => {
+      try {
+        setPill('Syncing…', 'busy');
+        await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
+      } catch (err) {
+        showError('main', (err as Error).message);
+      }
       await refreshAll();
-    } catch (err) {
-      showError('main', (err as Error).message);
-      await refreshAll();
-    }
+    });
   });
   $('btn-settings').addEventListener('click', () => void openSettings());
   $('btn-copy-id').addEventListener('click', async () => {
@@ -223,6 +242,10 @@ async function loadDuplicates(): Promise<void> {
     return;
   }
   $('dup-count').textContent = groups.length ? `(${groups.length})` : '';
+  if (groups.length === 0) {
+    box.textContent = 'No duplicates — everything is clean ✓';
+    return;
+  }
   for (const group of groups) {
     const div = document.createElement('div');
     div.className = 'dup-group';
@@ -307,21 +330,64 @@ function initSettings(): void {
   });
   $('btn-switch').addEventListener('click', async () => {
     clearErrors();
+    const mode = (document.querySelector('input[name="switch-mode"]:checked') as HTMLInputElement).value as
+      | 'new'
+      | 'existing';
+    const direction = (document.querySelector('input[name="switch-direction"]:checked') as HTMLInputElement).value as
+      | 'push'
+      | 'pull';
     const newServiceUrl = input('switch-url').value.trim();
+    const syncId = input('switch-id').value.trim();
     const newPassword = input('switch-password').value;
+    const confirm = input('switch-confirm').value;
     if (!newServiceUrl || !newPassword) {
       showError('settings', 'New service URL and password are required.');
       return;
     }
-    try {
-      await send({ command: MessageCommand.SwitchService, newServiceUrl, newPassword });
-      input('switch-password').value = '';
-      await refreshAll();
-      await openSettings();
-    } catch (err) {
-      showError('settings', (err as Error).message);
+    if (mode === 'new' && newPassword !== confirm) {
+      showError('settings', 'Passwords do not match.');
+      return;
     }
+    if (mode === 'existing' && !syncId) {
+      showError('settings', 'Sync ID is required for an existing sync.');
+      return;
+    }
+    await withBusy('btn-switch', 'Moving…', async () => {
+      try {
+        await send({
+          command: MessageCommand.SwitchService,
+          switch: { newServiceUrl, mode, syncId: syncId || undefined, newPassword, direction },
+        });
+        input('switch-password').value = '';
+        input('switch-confirm').value = '';
+        await refreshAll();
+        await openSettings();
+      } catch (err) {
+        showError('settings', (err as Error).message);
+      }
+    });
   });
+
+  const updateSwitchForm = (): void => {
+    const mode = (document.querySelector('input[name="switch-mode"]:checked') as HTMLInputElement).value;
+    const direction = (document.querySelector('input[name="switch-direction"]:checked') as HTMLInputElement).value;
+    ($('switch-id-row') as HTMLElement).hidden = mode !== 'existing';
+    ($('switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
+    ($('switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
+    const url = input('switch-url').value.trim() || '…';
+    const n = status?.bookmarkCount;
+    $('switch-summary').textContent =
+      mode === 'new'
+        ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks.`
+        : direction === 'push'
+          ? `Will overwrite the remote sync on ${url} with ${n ?? 'your'} local bookmarks.`
+          : `Will replace local bookmarks with the remote sync from ${url}.`;
+  };
+  document.querySelectorAll('input[name="switch-mode"], input[name="switch-direction"]').forEach((el) => {
+    el.addEventListener('change', updateSwitchForm);
+  });
+  input('switch-url').addEventListener('input', updateSwitchForm);
+  updateSwitchForm();
   $('btn-logs').addEventListener('click', async () => {
     clearErrors();
     try {
