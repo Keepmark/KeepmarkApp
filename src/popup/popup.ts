@@ -39,19 +39,24 @@ function showView(name: 'connect' | 'main'): void {
 
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
+/** Generation token: stale refresh responses never overwrite newer state. */
+let refreshSeq = 0;
 
 async function refreshAll(): Promise<void> {
+  const my = ++refreshSeq;
   try {
     status = await send<StatusResponse>({ command: MessageCommand.GetStatus });
   } catch {
     status = undefined;
   }
+  if (my !== refreshSeq) return;
   renderStatusCard('p', { status, ping: undefined });
   try {
     ping = await send<PingResponse>({ command: MessageCommand.Ping });
   } catch {
     ping = undefined;
   }
+  if (my !== refreshSeq) return;
   const view: StatusView = { status, ping };
   renderStatusCard('p', view);
   const state = $('sync-state');
@@ -112,6 +117,7 @@ async function initConnect(): Promise<void> {
       const invalid = validateConnect({
         mode,
         direction,
+        serviceUrl,
         syncId,
         password,
         confirm: input('confirm-password').value,
@@ -173,8 +179,8 @@ function initMain(): void {
   });
   $('btn-undo').addEventListener('click', async () => {
     clearErrors();
+    if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
     await withBusy('btn-undo', 'Undoing…', async () => {
-      if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
       try {
         await send({ command: MessageCommand.UndoLastLink });
         await refreshAll();

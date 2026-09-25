@@ -70,6 +70,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   if (!status?.syncEnabled) {
     setPill(pill, 'Not connected', 'bad');
     badge.textContent = '—';
+    badge.className = 'badge';
     $(`${prefix}-server`).textContent = '—';
     $(`${prefix}-syncid`).textContent = '—';
     $(`${prefix}-last`).textContent = '—';
@@ -178,21 +179,39 @@ export function describeUndo(kind: string, count: number | undefined, when: numb
   return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
 }
 
+/** Service URL check: https always; http only for loopback (local dev/E2E). */
+export function validateServiceUrl(raw: string): string | null {
+  const url = raw.trim();
+  if (!url) return 'Service URL is required.';
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'Service URL is not a valid URL.';
+  }
+  if (parsed.protocol === 'https:') return null;
+  if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)) return null;
+  return 'Service URL must use https (http is allowed only for localhost).';
+}
+
 /** Pure connect-form validation (foolproof rules). Null = valid. */
 export function validateConnect(input: {
   mode: 'new' | 'existing';
   direction: 'pull' | 'push';
+  serviceUrl: string;
   syncId: string;
   password: string;
   confirm: string;
   pushConfirmed: boolean;
 }): string | null {
+  const urlErr = validateServiceUrl(input.serviceUrl);
+  if (urlErr) return urlErr;
   if (!input.password) return 'Password is required.';
   if (input.mode === 'new') {
     if (input.password !== input.confirm) return 'Passwords do not match.';
     return null;
   }
-  if (!input.syncId) return 'Sync ID is required for an existing sync.';
+  if (!input.syncId.trim()) return 'Sync ID is required for an existing sync.';
   if (input.direction === 'push' && !input.pushConfirmed) {
     return 'Tick the confirmation to overwrite the server copy.';
   }
@@ -216,13 +235,13 @@ export function validateSwitch(input: {
   newPassword: string;
   confirm: string;
 }): string | null {
-  if (!input.newServiceUrl || !input.newPassword) {
-    return 'New service URL and password are required.';
-  }
-  if (input.mode === 'new' && input.newPassword !== input.confirm) {
-    return 'Passwords do not match.';
-  }
-  if (input.mode === 'existing' && !input.syncId) {
+  const urlErr = validateServiceUrl(input.newServiceUrl);
+  if (urlErr) return urlErr;
+  if (!input.newPassword) return 'A new password is required.';
+  // Confirm in BOTH modes: a typo in existing mode locks you out of the
+  // target sync with no recovery path.
+  if (input.newPassword !== input.confirm) return 'Passwords do not match.';
+  if (input.mode === 'existing' && !input.syncId?.trim()) {
     return 'Sync ID is required for an existing sync.';
   }
   return null;

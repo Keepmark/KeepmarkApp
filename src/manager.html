@@ -39,7 +39,7 @@
             </dd>
           </dl>
         </div>
-        <div id="status-error" class="error" hidden></div>
+        <div id="status-error" class="error" role="alert" hidden></div>
         <div class="row">
           <button id="m-btn-sync-now">⇅ Sync now</button>
           <button id="m-btn-refresh">Refresh status</button>
@@ -62,7 +62,8 @@
       <section id="sec-backup" hidden>
         <h2>Backup</h2>
         <p class="hint">Encrypted backups protected by their own password (min 8 chars).</p>
-        <div id="backup-error" class="error" hidden></div>
+        <div id="backup-error" class="error" role="alert" hidden></div>
+        <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
         <div class="row">
           <button id="m-btn-export">Export backup</button>
           <button id="m-btn-import">Import backup</button>
@@ -73,7 +74,7 @@
 
       <section id="sec-duplicates" hidden>
         <h2>Duplicates</h2>
-        <div id="dup-error" class="error" hidden></div>
+        <div id="dup-error" class="error" role="alert" hidden></div>
         <div class="row"><button id="m-btn-duplicates">Scan now</button></div>
         <div id="m-dup-list"></div>
       </section>
@@ -81,7 +82,7 @@
       <section id="sec-move" hidden>
         <h2>Move to another service</h2>
         <p class="hint">Nothing syncs until you confirm at step 2. A safety backup of the current side is downloaded first.</p>
-        <div id="move-error" class="error" hidden></div>
+        <div id="move-error" class="error" role="alert" hidden></div>
         <h3>1. Target</h3>
         <label>New service URL <input id="m-switch-url" type="url" /></label>
         <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
@@ -103,14 +104,14 @@
 
       <section id="sec-logs" hidden>
         <h2>Logs</h2>
-        <div id="logs-error" class="error" hidden></div>
+        <div id="logs-error" class="error" role="alert" hidden></div>
         <div class="row"><button id="m-btn-logs">Refresh logs</button></div>
         <pre id="m-log-list"></pre>
       </section>
 
       <section id="sec-settings" hidden>
         <h2>Settings</h2>
-        <div id="settings-error" class="error" hidden></div>
+        <div id="settings-error" class="error" role="alert" hidden></div>
         <dl id="m-service-info"></dl>
         <label class="check"><input id="m-opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
         <label>Log verbosity
@@ -124,7 +125,7 @@
         </label>
         <h3>Change password</h3>
         <p class="hint">Re-encrypts the sync with a new password. Your current password is verified first and never leaves this device. The old password stops working on all devices immediately — update your vault and other devices.</p>
-        <div id="pw-error" class="error" hidden></div>
+        <div id="pw-error" class="error" role="alert" hidden></div>
         <label>Current password <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label>New password <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label>Confirm new password <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>

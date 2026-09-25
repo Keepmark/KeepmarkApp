@@ -30,6 +30,10 @@ import { StoreKey } from '../shared/store.js';
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 let preview: SwitchPreviewResult | undefined;
+/** Generation token: stale refresh responses never overwrite newer state. */
+let statusSeq = 0;
+/** Inputs the current preview was made for — submit requires an exact match. */
+let previewFor: { newServiceUrl: string; mode: string; syncId?: string } | undefined;
 
 function sectionError(id: string, message: string): void {
   const el = $(id);
@@ -39,6 +43,10 @@ function sectionError(id: string, message: string): void {
 
 function hideErrors(): void {
   for (const id of ['status-error', 'backup-error', 'dup-error', 'move-error', 'logs-error', 'settings-error', 'pw-error']) {
+    $(id).hidden = true;
+  }
+  // Stale success/result boxes must not survive next to a new error.
+  for (const id of ['status-result', 'backup-result', 'move-result', 'pw-result', 'settings-result']) {
     $(id).hidden = true;
   }
 }
@@ -58,13 +66,21 @@ function showSection(name: string): void {
 }
 
 async function refreshStatus(): Promise<void> {
+  const my = ++statusSeq;
   hideErrors();
   try {
     status = await send<StatusResponse>({ command: MessageCommand.GetStatus });
   } catch (err) {
+    if (my !== statusSeq) return;
+    // Never leave a stale linked card: redraw cleared, then report.
+    status = undefined;
+    ping = undefined;
+    renderStatusCard('m', { status, ping });
+    updateDangerZone();
     sectionError('status-error', (err as Error).message);
     return;
   }
+  if (my !== statusSeq) return;
   const view: StatusView = { status, ping: undefined };
   renderStatusCard('m', view);
   try {
@@ -72,6 +88,7 @@ async function refreshStatus(): Promise<void> {
   } catch {
     ping = undefined;
   }
+  if (my !== statusSeq) return;
   renderStatusCard('m', { status, ping });
   updateDangerZone();
   await refreshUndoBanner();
@@ -94,10 +111,10 @@ async function refreshUndoBanner(): Promise<void> {
 }
 
 function initUndoBanner(): void {
-  $('m-btn-undo').addEventListener('click', () =>
-    withBusy('m-btn-undo', 'Undoing…', async () => {
-      hideErrors();
-      if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+  $('m-btn-undo').addEventListener('click', async () => {
+    hideErrors();
+    if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+    await withBusy('m-btn-undo', 'Undoing…', async () => {
       try {
         const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
         showResult('status-result', `Undone: ${res.undone}.`);
@@ -106,8 +123,8 @@ function initUndoBanner(): void {
       } catch (err) {
         sectionError('status-error', (err as Error).message);
       }
-    }),
-  );
+    });
+  });
   $('m-btn-undo-dismiss').addEventListener('click', async () => {
     await send({ command: MessageCommand.DismissUndo }).catch(() => undefined);
     ($('undo-banner') as HTMLElement).hidden = true;
@@ -136,7 +153,9 @@ function initStatusSection(): void {
       await refreshStatus();
     }),
   );
-  $('m-btn-refresh').addEventListener('click', () => void refreshStatus());
+  $('m-btn-refresh').addEventListener('click', () =>
+    withBusy('m-btn-refresh', 'Refreshing…', () => refreshStatus()),
+  );
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
   });
@@ -213,8 +232,11 @@ function initBackupSection(): void {
   $('m-btn-export').addEventListener('click', () =>
     withBusy('m-btn-export', 'Exporting…', async () => {
       hideErrors();
-      const password = window.prompt('Backup password (min 8 chars):') ?? '';
-      if (!password) return;
+      const password = input('m-backup-password').value;
+      if (!password) {
+        sectionError('backup-error', 'Enter a backup password first (min 8 chars).');
+        return;
+      }
       try {
         const json = await send<string>({ command: MessageCommand.ExportBackup, password });
         await send({
@@ -222,6 +244,7 @@ function initBackupSection(): void {
           filename: `keepmark-backup-${new Date().toISOString().slice(0, 10)}.xbs.json`,
           text: json,
         });
+        input('m-backup-password').value = '';
         showResult('backup-result', 'Backup exported to your downloads.');
       } catch (err) {
         sectionError('backup-error', (err as Error).message);
@@ -233,12 +256,18 @@ function initBackupSection(): void {
     hideErrors();
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    const password = window.prompt('Backup password:') ?? '';
-    if (!password) return;
+    const password = input('m-backup-password').value;
+    if (!password) {
+      sectionError('backup-error', 'Enter the backup password first, then choose the file again.');
+      (e.target as HTMLInputElement).value = '';
+      return;
+    }
     await withBusy('m-btn-import', 'Importing…', async () => {
       try {
         const json = await file.text();
         const res = await send<{ count: number }>({ command: MessageCommand.ImportBackup, json, password });
+        input('m-backup-password').value = '';
+        (input('m-import-file') as HTMLInputElement).value = '';
         showResult('backup-result', `Imported ${res.count} nodes and pushed to the service.`);
       } catch (err) {
         sectionError('backup-error', (err as Error).message);
@@ -247,7 +276,10 @@ function initBackupSection(): void {
   });
 }
 
+let dupSeq = 0;
+
 async function scanDuplicates(): Promise<void> {
+  const my = ++dupSeq;
   const box = $('m-dup-list');
   box.textContent = '';
   $('nav-dup-count').textContent = '';
@@ -255,9 +287,11 @@ async function scanDuplicates(): Promise<void> {
   try {
     groups = await send<DuplicateGroup[]>({ command: MessageCommand.GetDuplicates });
   } catch (err) {
+    if (my !== dupSeq) return;
     sectionError('dup-error', (err as Error).message);
     return;
   }
+  if (my !== dupSeq) return;
   if (groups.length === 0) {
     box.innerHTML = '<p class="clean">No duplicates — everything is clean ✓</p>';
     return;
@@ -277,6 +311,7 @@ async function scanDuplicates(): Promise<void> {
         const btn = document.createElement('button');
         btn.textContent = 'Delete';
         btn.id = `dup-del-${gi}-${entry.id}`;
+        btn.setAttribute('aria-label', `Delete duplicate ${entry.title ?? group.url} in ${entry.path}`);
         btn.addEventListener('click', () => {
           hideErrors();
           btn.disabled = true;
@@ -299,7 +334,9 @@ async function scanDuplicates(): Promise<void> {
 }
 
 function initDuplicatesSection(): void {
-  $('m-btn-duplicates').addEventListener('click', () => void scanDuplicates());
+  $('m-btn-duplicates').addEventListener('click', () =>
+    withBusy('m-btn-duplicates', 'Scanning…', () => scanDuplicates()),
+  );
 }
 
 function switchMode(): 'new' | 'existing' {
@@ -318,8 +355,9 @@ function updateMoveForm(): void {
   const mode = switchMode();
   ($('m-switch-id-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
-  ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
+  // Confirm row always visible: a typo in existing mode locks you out.
   preview = undefined;
+  previewFor = undefined;
   $('m-btn-switch').toggleAttribute('disabled', true);
   $('move-error').hidden = true;
   $('move-preview').hidden = true;
@@ -356,6 +394,8 @@ async function previewTarget(): Promise<void> {
         mode,
         syncId,
       });
+      // Pin what the preview was made for; submitMove() refuses stale previews.
+      previewFor = { newServiceUrl, mode, syncId };
     } catch (err) {
       sectionError('move-error', (err as Error).message);
       return;
@@ -393,6 +433,16 @@ async function submitMove(): Promise<void> {
     sectionError('move-error', invalid);
     return;
   }
+  if (
+    !preview ||
+    !previewFor ||
+    previewFor.newServiceUrl !== newServiceUrl ||
+    previewFor.mode !== mode ||
+    previewFor.syncId !== syncId
+  ) {
+    sectionError('move-error', 'Inputs changed since the check — press “Check target” again.');
+    return;
+  }
   await withBusy('m-btn-switch', 'Moving…', async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
@@ -416,6 +466,7 @@ function initMoveSection(): void {
     el.addEventListener('change', updateMoveForm);
   });
   input('m-switch-url').addEventListener('input', updateMoveForm);
+  input('m-switch-id').addEventListener('input', updateMoveForm);
   $('m-btn-preview').addEventListener('click', () => void previewTarget());
   $('m-btn-switch').addEventListener('click', () => void submitMove());
   updateMoveForm();
@@ -437,7 +488,9 @@ async function refreshLogs(): Promise<void> {
 }
 
 function initLogsSection(): void {
-  $('m-btn-logs').addEventListener('click', () => void refreshLogs());
+  $('m-btn-logs').addEventListener('click', () =>
+    withBusy('m-btn-logs', 'Loading…', () => refreshLogs()),
+  );
 }
 
 async function renderSettings(): Promise<void> {

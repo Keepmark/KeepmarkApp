@@ -238,6 +238,7 @@ describe('validateConnect (foolproof rules)', () => {
   const base = {
     mode: 'existing' as const,
     direction: 'pull' as const,
+    serviceUrl: 'https://api.xbrowsersync.org',
     syncId: 'id',
     password: 'pw',
     confirm: '',
@@ -245,6 +246,16 @@ describe('validateConnect (foolproof rules)', () => {
   };
   it('pull default passes with id + password', () => {
     expect(validateConnect(base)).toBeNull();
+  });
+  it('rejects bad service URLs', () => {
+    expect(validateConnect({ ...base, serviceUrl: 'not a url' })).toBe('Service URL is not a valid URL.');
+    expect(validateConnect({ ...base, serviceUrl: 'http://example.com/' })).toBe(
+      'Service URL must use https (http is allowed only for localhost).',
+    );
+    expect(validateConnect({ ...base, serviceUrl: 'http://localhost:8090' })).toBeNull();
+  });
+  it('trims a whitespace-only sync id', () => {
+    expect(validateConnect({ ...base, syncId: '   ' })).toBe('Sync ID is required for an existing sync.');
   });
   it('requires password', () => {
     expect(validateConnect({ ...base, password: '' })).toBe('Password is required.');
@@ -265,16 +276,22 @@ describe('validateConnect (foolproof rules)', () => {
 });
 
 describe('validateSwitch', () => {
-  it('requires url + password, confirm for new, id for existing', () => {
+  it('requires url + password, confirm always, id for existing', () => {
     expect(validateSwitch({ mode: 'new', newServiceUrl: '', syncId: '', newPassword: '', confirm: '' })).toBe(
-      'New service URL and password are required.',
+      'Service URL is required.',
+    );
+    expect(validateSwitch({ mode: 'new', newServiceUrl: 'ftp://x/', syncId: '', newPassword: 'a', confirm: 'a' })).toBe(
+      'Service URL must use https (http is allowed only for localhost).',
     );
     expect(
       validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'b' }),
     ).toBe('Passwords do not match.');
     expect(
-      validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: '' }),
+      validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: '  ', newPassword: 'a', confirm: 'a' }),
     ).toBe('Sync ID is required for an existing sync.');
+    expect(
+      validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: 'id', newPassword: 'a', confirm: 'b' }),
+    ).toBe('Passwords do not match.');
     expect(
       validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'a' }),
     ).toBeNull();

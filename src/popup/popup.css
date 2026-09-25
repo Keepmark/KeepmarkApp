@@ -124,67 +124,6 @@ button.danger {
   white-space: pre-wrap;
 }
 
-.toolbar {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.toolbar input {
-  flex: 1;
-  margin: 0;
-}
-
-#results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-#results li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  border-bottom: 1px dotted var(--border);
-}
-
-#results .link {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-#results .path {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#results .del {
-  flex: none;
-}
-
-#log-list {
-  font-size: 11px;
-  white-space: pre-wrap;
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  padding: 4px 6px;
-}
-
-details {
-  margin-top: 10px;
-}
-
 dl {
   display: grid;
   grid-template-columns: auto 1fr;
