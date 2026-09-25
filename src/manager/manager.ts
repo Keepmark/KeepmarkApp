@@ -411,6 +411,18 @@ function renderAbout(): void {
   $('about-api').textContent = `v${ApiVersion}`;
   $('about-minapi').textContent = `v${MinApiVersion}`;
   $('about-syncver').textContent = `v${SyncClientVersion}`;
+  $('about-bug').addEventListener(
+    'click',
+    () => {
+      const version = browser.runtime.getManifest().version;
+      const subject = encodeURIComponent(`[Keepmark ${version}] Bug report`);
+      const body = encodeURIComponent(
+        `App version: ${version}\nAPI version: ${ApiVersion}\nSync format: ${SyncClientVersion}\n\nDescribe the issue:\n`,
+      );
+      location.href = `mailto:keepmark@proton.me?subject=${subject}&body=${body}`;
+    },
+    { once: true },
+  );
 }
 
 function init(): void {
