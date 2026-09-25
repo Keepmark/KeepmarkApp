@@ -65,6 +65,15 @@ describe('bookmark helpers', () => {
     expect(validateBookmarkIds(repaired)).toBe(true);
   });
 
+  it('repair keeps id-less nodes in place like the original (NaN sort)', () => {
+    // Original: sort((x, y) => x.id - y.id); undefined ids compare as NaN
+    // (treated as 0, stable) — they must NOT jump to the front.
+    const tree = [{ id: 5, title: 'E' }, { title: 'N' }, { id: 3, title: 'C' }] as BookmarkNode[];
+    const repaired = repairBookmarkIds(tree);
+    expect(repaired.map((b) => b.title)).toEqual(['E', 'N', 'C']);
+    expect(validateBookmarkIds(repaired)).toBe(true);
+  });
+
   it('findById searches recursively', () => {
     const tree = [{ id: 1, children: [{ id: 2, title: 'deep' }] }];
     expect((findById(2, tree as never) as { title: string }).title).toBe('deep');

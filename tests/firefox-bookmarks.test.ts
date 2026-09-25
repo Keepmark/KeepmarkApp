@@ -7,6 +7,7 @@ import {
   getNativeBookmarksAsBookmarks,
   type BookmarkApi,
 } from '../src/firefox/bookmarks';
+import { getSupportedUrl, urlIsSupported } from '../src/firefox/platform';
 import type { NativeNode } from '../src/shared/bookmarks';
 import { BookmarkContainer } from '../src/shared/bookmarks';
 
@@ -119,5 +120,13 @@ describe('firefox native service', () => {
     const synced = await getNativeBookmarksAsBookmarks(api, false);
     const toolbar = synced.find((c) => c.title === BookmarkContainer.Toolbar)!;
     expect(toolbar.children ?? []).toHaveLength(0);
+  });
+
+  it('url support is case-insensitive (uppercase schemes stay intact)', () => {
+    expect(urlIsSupported('HTTPS://EXAMPLE.COM')).toBe(true);
+    expect(urlIsSupported('FTP://host/file')).toBe(true);
+    expect(urlIsSupported('chrome://settings')).toBe(false);
+    expect(urlIsSupported('data:text/plain,hi')).toBe(false);
+    expect(getSupportedUrl('HTTPS://EXAMPLE.COM')).toBe('HTTPS://EXAMPLE.COM');
   });
 });
