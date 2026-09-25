@@ -154,15 +154,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 
 ## 7. Pending work (exact resume point)
 
-**Icons/assets from Keepmark — DONE (2026-09-25):**
-
-- `res/assets/{icon16,icon32,icon48,icon128,notsynced32}.png` generated with
-  PIL LANCZOS from `../Keepmark/src/Keepmark/Resources/AppIcon/appicon.png`
-  (432² RGBA rounded tile; notsynced = grayscale + 35% dim).
-- Manifests carry `icons` + `default_icon` 32; `copyStatic` ships `assets/`;
-  background sets `setIcon` per state (notsynced variant on `!`) + badge text;
-  notifications use `icon48.png`; popup header shows the mark.
-- Source of truth for future sizes: Keepmark `brand/` + `Resources/AppIcon/`.
+**Icons/assets from Keepmark brand/ — DONE (see res/assets, git history):**
+toolbar + manifest + notification icons rescaled from `10-favicon.png`
+(plus grayscale notsynced); in-page brand chip uses the white mark. Source of
+truth for future sizes: `../Keepmark/brand/`.
 
 **Known limitations / next features (not started):** manual browser QA
 (see README install section); QR connect (only `QrDelimiter` constant exists);
