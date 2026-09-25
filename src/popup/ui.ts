@@ -136,3 +136,44 @@ export function describeUndo(kind: string, count: number | undefined, when: numb
   const n = count !== undefined ? ` (${count} bookmarks)` : '';
   return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
 }
+
+/** Pure connect-form validation (foolproof rules). Null = valid. */
+export function validateConnect(input: {
+  mode: 'new' | 'existing';
+  direction: 'pull' | 'push';
+  syncId: string;
+  password: string;
+  confirm: string;
+  pushConfirmed: boolean;
+}): string | null {
+  if (!input.password) return 'Password is required.';
+  if (input.mode === 'new') {
+    if (input.password !== input.confirm) return 'Passwords do not match.';
+    return null;
+  }
+  if (!input.syncId) return 'Sync ID is required for an existing sync.';
+  if (input.direction === 'push' && !input.pushConfirmed) {
+    return 'Tick the confirmation to overwrite the server copy.';
+  }
+  return null;
+}
+
+/** Pure move-wizard validation. Null = valid. */
+export function validateSwitch(input: {
+  mode: 'new' | 'existing';
+  newServiceUrl: string;
+  syncId?: string;
+  newPassword: string;
+  confirm: string;
+}): string | null {
+  if (!input.newServiceUrl || !input.newPassword) {
+    return 'New service URL and password are required.';
+  }
+  if (input.mode === 'new' && input.newPassword !== input.confirm) {
+    return 'Passwords do not match.';
+  }
+  if (input.mode === 'existing' && !input.syncId) {
+    return 'Sync ID is required for an existing sync.';
+  }
+  return null;
+}

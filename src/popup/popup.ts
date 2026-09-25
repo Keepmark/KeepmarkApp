@@ -9,6 +9,7 @@ import {
   copyText,
   describeUndo,
   input,
+  validateConnect,
   renderStatusCard,
   send,
   withBusy,
@@ -108,26 +109,22 @@ async function initConnect(): Promise<void> {
       const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
       const syncId = input('sync-id').value.trim();
       const password = input('password').value;
-      if (!password) {
-        showError('connect', 'Password is required.');
+      const invalid = validateConnect({
+        mode,
+        direction,
+        syncId,
+        password,
+        confirm: input('confirm-password').value,
+        pushConfirmed: (input('conn-push-confirm') as HTMLInputElement).checked,
+      });
+      if (invalid) {
+        showError('connect', invalid);
         return;
       }
       try {
         if (mode === 'new') {
-          if (password !== input('confirm-password').value) {
-            showError('connect', 'Passwords do not match.');
-            return;
-          }
           await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
         } else {
-          if (!syncId) {
-            showError('connect', 'Sync ID is required for an existing sync.');
-            return;
-          }
-          if (direction === 'push' && !(input('conn-push-confirm') as HTMLInputElement).checked) {
-            showError('connect', 'Tick the confirmation to overwrite the server copy.');
-            return;
-          }
           await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
         }
         input('password').value = '';

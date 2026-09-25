@@ -8,6 +8,7 @@ import {
   $,
   copyText,
   describeUndo,
+  validateSwitch,
   input,
   renderStatusCard,
   send,
@@ -336,16 +337,9 @@ async function submitMove(): Promise<void> {
   const syncId = input('m-switch-id').value.trim() || undefined;
   const newPassword = input('m-switch-password').value;
   const confirm = input('m-switch-confirm').value;
-  if (!newPassword) {
-    sectionError('move-error', 'A password is required.');
-    return;
-  }
-  if (mode === 'new' && newPassword !== confirm) {
-    sectionError('move-error', 'Passwords do not match.');
-    return;
-  }
-  if (mode === 'existing' && !syncId) {
-    sectionError('move-error', 'Sync ID is required for an existing sync.');
+  const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm });
+  if (invalid) {
+    sectionError('move-error', invalid);
     return;
   }
   await withBusy('m-btn-switch', 'Moving…', async () => {
