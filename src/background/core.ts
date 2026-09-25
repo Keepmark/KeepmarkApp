@@ -846,6 +846,7 @@ export class BackgroundCore {
     await this.ports.alarms.clear(UpdatesAlarmName);
     await this.store.remove(StoreKey.BookmarkIdMappings);
     await this.store.remove(StoreKey.Bookmarks);
+    await this.store.remove(StoreKey.LastUpdated);
     await this.store.set(StoreKey.SyncEnabled, false);
     await this.store.set(StoreKey.SyncInfo, {});
     await this.setBadge(false);

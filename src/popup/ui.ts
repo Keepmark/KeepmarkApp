@@ -67,6 +67,14 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const badge = $(`${prefix}-service-badge`);
   if (!status?.syncEnabled) {
     setPill(pill, 'Not connected', 'bad');
+    badge.textContent = '—';
+    $(`${prefix}-server`).textContent = '—';
+    $(`${prefix}-syncid`).textContent = '—';
+    $(`${prefix}-last`).textContent = '—';
+    $(`${prefix}-space`).textContent = '—';
+    ($(`${prefix}-space-fill`) as HTMLElement).style.width = '0%';
+    const countEl = document.getElementById(`${prefix}-count`);
+    if (countEl) countEl.textContent = '—';
     return;
   }
   const serviceUrl = status.serviceUrl ?? DefaultServiceUrl;

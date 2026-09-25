@@ -385,6 +385,16 @@ describe('background core', () => {
     await core.handleMessage({ command: MessageCommand.DisableSync });
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
+    expect(await store.get(StoreKey.LastUpdated)).toBeUndefined();
+    expect(await store.get(StoreKey.Bookmarks)).toBeUndefined();
+    const status = (await core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      syncId?: string;
+      lastUpdated?: string;
+      usedBytes?: number;
+    };
+    expect(status.syncId).toBeUndefined();
+    expect(status.lastUpdated).toBeUndefined();
+    expect(status.usedBytes).toBe(0);
   });
 
   it('status reflects link state', async () => {
