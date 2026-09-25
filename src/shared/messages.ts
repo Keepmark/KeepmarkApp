@@ -30,6 +30,9 @@ export enum MessageCommand {
   Ping = 'ping',
   SwitchPreview = 'switch-preview',
   SetVerbosity = 'set-verbosity',
+  GetUndoState = 'get-undo-state',
+  UndoLastLink = 'undo-last-link',
+  DismissUndo = 'dismiss-undo',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -97,6 +100,23 @@ export interface PingResponse {
   remoteLastUpdated?: string;
 }
 
+/** One-slot undo for dangerous link operations. Snapshots are encrypted. */
+export type UndoKind =
+  | 'connect-new'
+  | 'connect-pull'
+  | 'connect-push'
+  | 'switch-new'
+  | 'switch-pull'
+  | 'switch-push'
+  | 'import';
+
+export interface UndoState {
+  kind: UndoKind;
+  timestamp: number;
+  bookmarkCount?: number;
+  serviceUrl?: string;
+}
+
 export interface DuplicateEntry {
   id: number;
   title?: string;
@@ -112,7 +132,7 @@ export type MessagePayload =
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | { command: MessageCommand.ConnectNew; serviceUrl: string; password: string }
-  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string }
+  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string; direction: 'pull' | 'push' }
   | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
@@ -125,6 +145,9 @@ export type MessagePayload =
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.SetVerbosity; level: number }
+  | { command: MessageCommand.GetUndoState }
+  | { command: MessageCommand.UndoLastLink }
+  | { command: MessageCommand.DismissUndo }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =

@@ -32,13 +32,14 @@ import {
   type SwitchPreviewResult,
   type SwitchTarget,
   type SyncJobType,
+  type UndoKind,
+  type UndoState,
 } from '../shared/messages.js';
 import { reconcileContainer } from '../shared/reconcile.js';
 import { Store, StoreKey, type SyncInfo } from '../shared/store.js';
 import {
   checkService,
   createNewSync,
-  pullExistingSync,
   pullWithDerivedKey,
   pushBookmarks,
   switchService,
@@ -49,6 +50,24 @@ import { overwriteAll, type NativeAdapter } from './adapter.js';
 
 export const UpdatesAlarmName = 'xbs-sync-updates-check';
 export const NativeDebounceAlarmName = 'xbs-native-debounce';
+
+/** Encrypted undo snapshot for one dangerous link operation. */
+export interface UndoSlotData {
+  kind: UndoKind;
+  timestamp: number;
+  /** Derived key of the operation side (decrypts localEnc, auths PUT-back). */
+  opDerivedKey: string;
+  opSyncId: string;
+  opServiceUrl: string;
+  prevSyncInfo: SyncInfo;
+  prevLastUpdated?: string;
+  prevBlob?: string;
+  /** Encrypted pre-image of the native tree (when natives are overwritten). */
+  localEnc?: string;
+  localCount?: number;
+  /** Encrypted pre-image of the remote blob (when remote is overwritten). */
+  remotePreBlob?: string;
+}
 
 export interface AlarmPort {
   schedule(name: string, periodMinutes: number): Promise<void>;
@@ -134,7 +153,7 @@ export class BackgroundCore {
       case MessageCommand.ConnectNew:
         return this.connectNew(msg.serviceUrl, msg.password);
       case MessageCommand.ConnectExisting:
-        return this.connectExisting(msg.serviceUrl, msg.syncId, msg.password);
+        return this.connectExisting(msg.serviceUrl, msg.syncId, msg.password, msg.direction);
       case MessageCommand.AddBookmark:
         return this.addBookmark(msg);
       case MessageCommand.RemoveBookmark:
@@ -159,6 +178,12 @@ export class BackgroundCore {
         return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.SetVerbosity:
         return this.setVerbosity(msg.level);
+      case MessageCommand.GetUndoState:
+        return this.getUndoState();
+      case MessageCommand.UndoLastLink:
+        return this.undoLastLink();
+      case MessageCommand.DismissUndo:
+        return this.clearUndo();
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
     }
@@ -314,9 +339,18 @@ export class BackgroundCore {
       const api = this.makeApi(serviceUrl);
       await checkService(api, this.log);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+      const prev = await this.capturePrev();
       const { id } = await this.withSuspended(() =>
         createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl),
       );
+      const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      await this.saveUndo({
+        kind: 'connect-new',
+        opDerivedKey: linked!.password!,
+        opSyncId: id,
+        opServiceUrl: serviceUrl,
+        ...prev,
+      });
       await this.afterLink();
       return { id };
     } finally {
@@ -325,7 +359,12 @@ export class BackgroundCore {
     }
   }
 
-  private async connectExisting(serviceUrl: string, syncId: string, password: string): Promise<{ id: string }> {
+  private async connectExisting(
+    serviceUrl: string,
+    syncId: string,
+    password: string,
+    direction: 'pull' | 'push' = 'pull',
+  ): Promise<{ id: string }> {
     if (this.connecting) throw new UnexpectedResponseException('Connect already in progress.');
     this.connecting = true;
     await this.setBadge(true);
@@ -333,12 +372,40 @@ export class BackgroundCore {
       const api = this.makeApi(serviceUrl);
       await checkService(api, this.log);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
-      const pulled = await this.withSuspended(() =>
-        pullExistingSync(this.depsFor(api, syncToolbar), syncId, password, serviceUrl),
-      );
-      if (pulled.updateRemote) {
-        const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-        await pushBookmarks(api, this.store, syncId, info!.password!, pulled.bookmarks);
+      if (direction === 'push') {
+        await this.connectPushExisting(api, serviceUrl, syncId, password, syncToolbar);
+      } else {
+        const versionRes = await api.getVersion(syncId);
+        const remoteVersion = versionRes.version ?? undefined;
+        if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+          throw new UnsupportedSyncVersionException(
+            `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+          );
+        }
+        const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
+        const natives = await this.adapter.readAll(syncToolbar);
+        const res = await api.getBookmarks(syncId);
+        await this.saveUndo({
+          kind: 'connect-pull',
+          opDerivedKey: derived,
+          opSyncId: syncId,
+          opServiceUrl: serviceUrl,
+          ...(await this.capturePrev()),
+          localEnc: await encryptData(JSON.stringify(natives), derived),
+          localCount: countNodes(natives),
+        });
+        const pulled = await this.withSuspended(() =>
+          pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+            syncId,
+            derivedKey: derived,
+            blob: res.bookmarks ?? '',
+            lastUpdated: res.lastUpdated!,
+            remoteVersion,
+          }, serviceUrl),
+        );
+        if (pulled.updateRemote) {
+          await pushBookmarks(api, this.store, syncId, derived, pulled.bookmarks);
+        }
       }
       await this.afterLink();
       return { id: syncId };
@@ -346,6 +413,63 @@ export class BackgroundCore {
       this.connecting = false;
       await this.setBadge(false);
     }
+  }
+
+  /**
+   * First-link upload onto an existing sync (migration case, never the
+   * default): version gate → password verified by decrypting the remote →
+   * safety-backup download of the server copy → PUT local tree based on the
+   * remote lastUpdated. A 409 surfaces as a conflict error, nothing is
+   * overwritten locally.
+   */
+  private async connectPushExisting(
+    api: XSyncApiClient,
+    serviceUrl: string,
+    syncId: string,
+    password: string,
+    syncToolbar: boolean,
+  ): Promise<void> {
+    const versionRes = await api.getVersion(syncId);
+    const remoteVersion = versionRes.version ?? undefined;
+    if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(
+        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+      );
+    }
+    const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
+    const remote = await api.getBookmarks(syncId);
+    const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
+    const remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
+    await this.ports.chrome.download(`keepmark-pre-push-${Date.now()}.json`, JSON.stringify(remoteTree));
+    await this.saveUndo({
+      kind: 'connect-push',
+      opDerivedKey: derived,
+      opSyncId: syncId,
+      opServiceUrl: serviceUrl,
+      ...(await this.capturePrev()),
+      remotePreBlob: remote.bookmarks ?? '',
+      localCount: countNodes(remoteTree),
+    });
+    const localTree = await this.withSuspended(async () => {
+      const natives = await this.adapter.readAll(syncToolbar);
+      const withIds = ensureContainersExist(natives);
+      return withIds;
+    });
+    const encrypted = await encryptData(JSON.stringify(localTree), derived);
+    const updated = await api.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+    await this.withSuspended(async () => {
+      const mappings = await this.adapter.rebuildMappings(localTree, syncToolbar);
+      await this.idMapper.set(mappings);
+    });
+    await this.store.set(StoreKey.SyncInfo, {
+      id: syncId,
+      password: derived,
+      version: remoteVersion,
+      serviceUrl,
+    });
+    await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
+    await this.store.set(StoreKey.Bookmarks, encrypted);
+    await this.store.set(StoreKey.SyncEnabled, true);
   }
 
   private async afterLink(): Promise<void> {
@@ -390,9 +514,21 @@ export class BackgroundCore {
   }
 
   private async importBackup(json: string, password: string): Promise<{ count: number }> {
-    const { syncToolbar } = await this.requireCreds();
+    const { info, syncToolbar } = await this.requireCreds();
     const tree = await importBackup(json, password);
     const count = countNodes(tree);
+    const natives = await this.adapter.readAll(syncToolbar);
+    const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
+    await this.saveUndo({
+      kind: 'import',
+      opDerivedKey: info.password!,
+      opSyncId: info.id!,
+      opServiceUrl: info.serviceUrl ?? DefaultServiceUrl,
+      ...(await this.capturePrev()),
+      localEnc: await encryptData(JSON.stringify(natives), info.password!),
+      localCount: countNodes(natives),
+      remotePreBlob: currentBlob,
+    });
     await this.withSuspended(async () => {
       const mappings = await overwriteAll(this.adapter, tree, syncToolbar);
       await this.idMapper.set(mappings);
@@ -422,7 +558,16 @@ export class BackgroundCore {
     await checkService(newApi, this.log);
 
     if (target.mode === 'new') {
+      const prev = await this.capturePrev();
       const { id } = await switchService(newApi, this.store, tree, target.newPassword, target.newServiceUrl);
+      const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      await this.saveUndo({
+        kind: 'switch-new',
+        opDerivedKey: linked!.password!,
+        opSyncId: id,
+        opServiceUrl: target.newServiceUrl,
+        ...prev,
+      });
       await this.afterLink();
       return { id };
     }
@@ -441,6 +586,16 @@ export class BackgroundCore {
     await decryptData(remote.bookmarks ?? '', derived);
 
     if (target.direction === 'pull') {
+      const natives = await this.adapter.readAll(syncToolbar);
+      await this.saveUndo({
+        kind: 'switch-pull',
+        opDerivedKey: derived,
+        opSyncId: syncId,
+        opServiceUrl: target.newServiceUrl,
+        ...(await this.capturePrev()),
+        localEnc: await encryptData(JSON.stringify(natives), derived),
+        localCount: countNodes(natives),
+      });
       await this.withSuspended(() =>
         pullWithDerivedKey(this.depsFor(newApi, syncToolbar), {
           syncId,
@@ -452,6 +607,15 @@ export class BackgroundCore {
       );
     } else {
       // Push the local tree onto the existing remote, based on its lastUpdated.
+      await this.saveUndo({
+        kind: 'switch-push',
+        opDerivedKey: derived,
+        opSyncId: syncId,
+        opServiceUrl: target.newServiceUrl,
+        ...(await this.capturePrev()),
+        remotePreBlob: remote.bookmarks ?? '',
+        localCount: countNodes(tree),
+      });
       const encrypted = await encryptData(JSON.stringify(tree), derived);
       const updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
       await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
@@ -510,6 +674,90 @@ export class BackgroundCore {
       }
     }
     return result;
+  }
+
+  // ---------------------------------------------------------------- undo slot
+
+  /**
+   * Single undo slot for dangerous link operations. Snapshots are taken
+   * BEFORE any mutation and hold encrypted blobs only (never plaintext at
+   * rest, never the raw password). Overwritten by the next dangerous op,
+   * cleared on undo/dismiss. Remote PUT-back re-reads the server base, so a
+   * concurrent write fails honestly with 409 instead of clobbering.
+   */
+  private async saveUndo(
+    slot: Omit<UndoSlotData, 'timestamp'>,
+  ): Promise<void> {
+    await this.store.set(StoreKey.UndoSlot, { ...slot, timestamp: Date.now() });
+  }
+
+  private async clearUndo(): Promise<{ cleared: boolean }> {
+    await this.store.remove(StoreKey.UndoSlot);
+    return { cleared: true };
+  }
+
+  private async getUndoState(): Promise<UndoState | null> {
+    const slot = await this.store.get<UndoSlotData>(StoreKey.UndoSlot);
+    if (!slot) return null;
+    return {
+      kind: slot.kind,
+      timestamp: slot.timestamp,
+      bookmarkCount: slot.localCount,
+      serviceUrl: slot.opServiceUrl,
+    };
+  }
+
+  private async restoreNatives(tree: BookmarkNode[], syncToolbar: boolean): Promise<void> {
+    await this.withSuspended(async () => {
+      await this.adapter.clearAndPopulate(tree, syncToolbar);
+      await this.idMapper.set(await this.adapter.rebuildMappings(tree, syncToolbar));
+    });
+  }
+
+  /** Previous link state for undo snapshots (empty when unlinked). */
+  private async capturePrev(): Promise<
+    Pick<UndoSlotData, 'prevSyncInfo' | 'prevLastUpdated' | 'prevBlob'>
+  > {
+    return {
+      prevSyncInfo: (await this.store.get<SyncInfo>(StoreKey.SyncInfo)) ?? {},
+      prevLastUpdated: await this.store.get<string>(StoreKey.LastUpdated),
+      prevBlob: await this.store.get<string>(StoreKey.Bookmarks),
+    };
+  }
+
+  private async restorePrevState(slot: UndoSlotData): Promise<void> {
+    await this.store.set(StoreKey.SyncInfo, slot.prevSyncInfo);
+    if (slot.prevLastUpdated !== undefined) {
+      await this.store.set(StoreKey.LastUpdated, slot.prevLastUpdated);
+    } else {
+      await this.store.remove(StoreKey.LastUpdated);
+    }
+    if (slot.prevBlob !== undefined) {
+      await this.store.set(StoreKey.Bookmarks, slot.prevBlob);
+    } else {
+      await this.store.remove(StoreKey.Bookmarks);
+    }
+    await this.store.set(StoreKey.SyncEnabled, !!slot.prevSyncInfo.id);
+  }
+
+  private async undoLastLink(): Promise<{ undone: UndoKind }> {
+    const slot = await this.store.get<UndoSlotData>(StoreKey.UndoSlot);
+    if (!slot) throw new UnexpectedResponseException('Nothing to undo.');
+    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+
+    if (slot.localEnc) {
+      const tree = JSON.parse(await decryptData(slot.localEnc, slot.opDerivedKey)) as BookmarkNode[];
+      await this.restoreNatives(tree, syncToolbar);
+    }
+    if (slot.remotePreBlob) {
+      const api = this.makeApi(slot.opServiceUrl);
+      const fresh = await api.getLastUpdated(slot.opSyncId);
+      await api.updateBookmarks(slot.opSyncId, slot.remotePreBlob, fresh.lastUpdated ?? '', false);
+    }
+    await this.restorePrevState(slot);
+    await this.clearUndo();
+    this.log.log(XbsLogLevel.Info, 'sync', `Undid ${slot.kind}, previous state restored`);
+    return { undone: slot.kind };
   }
 
   // ---------------------------------------------------------------- status

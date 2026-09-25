@@ -25,6 +25,15 @@
       <label>Sync ID
         <input id="sync-id" type="text" placeholder="sync id from your other device" />
       </label>
+      <label class="check"><input type="radio" name="conn-direction" value="pull" checked />
+        <span>⬇ <b>Download</b> — replace local bookmarks with the server copy (safe, recommended).</span></label>
+      <label class="check"><input type="radio" name="conn-direction" value="push" />
+        <span>⬆ <b>Upload</b> — overwrite the server copy with my local bookmarks (deletes server data!).</span></label>
+      <div id="conn-push-warn" hidden>
+        <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>
+        <label class="check"><input id="conn-push-confirm" type="checkbox" />
+          <span>I understand the server copy will be replaced.</span></label>
+      </div>
     </div>
     <label>Password
       <input id="password" type="password" autocomplete="current-password" />
@@ -62,6 +71,11 @@
       </dl>
     </div>
     <div id="main-error" class="error" hidden></div>
+    <div id="p-undo" class="undo" hidden>
+      <span id="p-undo-text"></span>
+      <span class="row"><button id="btn-undo" class="mini">Undo</button>
+      <button id="btn-undo-dismiss" class="mini">Dismiss</button></span>
+    </div>
     <div class="row">
       <button id="btn-sync-now">⇅ Sync now</button>
       <button id="btn-manage">⚙ Manage</button>

@@ -27,6 +27,7 @@ export enum StoreKey {
   SyncInfo = 'syncInfo',
   TelemetryEnabled = 'telemetryEnabled',
   TraceLog = 'traceLog',
+  UndoSlot = 'undoSlot',
 }
 
 /** Persisted sync credentials. password holds the derived key, never the raw password. */

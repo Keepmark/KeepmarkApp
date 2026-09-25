@@ -179,6 +179,7 @@ describe('background core', () => {
       serviceUrl: 'https://x.test/',
       syncId: SYNC_ID,
       password: PASSWORD,
+      direction: 'pull',
     });
     const children = await mockApi.getChildren('unfiled_____');
     expect(children.map((c) => c.title)).toContain('R');
@@ -521,6 +522,115 @@ describe('background core', () => {
     await expect(core.handleMessage({ command: MessageCommand.SetVerbosity, level: 9 })).rejects.toBeInstanceOf(
       UnexpectedResponseException,
     );
+  });
+
+  it('undo of connect-pull restores natives and unlinks', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+      { id: 3, title: BookmarkContainer.Menu, children: [] },
+      { id: 4, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'Mine', url: 'https://mine.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://x.test/',
+      syncId: SYNC_ID,
+      password: PASSWORD,
+      direction: 'pull',
+    });
+    // Remote replaced natives; undo brings Mine back and unlinks.
+    const undoState = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as {
+      kind: string;
+    } | null;
+    expect(undoState?.kind).toBe('connect-pull');
+    const res = (await core.handleMessage({ command: MessageCommand.UndoLastLink })) as { undone: string };
+    expect(res.undone).toBe('connect-pull');
+    const children = await mockApi.getChildren('unfiled_____');
+    expect(children.map((c) => c.title)).toContain('Mine');
+    expect(children.map((c) => c.title)).not.toContain('R');
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
+  });
+
+  it('undo of connect-push puts the server copy back', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    const stale: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [] },
+      { id: 2, title: BookmarkContainer.Menu, children: [] },
+      { id: 3, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(stale), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    state.puts.length = 0;
+    await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'existing',
+        syncId: 'target-id',
+        newPassword: 'target-password',
+        direction: 'push',
+      },
+    });
+    expect(state.puts).toHaveLength(1);
+    await core.handleMessage({ command: MessageCommand.UndoLastLink });
+    // Last PUT restored the pre-push server blob.
+    expect(state.puts).toHaveLength(2);
+    const back = JSON.parse(await decrypt_blob(state.puts[1].blob, targetDerived));
+    expect(back).toEqual(stale);
+    const info = await store.get<{ serviceUrl?: string }>(StoreKey.SyncInfo);
+    expect(info!.serviceUrl).toBe('https://x.test/');
+  });
+
+  it('failed push-undo keeps the slot and reports conflict honestly', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    state.remoteBlob = await encryptData(JSON.stringify([]), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'existing',
+        syncId: 'target-id',
+        newPassword: 'target-password',
+        direction: 'push',
+      },
+    });
+    state.failNextPut409 = true; // someone else writes before our undo
+    const { DataOutOfSyncException } = await import('../src/shared/errors');
+    await expect(core.handleMessage({ command: MessageCommand.UndoLastLink })).rejects.toBeInstanceOf(
+      DataOutOfSyncException,
+    );
+    const kept = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as { kind: string } | null;
+    expect(kept?.kind).toBe('switch-push');
+  });
+
+  it('dismiss clears the slot and new ops overwrite it', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).not.toBeNull();
+    await core.handleMessage({ command: MessageCommand.DismissUndo });
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
   });
 });
 

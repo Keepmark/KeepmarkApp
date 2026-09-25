@@ -7,6 +7,7 @@ import { DefaultServiceUrl } from '../shared/constants.js';
 import {
   $,
   copyText,
+  describeUndo,
   input,
   renderStatusCard,
   send,
@@ -17,6 +18,7 @@ import {
   MessageCommand,
   type PingResponse,
   type StatusResponse,
+  type UndoState,
 } from '../shared/messages.js';
 
 function showError(where: 'connect' | 'main', message: string): void {
@@ -59,6 +61,23 @@ async function refreshAll(): Promise<void> {
   } else {
     state.textContent = status.lastUpdated ? `Synced ${new Date(status.lastUpdated).toLocaleString()}` : 'Synced';
   }
+  await refreshUndoBanner();
+}
+
+async function refreshUndoBanner(): Promise<void> {
+  const banner = $('p-undo') as HTMLElement;
+  let undo: UndoState | null = null;
+  try {
+    undo = await send<UndoState | null>({ command: MessageCommand.GetUndoState });
+  } catch {
+    undo = null;
+  }
+  if (!undo) {
+    banner.hidden = true;
+    return;
+  }
+  $('p-undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
+  banner.hidden = false;
 }
 
 async function initConnect(): Promise<void> {
@@ -67,8 +86,13 @@ async function initConnect(): Promise<void> {
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
     ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
+    updateDirection();
   };
-  document.querySelectorAll('input[name="conn-mode"]').forEach((el) => {
+  const updateDirection = (): void => {
+    const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value;
+    ($('conn-push-warn') as HTMLElement).hidden = direction !== 'push';
+  };
+  document.querySelectorAll('input[name="conn-mode"], input[name="conn-direction"]').forEach((el) => {
     el.addEventListener('change', updateMode);
   });
   updateMode();
@@ -78,6 +102,9 @@ async function initConnect(): Promise<void> {
       const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
         | 'new'
         | 'existing';
+      const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value as
+        | 'pull'
+        | 'push';
       const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
       const syncId = input('sync-id').value.trim();
       const password = input('password').value;
@@ -97,10 +124,15 @@ async function initConnect(): Promise<void> {
             showError('connect', 'Sync ID is required for an existing sync.');
             return;
           }
-          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password });
+          if (direction === 'push' && !(input('conn-push-confirm') as HTMLInputElement).checked) {
+            showError('connect', 'Tick the confirmation to overwrite the server copy.');
+            return;
+          }
+          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
         }
         input('password').value = '';
         input('confirm-password').value = '';
+        (input('conn-push-confirm') as HTMLInputElement).checked = false;
         showView('main');
         await refreshAll();
       } catch (err) {
@@ -138,6 +170,22 @@ function initMain(): void {
   });
   $('btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
+  });
+  $('btn-undo').addEventListener('click', async () => {
+    clearErrors();
+    await withBusy('btn-undo', 'Undoing…', async () => {
+      if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+      try {
+        await send({ command: MessageCommand.UndoLastLink });
+        await refreshAll();
+      } catch (err) {
+        showError('main', (err as Error).message);
+      }
+    });
+  });
+  $('btn-undo-dismiss').addEventListener('click', async () => {
+    await send({ command: MessageCommand.DismissUndo }).catch(() => undefined);
+    ($('p-undo') as HTMLElement).hidden = true;
   });
 }
 

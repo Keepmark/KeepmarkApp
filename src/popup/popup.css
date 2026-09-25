@@ -94,6 +94,14 @@ select {
   font-size: 11px;
 }
 
+.warning {
+  color: var(--warn, #b7791f);
+  font-size: 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
 .row {
   display: flex;
   gap: 8px;
@@ -279,6 +287,18 @@ button.mini {
   height: 100%;
   width: 0%;
   background: var(--accent);
+}
+
+.undo {
+  margin: 8px 0;
+  border: 1px dashed var(--warn, #b7791f);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.undo .row {
+  margin-top: 4px;
 }
 
 .check {

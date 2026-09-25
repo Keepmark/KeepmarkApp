@@ -7,6 +7,7 @@ import { ApiVersion, MinApiVersion, SyncClientVersion } from '../shared/constant
 import {
   $,
   copyText,
+  describeUndo,
   input,
   renderStatusCard,
   send,
@@ -19,6 +20,7 @@ import {
   type PingResponse,
   type StatusResponse,
   type SwitchPreviewResult,
+  type UndoState,
 } from '../shared/messages.js';
 import { StoreKey } from '../shared/store.js';
 
@@ -68,6 +70,44 @@ async function refreshStatus(): Promise<void> {
     ping = undefined;
   }
   renderStatusCard('m', { status, ping });
+  await refreshUndoBanner();
+}
+
+async function refreshUndoBanner(): Promise<void> {
+  const banner = $('undo-banner') as HTMLElement;
+  let undo: UndoState | null = null;
+  try {
+    undo = await send<UndoState | null>({ command: MessageCommand.GetUndoState });
+  } catch {
+    undo = null;
+  }
+  if (!undo) {
+    banner.hidden = true;
+    return;
+  }
+  $('undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
+  banner.hidden = false;
+}
+
+function initUndoBanner(): void {
+  $('m-btn-undo').addEventListener('click', () =>
+    withBusy('m-btn-undo', 'Undoing…', async () => {
+      hideErrors();
+      if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+      try {
+        const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
+        showResult('status-result', `Undone: ${res.undone}.`);
+        await refreshStatus();
+        await refreshUndoBanner();
+      } catch (err) {
+        sectionError('status-error', (err as Error).message);
+      }
+    }),
+  );
+  $('m-btn-undo-dismiss').addEventListener('click', async () => {
+    await send({ command: MessageCommand.DismissUndo }).catch(() => undefined);
+    ($('undo-banner') as HTMLElement).hidden = true;
+  });
 }
 
 function initSidebar(): void {
@@ -428,6 +468,7 @@ function renderAbout(): void {
 function init(): void {
   initSidebar();
   initStatusSection();
+  initUndoBanner();
   initBackupSection();
   initDuplicatesSection();
   initMoveSection();

@@ -280,6 +280,18 @@ dd {
   color: var(--ok);
 }
 
+.undo {
+  margin-top: 10px;
+  border: 1px dashed var(--warn);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.undo .row {
+  margin-top: 6px;
+}
+
 .notice {
   border: 1px solid var(--warn);
   border-radius: 6px;

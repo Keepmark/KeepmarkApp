@@ -108,3 +108,23 @@ export async function copyText(text: string, fallbackLabel: string): Promise<voi
     window.prompt(fallbackLabel, text);
   }
 }
+
+/** Human-readable undo slot description for banners. */
+export function describeUndo(kind: string, count: number | undefined, when: number): string {
+  const what =
+    kind === 'connect-new'
+      ? 'created a new sync'
+      : kind === 'connect-pull'
+        ? 'downloaded the server copy'
+        : kind === 'connect-push'
+          ? 'uploaded over the server copy'
+          : kind === 'switch-new'
+            ? 'moved to a new sync'
+            : kind === 'switch-pull'
+              ? 'moved and downloaded the server copy'
+              : kind === 'switch-push'
+                ? 'moved and uploaded over the server copy'
+                : 'imported a backup';
+  const n = count !== undefined ? ` (${count} bookmarks)` : '';
+  return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
+}
