@@ -48,6 +48,20 @@ export interface ServiceInfo {
   status: ServiceStatus;
   version?: string;
   url?: string;
+  /** v1.2 capability advertisement (absent on legacy services). */
+  capabilities?: ApiCapabilities;
+}
+
+/** v1.2 capability advertisement (absent on legacy services). */
+export interface ApiCapabilities {
+  revision?: boolean;
+  conditionalGet?: boolean;
+  delete?: boolean;
+}
+
+/** True when the service speaks the v1.2 extended contract. */
+export function supportsV12(info: ServiceInfo): boolean {
+  return info.capabilities?.revision === true;
 }
 
 /** Normalize a tree like Keepmark SyncEngine: empty descriptions/tags -> undefined, trim 300ch. */

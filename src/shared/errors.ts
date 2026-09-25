@@ -24,6 +24,10 @@ export class DailyNewSyncLimitException extends XbsException {}
 /** 409 — remote changed since our lastUpdated; re-pull before pushing. */
 export class DataOutOfSyncException extends XbsException {}
 
+/** 412 — the server does not speak the requested API contract (v1.2-only
+ * endpoint or Accept-Version on a legacy service). */
+export class UnsupportedVersionException extends XbsException {}
+
 /** 413 — encrypted blob exceeds the service maxSyncSize. */
 export class SyncTooLargeException extends XbsException {}
 
@@ -65,6 +69,8 @@ export function errorForStatus(status: number, serverMessage: string, local: (ke
       return new DailyNewSyncLimitException(withServer(local('ErrDailyNewSyncLimit')));
     case 409:
       return new DataOutOfSyncException(withServer(local('ErrDataOutOfSync')));
+    case 412:
+      return new UnsupportedVersionException(withServer(local('ErrUnsupportedVersion')));
     case 413:
       return new SyncTooLargeException(withServer(local('ErrSyncTooLarge')));
     case 429:
