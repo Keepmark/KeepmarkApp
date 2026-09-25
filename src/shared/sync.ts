@@ -219,12 +219,17 @@ export async function pullExistingSync(
   const { api, store, native, idMapper, log, syncToolbar } = deps;
   const versionRes = await api.getVersion(syncId);
   const remoteVersion = versionRes.version;
-  if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+  if (!remoteVersion) {
+    throw new UnsupportedSyncVersionException(
+      'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+    );
+  }
+  if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
     throw new UnsupportedSyncVersionException(
       `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
     );
   }
-  const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
+  const derived = await deriveKey(password, syncId, remoteVersion);
 
   // v1.2 links read the extended shape so meta flows; a 412 (downgraded
   // service) falls back to the legacy shape instead of failing the link.

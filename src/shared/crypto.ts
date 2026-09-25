@@ -5,7 +5,11 @@
 
 import lzutf8 from 'lzutf8';
 import { GcmNonceLength, KeyDerivationIterations } from './constants.js';
-import { InvalidCredentialsException, UnsupportedSyncVersionException } from './errors.js';
+import {
+  IncompleteSyncInfoException,
+  InvalidCredentialsException,
+  UnsupportedSyncVersionException,
+} from './errors.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder(undefined, { fatal: true });
@@ -44,6 +48,9 @@ export async function deriveKey(password: string, syncId: string, syncVersion?: 
       'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
     );
   }
+  if (!password || !syncId) {
+    throw new IncompleteSyncInfoException('Password and sync ID are required to derive the sync key.');
+  }
   const imported = await subtle().importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   const derived = await subtle().deriveKey(
     { name: 'PBKDF2', salt: enc.encode(syncId), iterations: KeyDerivationIterations, hash: 'SHA-256' },
@@ -58,15 +65,23 @@ export async function deriveKey(password: string, syncId: string, syncVersion?: 
 
 export async function encryptData(plain: string, derivedKeyB64: string): Promise<string> {
   if (!plain) return '';
-  const keyBytes = base64ToBytes(derivedKeyB64);
-  const iv = globalThis.crypto.getRandomValues(new Uint8Array(GcmNonceLength));
-  const key = await subtle().importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt']);
-  const compressed = lzutf8.compress(plain) as Uint8Array;
-  const ct = await subtle().encrypt({ name: 'AES-GCM', iv }, key, compressed as BufferSource);
-  const combined = new Uint8Array(iv.length + ct.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(ct), iv.length);
-  return bytesToBase64(combined);
+  try {
+    const keyBytes = base64ToBytes(derivedKeyB64);
+    if (keyBytes.length !== 32) {
+      throw new IncompleteSyncInfoException('Stored sync key is corrupt (expected 32 bytes). Relink the sync.');
+    }
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(GcmNonceLength));
+    const key = await subtle().importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt']);
+    const compressed = lzutf8.compress(plain) as Uint8Array;
+    const ct = await subtle().encrypt({ name: 'AES-GCM', iv }, key, compressed as BufferSource);
+    const combined = new Uint8Array(iv.length + ct.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ct), iv.length);
+    return bytesToBase64(combined);
+  } catch (err) {
+    if (err instanceof IncompleteSyncInfoException) throw err;
+    throw new InvalidCredentialsException('Encryption failed.', { cause: err });
+  }
 }
 
 export async function decryptData(blob: string, derivedKeyB64: string): Promise<string> {

@@ -15,9 +15,21 @@ import { BackgroundCore, type CorePorts } from './core.js';
 const bookmarksApi = browser.bookmarks as unknown as BookmarkApi;
 
 function addRemove<T>(add: (h: (arg: T) => void) => void, remove: (h: (arg: T) => void) => void) {
+  // Map handler -> registered wrapper: remove() must pass the SAME function
+  // object that add() registered, otherwise removal silently never matches.
+  const wrappers = new Map<() => void, (arg: T) => void>();
   return {
-    add: (handler: () => void) => add(() => handler()),
-    remove: (handler: () => void) => remove(() => handler()),
+    add: (handler: () => void) => {
+      const wrapper = (_arg: T): void => handler();
+      wrappers.set(handler, wrapper);
+      add(wrapper);
+    },
+    remove: (handler: () => void) => {
+      const wrapper = wrappers.get(handler);
+      if (!wrapper) return;
+      wrappers.delete(handler);
+      remove(wrapper);
+    },
   };
 }
 
@@ -61,6 +73,16 @@ function ports(): CorePorts {
         setIcon(details: { path: string }): Promise<void>;
       }
     | undefined;
+  // onChildrenReordered exists only on Chromium (absent from the older
+  // polyfill types): reorder-without-move would otherwise never schedule.
+  const reorderEvent = (
+    browser.bookmarks as unknown as {
+      onChildrenReordered?: {
+        addListener(h: () => void): void;
+        removeListener(h: () => void): void;
+      };
+    }
+  ).onChildrenReordered;
   return {
     alarms: {
       schedule: (name, periodMinutes) => browser.alarms.create(name, { periodInMinutes: periodMinutes }).then(() => undefined),
@@ -85,6 +107,14 @@ function ports(): CorePorts {
         (h) => browser.bookmarks.onMoved.addListener(h),
         (h) => browser.bookmarks.onMoved.removeListener(h),
       ),
+      ...(reorderEvent
+        ? {
+            childrenReordered: addRemove(
+              (h) => reorderEvent.addListener(h),
+              (h) => reorderEvent.removeListener(h),
+            ),
+          }
+        : {}),
     },
     chrome: {
       setBadge: async (text, title) => {

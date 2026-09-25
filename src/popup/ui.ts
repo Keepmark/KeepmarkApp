@@ -171,7 +171,9 @@ export function describeUndo(kind: string, count: number | undefined, when: numb
                 ? 'moved and uploaded over the server copy'
                 : kind === 'change-password'
                   ? 'changed the sync password'
-                  : 'imported a backup';
+                  : kind === 'restore'
+                    ? 'restored bookmarks'
+                    : 'imported a backup';
   const n = count !== undefined ? ` (${count} bookmarks)` : '';
   return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
 }

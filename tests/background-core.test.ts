@@ -24,6 +24,7 @@ function makePorts(): CorePorts & {
   fireNative(): void;
   scheduled: { name: string; minutes: number }[];
   onceFired: string[];
+  cleared: string[];
 } {
   const alarmCbs: ((name: string) => void)[] = [];
   const handlers: (() => void)[] = [];
@@ -35,9 +36,10 @@ function makePorts(): CorePorts & {
     downloads: [] as { filename: string; text: string }[],
     scheduled: [] as { name: string; minutes: number }[],
     onceFired: [] as string[],
+    cleared: [] as string[],
     alarms: {
       schedule: async (name: string, minutes: number) => void ports.scheduled.push({ name, minutes }),
-      clear: async () => undefined,
+      clear: async (name: string) => void ports.cleared.push(name),
       once: async (name: string) => void ports.onceFired.push(name),
       onAlarm: (cb: (name: string) => void) => void alarmCbs.push(cb),
     },
@@ -277,8 +279,12 @@ describe('background core', () => {
       makeFakeApi(baseState()),
     );
     await core.startup();
-    expect(await store.get(StoreKey.InstallBackup)).toContain('[xbs]');
+    const first = await store.get<string>(StoreKey.InstallBackup);
+    expect(first).toContain('[xbs]');
     expect(ports.scheduled).toHaveLength(0);
+    // Second startup (e.g. MV3 wake) must not contaminate the snapshot.
+    await core.startup();
+    expect(await store.get<string>(StoreKey.InstallBackup)).toBe(first);
   });
 
   it('connect-new uploads natives and links', async () => {
@@ -330,6 +336,7 @@ describe('background core', () => {
     // alarm (SW-safe), whose firing reconciles + pushes.
     await mockApi.create({ parentId: 'unfiled_____', title: 'Fresh', url: 'https://fresh.test' });
     core.onNativeEvent();
+    await sleep(0);
     expect(ports.onceFired).toContain(NativeDebounceAlarmName);
     ports.fireAlarm(NativeDebounceAlarmName);
     await vi.waitFor(() => expect(state.puts.length).toBeGreaterThan(putsBefore));
@@ -530,6 +537,59 @@ describe('background core', () => {
     expect(status.syncId).toBeUndefined();
     expect(status.lastUpdated).toBeUndefined();
     expect(status.usedBytes).toBe(0);
+  });
+
+  it('disable clears both alarms and the v12 flag state', async () => {
+    const state = baseState();
+    const { core, ports } = await linkedCore(state);
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    expect(ports.cleared).toContain('xbs-sync-updates-check');
+    expect(ports.cleared).toContain('xbs-native-debounce');
+  });
+
+  it('server-side deletion stashes a RemovedSync snapshot', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const failing = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      makePorts(),
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const { SyncNotFoundException } = await import('../src/shared/errors');
+    await failing.disableSync(new SyncNotFoundException('gone'));
+    const snap = await store.get<{ bookmarks: unknown[]; lastUpdated?: string; serviceUrl?: string; savedAt: string }>(
+      StoreKey.RemovedSync,
+    );
+    expect(snap?.bookmarks.length).toBeGreaterThan(0);
+    expect(snap?.serviceUrl).toBe('https://x.test/');
+    expect(snap).not.toHaveProperty('password');
+    const status = (await failing.handleMessage({ command: MessageCommand.GetStatus })) as {
+      removedSync?: boolean;
+    };
+    expect(status.removedSync).toBe(true);
+    const fetched = (await failing.handleMessage({ command: MessageCommand.GetRemovedSync })) as {
+      bookmarks: unknown[];
+    } | null;
+    expect(fetched?.bookmarks.length).toBeGreaterThan(0);
+    await failing.handleMessage({ command: MessageCommand.ClearRemovedSync });
+    expect(await store.get(StoreKey.RemovedSync)).toBeUndefined();
+  });
+
+  it('restore snapshots an undo slot before overwriting natives', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    await core.handleMessage({
+      command: MessageCommand.RestoreBookmarks,
+      bookmarks: [
+        { id: 1, title: '[xbs] Other', children: [{ id: 2, title: 'Restored', url: 'https://r.test' }] },
+      ],
+    });
+    const undo = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as { kind: string } | null;
+    expect(undo?.kind).toBe('restore');
   });
 
   it('status reflects link state', async () => {

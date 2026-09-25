@@ -225,7 +225,7 @@ describe('formatBytes', () => {
 
 describe('describeUndo', () => {
   it('covers every kind with count and date', () => {
-    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'switch-new', 'switch-pull', 'switch-push', 'change-password', 'import']) {
+    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'switch-new', 'switch-pull', 'switch-push', 'change-password', 'restore', 'import']) {
       const text = describeUndo(kind, 42, 0);
       expect(text).toContain('42 bookmarks');
       expect(text).toContain('Undo restores');

@@ -30,6 +30,7 @@ import {
   type DuplicateGroup,
   type MessagePayload,
   type PingResponse,
+  type RemovedSyncSnapshot,
   type StatusResponse,
   type SwitchPreviewResult,
   type SwitchTarget,
@@ -100,6 +101,8 @@ export interface NativeListenerPort {
   changed: ListenerPort;
   removed: ListenerPort;
   moved: ListenerPort;
+  /** Chromium-only (absent on Firefox): fires on reorder without move. */
+  childrenReordered?: ListenerPort;
 }
 
 export interface ChromePort {
@@ -128,6 +131,7 @@ export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
   private connecting = false;
+  private started = false;
   /**
    * v1.2 capability per service URL (null = not probed yet). Probed via the
    * extended /info contract; any failure means legacy. Invalidated on 412 so
@@ -151,6 +155,9 @@ export class BackgroundCore {
     ports.listeners.changed.add(onEvent);
     ports.listeners.removed.add(onEvent);
     ports.listeners.moved.add(onEvent);
+    // Chromium-only: reorder without move (e.g. "sort by name") emits only
+    // this event upstream. Absent on Firefox — optional port.
+    ports.listeners.childrenReordered?.add(onEvent);
     ports.alarms.onAlarm((name) => {
       if (name === UpdatesAlarmName) {
         void this.checkForUpdates().catch((err) => this.onBackgroundError(err));
@@ -205,6 +212,11 @@ export class BackgroundCore {
         return this.undoLastLink();
       case MessageCommand.DismissUndo:
         return this.clearUndo();
+      case MessageCommand.GetRemovedSync:
+        return this.getRemovedSync();
+      case MessageCommand.ClearRemovedSync:
+        await this.store.remove(StoreKey.RemovedSync);
+        return { cleared: true };
       case MessageCommand.ChangePassword:
         return this.changePassword(msg.currentPassword, msg.newPassword);
       case MessageCommand.DownloadFile:
@@ -449,6 +461,19 @@ export class BackgroundCore {
     if (!bookmarks) throw new UnexpectedResponseException('Nothing to restore.');
     const tree = bookmarks;
     const { info, syncToolbar } = await this.requireCreds();
+    // Restore overwrites natives: snapshot first like every mutating flow.
+    const natives = await this.adapter.readAll(syncToolbar);
+    const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
+    await this.saveUndo({
+      kind: 'restore',
+      opDerivedKey: info.password!,
+      opSyncId: info.id!,
+      opServiceUrl: info.serviceUrl ?? DefaultServiceUrl,
+      ...(await this.capturePrev()),
+      localEnc: await encryptData(JSON.stringify(natives), info.password!),
+      localCount: countNodes(natives),
+      remotePreBlob: currentBlob,
+    });
     await this.withSuspended(async () => {
       const mappings = await overwriteAll(this.adapter, tree, syncToolbar);
       await this.idMapper.set(mappings);
@@ -462,8 +487,14 @@ export class BackgroundCore {
   onNativeEvent(): void {
     // Alarm-based debounce (not setTimeout): creating the same alarm twice
     // overwrites it, and alarms wake a sleeping MV3 service worker.
-    void this.ports.alarms
-      .once(NativeDebounceAlarmName, Date.now() + (this.options.debounceMs ?? 300))
+    // Never schedule while unlinked: a pending alarm firing after disable
+    // would only produce queue noise.
+    void this.store
+      .get<boolean>(StoreKey.SyncEnabled)
+      .then((enabled) => {
+        if (!enabled) return;
+        return this.ports.alarms.once(NativeDebounceAlarmName, Date.now() + (this.options.debounceMs ?? 300));
+      })
       .catch((err) => this.onBackgroundError(err));
   }
 
@@ -541,12 +572,17 @@ export class BackgroundCore {
       } else {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
-        if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+        if (!remoteVersion) {
+          throw new UnsupportedSyncVersionException(
+            'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+          );
+        }
+        if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
           throw new UnsupportedSyncVersionException(
             `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
           );
         }
-        const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
+        const derived = await deriveKey(password, syncId, remoteVersion);
         const natives = await this.adapter.readAll(syncToolbar);
         // v1.2 links read the extended shape so meta flows; a 412 falls back
         // to the legacy shape instead of failing the link.
@@ -614,12 +650,17 @@ export class BackgroundCore {
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
-    if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+    if (!remoteVersion) {
+      throw new UnsupportedSyncVersionException(
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+      );
+    }
+    if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
         `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
       );
     }
-    const derived = await deriveKey(password, syncId, remoteVersion ?? SyncClientVersion);
+    const derived = await deriveKey(password, syncId, remoteVersion);
     // v1.2 links read the extended shape so the upload can use revision CAS.
     // A 412 anywhere (downgraded service) falls back to the legacy contract.
     let remote: import('../shared/api.js').GetBookmarksResponse;
@@ -865,12 +906,17 @@ export class BackgroundCore {
     const syncId = target.syncId!;
     const versionRes = await newApi.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
-    if (remoteVersion && compareVersions(remoteVersion, SyncClientVersion) > 0) {
+    if (!remoteVersion) {
+      throw new UnsupportedSyncVersionException(
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+      );
+    }
+    if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
         `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
       );
     }
-    const derived = await deriveKey(target.newPassword, syncId, remoteVersion ?? SyncClientVersion);
+    const derived = await deriveKey(target.newPassword, syncId, remoteVersion);
     let remote: import('../shared/api.js').GetBookmarksResponse;
     let effectiveV12 = v12;
     if (v12) {
@@ -1199,6 +1245,10 @@ export class BackgroundCore {
       this.log.minLevel = level as XbsLogLevel;
     }
   }
+  private async getRemovedSync(): Promise<RemovedSyncSnapshot | null> {
+    return (await this.store.get<RemovedSyncSnapshot>(StoreKey.RemovedSync)) ?? null;
+  }
+
   private async getStatus(): Promise<StatusResponse> {
     const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
@@ -1216,6 +1266,7 @@ export class BackgroundCore {
       bookmarkCount: info ? await this.countCached(info).catch(() => undefined) : undefined,
       logLevel: this.log.minLevel as number,
       supportsV12: v12Usable(info),
+      removedSync: (await this.store.get(StoreKey.RemovedSync)) !== undefined,
     };
   }
 
@@ -1286,8 +1337,32 @@ export class BackgroundCore {
    * run (delete has no undo by design).
    */
   async disableSync(err?: Error): Promise<void> {
+    // On server-side deletion the cached copy is the ONLY copy left: stash a
+    // plaintext snapshot (tree + lastUpdated + service URL, never the
+    // password) before wiping, mirroring upstream setSyncRemoved. The manager
+    // surfaces it with Download/Dismiss.
+    if (err instanceof SyncNotFoundException) {
+      try {
+        const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+        const blob = await this.store.get<string>(StoreKey.Bookmarks);
+        const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
+        if (info?.password && blob) {
+          const tree = JSON.parse(await decryptData(blob, info.password)) as BookmarkNode[];
+          await this.store.set(StoreKey.RemovedSync, {
+            bookmarks: tree,
+            lastUpdated,
+            serviceUrl: info.serviceUrl,
+            savedAt: new Date().toISOString(),
+          });
+        }
+      } catch (snapshotErr) {
+        this.log.log(XbsLogLevel.Warning, 'sync', `RemovedSync snapshot failed: ${(snapshotErr as Error)?.message}`);
+      }
+    }
     this.queue.clear();
+    this.v12cache.clear();
     await this.ports.alarms.clear(UpdatesAlarmName);
+    await this.ports.alarms.clear(NativeDebounceAlarmName);
     await this.store.remove(StoreKey.BookmarkIdMappings);
     await this.store.remove(StoreKey.Bookmarks);
     await this.store.remove(StoreKey.LastUpdated);
@@ -1304,12 +1379,21 @@ export class BackgroundCore {
     }
   }
 
-  /** First-run / startup: verbosity, snapshot install backup, resume polling when linked. */
+  /** First-run / startup: verbosity, one-time install snapshot, resume polling. */
   async startup(): Promise<void> {
+    if (this.started) return;
+    this.started = true;
     await this.applyVerbosity();
     try {
-      const snapshot = await this.adapter.readAll(true);
-      await this.store.set(StoreKey.InstallBackup, JSON.stringify(snapshot));
+      // Write-once: every MV3 wake would otherwise contaminate the install
+      // backup with already-synced natives.
+      if ((await this.store.get(StoreKey.InstallBackup)) === undefined) {
+        const snapshot = await this.adapter.readAll(true);
+        await this.store.set(
+          StoreKey.InstallBackup,
+          JSON.stringify({ bookmarks: snapshot, date: new Date().toISOString() }),
+        );
+      }
     } catch (err) {
       this.log.log(XbsLogLevel.Warning, 'sync', `Install backup failed: ${(err as Error).message}`);
     }

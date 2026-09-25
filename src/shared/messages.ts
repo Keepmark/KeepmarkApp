@@ -35,6 +35,8 @@ export enum MessageCommand {
   UndoLastLink = 'undo-last-link',
   DismissUndo = 'dismiss-undo',
   ChangePassword = 'change-password',
+  GetRemovedSync = 'get-removed-sync',
+  ClearRemovedSync = 'clear-removed-sync',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -70,6 +72,16 @@ export interface StatusResponse {
   logLevel?: number;
   /** True when the linked service speaks the v1.2 contract (gates v1.2-only UI). */
   supportsV12?: boolean;
+  /** True when a server-deleted sync left a local snapshot (see RemovedSync). */
+  removedSync?: boolean;
+}
+
+/** Plaintext snapshot of a server-deleted sync (no password ever stored). */
+export interface RemovedSyncSnapshot {
+  bookmarks: BookmarkNode[];
+  lastUpdated?: string;
+  serviceUrl?: string;
+  savedAt: string;
 }
 
 /** Move-service target. Nothing syncs until the popup submits this choice. */
@@ -120,6 +132,7 @@ export type UndoKind =
   | 'switch-pull'
   | 'switch-push'
   | 'change-password'
+  | 'restore'
   | 'import';
 
 export interface UndoState {
@@ -161,6 +174,8 @@ export type MessagePayload =
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
   | { command: MessageCommand.DismissUndo }
+  | { command: MessageCommand.GetRemovedSync }
+  | { command: MessageCommand.ClearRemovedSync }
   | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
