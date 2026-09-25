@@ -26,6 +26,7 @@ describe('api client', () => {
     [405, NotAcceptingNewSyncsException],
     [406, DailyNewSyncLimitException],
     [409, DataOutOfSyncException],
+    [400, UnexpectedResponseException],
     [412, UnsupportedVersionException],
     [413, SyncTooLargeException],
     [429, ThrottledException],
@@ -118,7 +119,7 @@ describe('api client', () => {
 
 describe('api client v1.2', () => {
   function v12Api(
-    seen: { version?: string; ifNoneMatch?: string; method?: string; path?: string },
+    seen: { version?: string; ifNoneMatch?: string; method?: string; path?: string; body?: unknown },
     status: number,
     body: unknown,
   ): XSyncApiClient {
@@ -132,6 +133,7 @@ describe('api client v1.2', () => {
         seen.ifNoneMatch = headers['If-None-Match'];
         seen.method = init?.method;
         seen.path = String(url).replace('https://example.test/', '');
+        seen.body = init?.body !== undefined ? JSON.parse(String(init.body)) : undefined;
         return jsonResponse(status, body);
       }) as typeof fetch,
     );
@@ -169,6 +171,36 @@ describe('api client v1.2', () => {
     expect(seen.version).toBe('1.2.0');
   });
 
+  it('v1.2 PUT sends baseRevision (never lastUpdated), legacy PUT the opposite', async () => {
+    const seen: Record<string, unknown> = {};
+    const api = v12Api(seen, 200, { lastUpdated: 't9', meta: { revision: 5 } });
+    await api.updateBookmarksV12('x', 'blob', 4);
+    expect(seen.body).toMatchObject({ bookmarks: 'blob', baseRevision: 4 });
+    expect(seen.body).not.toHaveProperty('lastUpdated');
+
+    const legacy = v12Api(seen, 200, { lastUpdated: 't9' });
+    await legacy.updateBookmarks('x', 'blob', 't3');
+    expect(seen.body).toMatchObject({ bookmarks: 'blob', lastUpdated: 't3' });
+    expect(seen.body).not.toHaveProperty('baseRevision');
+  });
+
+  it('updateVersion flag serializes the sync format version on both contracts', async () => {
+    const seen: Record<string, unknown> = {};
+    const v12 = v12Api(seen, 200, { lastUpdated: 't9', meta: { revision: 2 } });
+    await v12.updateBookmarksV12('x', 'blob', 1, true);
+    expect(seen.body).toMatchObject({ baseRevision: 1, version: '1.8.0' });
+    const legacy = v12Api(seen, 200, { lastUpdated: 't9' });
+    await legacy.updateBookmarks('x', 'blob', 't1', true);
+    expect(seen.body).toMatchObject({ lastUpdated: 't1', version: '1.8.0' });
+  });
+
+  it('createSyncV12 posts the sync format version', async () => {
+    const seen: Record<string, unknown> = {};
+    const api = v12Api(seen, 200, { id: 'x', lastUpdated: 't1', version: '1.8.0', meta: { revision: 1 } });
+    await api.createSyncV12();
+    expect(seen.body).toMatchObject({ version: '1.8.0' });
+  });
+
   it('legacy calls keep Accept-Version 1.1.13', async () => {
     const seen: Record<string, string | undefined> = {};
     const api = v12Api(seen, 200, { bookmarks: 'b', version: '1.8.0', lastUpdated: 't' });
@@ -202,6 +234,21 @@ describe('api client v1.2', () => {
     const seen: Record<string, string | undefined> = {};
     const api = v12Api(seen, 412, { message: 'nope' });
     await expect(api.getBookmarksIfChanged('x', 'h')).rejects.toBeInstanceOf(UnsupportedVersionException);
+  });
+
+  it('conditional GET quotes the hash opaquely (server compares case-insensitively)', async () => {
+    const seen: Record<string, string | undefined> = {};
+    const log = new InMemoryLogger();
+    const api = new XSyncApiClient(
+      'https://example.test/',
+      log,
+      (async (_url, init) => {
+        seen.ifNoneMatch = (init?.headers as Record<string, string>)['If-None-Match'];
+        return new Response(null, { status: 304 });
+      }) as typeof fetch,
+    );
+    await expect(api.getBookmarksIfChanged('x', 'AbC123')).resolves.toBeNull();
+    expect(seen.ifNoneMatch).toBe('"AbC123"');
   });
 
   it('delete succeeds on {} and tolerates an empty body', async () => {

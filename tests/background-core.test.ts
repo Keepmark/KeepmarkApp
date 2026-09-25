@@ -87,14 +87,35 @@ function makeFakeApi(state: FakeApiState): (url: string) => XSyncApiClient {
     state.hash = `h${state.revision}`;
     return { revision: state.revision, hash: state.hash };
   };
+  const getInfoV12 = async (): Promise<{
+    status: number;
+    version: string;
+    maxSyncSize: number;
+    capabilities?: { revision: boolean; conditionalGet: boolean; delete: boolean };
+  }> => {
+    // A downgraded service 412s the extended contract (shaped legacy answers
+    // only come from genuinely legacy services).
+    if (state.v12 && !state.v12alive) await unsupportedVersion();
+    return state.v12 ? { ...state.info, capabilities: v12caps() } : { ...state.info };
+  };
+  const fail409 = async (): Promise<never> => {
+    const { DataOutOfSyncException } = await import('../src/shared/errors');
+    throw new DataOutOfSyncException('conflict');
+  };
   return (_url: string) =>
     ({
       getInfo: async () => ({ ...state.info }),
-      getInfoV12: async () => ({ ...state.info, capabilities: state.v12 ? v12caps() : undefined }),
-      supportsV12: async () => state.v12,
-      createSync: async () => ({ ...state.created }),
+      getInfoV12,
+      // Derived from the shaped response like the real client — never a flag.
+      supportsV12: async () => (await getInfoV12()).capabilities?.revision === true,
+      // Every create is a fresh server doc with its own base timestamp.
+      createSync: async () => {
+        state.remoteLastUpdated = state.created.lastUpdated;
+        return { ...state.created };
+      },
       createSyncV12: async () => {
         if (!state.v12 || !state.v12alive) await unsupportedVersion();
+        state.remoteLastUpdated = state.created.lastUpdated;
         state.revision = 1;
         state.hash = 'h1';
         return { ...state.created, meta: { revision: 1, hash: 'h1' } };
@@ -128,8 +149,11 @@ function makeFakeApi(state: FakeApiState): (url: string) => XSyncApiClient {
       updateBookmarks: async (_id: string, blob: string, lastUpdated: string) => {
         if (state.failNextPut409) {
           state.failNextPut409 = false;
-          const { DataOutOfSyncException } = await import('../src/shared/errors');
-          throw new DataOutOfSyncException('conflict');
+          await fail409();
+        }
+        // Atomic timestamp CAS like the real server: a stale base loses.
+        if (lastUpdated !== state.remoteLastUpdated) {
+          await fail409();
         }
         state.puts.push({ blob, lastUpdated });
         state.remoteBlob = blob;
@@ -295,7 +319,7 @@ describe('background core', () => {
     const children = await mockApi.getChildren('unfiled_____');
     expect(children.map((c) => c.title)).toContain('R');
     // Repair (containers added) triggered a follow-up push.
-    expect(state.puts.length).toBeGreaterThanOrEqual(0);
+    expect(state.puts.length).toBe(1);
   });
 
   it('native event reconciles and pushes', async () => {
@@ -802,9 +826,9 @@ describe('background core', () => {
     const { core, store, ports, derived } = await linkedCore(state);
     const before = await store.get<string>(StoreKey.Bookmarks);
     const { InvalidCredentialsException } = await import('../src/shared/errors');
-    await expect(
-      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: 'wrong password', newPassword: 'brand new password' }),
-    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    const wrong = await core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: 'wrong password', newPassword: 'brand new password' }).catch((e: Error) => e);
+    expect(wrong).toBeInstanceOf(InvalidCredentialsException);
+    expect((wrong as Error).message).toBe('Current password is incorrect.');
     // Nothing downloaded, pushed or stored: creds, blob and undo slot untouched.
     expect(ports.downloads).toHaveLength(0);
     expect(state.puts).toHaveLength(1); // only the connect-time push
@@ -928,6 +952,8 @@ describe('background core v1.2', () => {
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
     expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
     expect(ports.notices.some((n) => n.title === 'Server copy deleted')).toBe(true);
+    // The delete carries no undo by design: the slot is gone with the link.
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
     // Natives untouched: the local bookmark survives the server wipe.
     const children = await mockApi.getChildren('unfiled_____');
     expect(children.map((c) => c.title)).toContain('A');
@@ -1039,6 +1065,100 @@ describe('background core v1.2', () => {
       serviceVersion?: string;
     };
     expect(v12Status.serviceVersion).toBe('1.2.0');
+  });
+
+  it('disable-sync invalidates the undo slot', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).not.toBeNull();
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
+  });
+
+  it('undo of connect-new on v1.2 cleans the orphaned server sync', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    const res = (await core.handleMessage({ command: MessageCommand.UndoLastLink })) as { undone: string };
+    expect(res.undone).toBe('connect-new');
+    expect(state.deleted).toEqual([SYNC_ID]);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+  });
+
+  it('undo keeps the PUT-back freshness instead of the stale snapshot', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: PASSWORD,
+      newPassword: 'rotated password',
+    });
+    const revAfterChange = await store.get(StoreKey.SyncRevision);
+    expect(revAfterChange).toBeGreaterThan(2);
+    await core.handleMessage({ command: MessageCommand.UndoLastLink });
+    // Legacy PUT-back responses carry no meta: the stored revision is cleared
+    // (never left pointing at the undone write), lastUpdated is the fresh one.
+    expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
+    expect(await store.get<string>(StoreKey.LastUpdated)).toBe(state.remoteLastUpdated);
+  });
+
+  it('failed switch-push keeps the previous undo slot', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    state.remoteBlob = await encryptData(JSON.stringify([]), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    state.failNextPut409 = true;
+    const { DataOutOfSyncException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.SwitchService,
+        switch: {
+          newServiceUrl: 'https://new.test/',
+          mode: 'existing',
+          syncId: 'target-id',
+          newPassword: 'target-password',
+          direction: 'push',
+        },
+      }),
+    ).rejects.toBeInstanceOf(DataOutOfSyncException);
+    const kept = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as { kind: string } | null;
+    expect(kept?.kind).toBe('connect-new');
+  });
+
+  it('ping preserves a concurrent password rotation', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    await store.set(StoreKey.SyncInfo, { id: SYNC_ID, password: 'rotated-key', serviceUrl: 'https://x.test/' });
+    const pong = (await core.handleMessage({ command: MessageCommand.Ping })) as { reachable: boolean };
+    expect(pong.reachable).toBe(true);
+    const info = await store.get<{ password: string; serviceVersion?: string }>(StoreKey.SyncInfo);
+    expect(info!.password).toBe('rotated-key');
+    expect(info!.serviceVersion).toBe('1.1.13');
+  });
+
+  it('a failing safety download does not block the operation', async () => {
+    const state = baseState();
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const failing = { ...ports, chrome: { ...ports.chrome, download: async () => { throw new Error('no dl'); } } };
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      failing,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
+    const res = (await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: PASSWORD,
+      newPassword: 'rotated password',
+    })) as { lastUpdated: string };
+    expect(res.lastUpdated).toBeTruthy();
   });
 });
 

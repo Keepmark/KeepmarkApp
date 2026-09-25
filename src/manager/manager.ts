@@ -38,7 +38,7 @@ function sectionError(id: string, message: string): void {
 }
 
 function hideErrors(): void {
-  for (const id of ['status-error', 'backup-error', 'dup-error', 'move-error', 'logs-error', 'settings-error']) {
+  for (const id of ['status-error', 'backup-error', 'dup-error', 'move-error', 'logs-error', 'settings-error', 'pw-error']) {
     $(id).hidden = true;
   }
 }
@@ -143,6 +143,7 @@ function initStatusSection(): void {
   $('m-btn-unlink').addEventListener('click', () =>
     withBusy('m-btn-unlink', 'Unlinking…', async () => {
       hideErrors();
+      if (!window.confirm('Unlink this device? Sync stops; native bookmarks are untouched.')) return;
       try {
         await send({ command: MessageCommand.DisableSync });
         showResult('status-result', 'Unlinked. Native bookmarks are untouched.');
@@ -157,6 +158,9 @@ function initStatusSection(): void {
   $('m-btn-delete-remote').addEventListener('click', () =>
     withBusy('m-btn-delete-remote', 'Deleting…', async () => {
       hideErrors();
+      // Defense in depth: the background re-gates, but a disabled button
+      // must never even reach the confirms.
+      if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
       // No undo exists for this (the server has no undelete): two explicit
       // confirms plus the automatic backup download in the background.
       if (
@@ -317,6 +321,7 @@ function updateMoveForm(): void {
   ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
   preview = undefined;
   $('m-btn-switch').toggleAttribute('disabled', true);
+  $('move-error').hidden = true;
   $('move-preview').hidden = true;
   $('move-result').hidden = true;
   const url = input('m-switch-url').value.trim() || '…';
@@ -389,6 +394,7 @@ async function submitMove(): Promise<void> {
     return;
   }
   await withBusy('m-btn-switch', 'Moving…', async () => {
+    ($('move-result') as HTMLElement).hidden = true;
     try {
       const res = await send<{ id: string }>({
         command: MessageCommand.SwitchService,
@@ -399,6 +405,7 @@ async function submitMove(): Promise<void> {
       showResult('move-result', `Moved. New sync ID: ${res.id}`);
       await refreshStatus();
     } catch (err) {
+      input('m-switch-confirm').value = '';
       sectionError('move-error', (err as Error).message);
     }
   });
@@ -488,6 +495,7 @@ function initSettingsSection(): void {
   $('m-btn-password').addEventListener('click', () =>
     withBusy('m-btn-password', 'Changing…', async () => {
       hideErrors();
+      ($('pw-result') as HTMLElement).hidden = true;
       const current = input('m-current-password').value;
       const next = input('m-new-password').value;
       const invalid = validatePasswordChange({ current, next, confirm: input('m-new-password-confirm').value });
@@ -503,6 +511,10 @@ function initSettingsSection(): void {
         showResult('pw-result', 'Password changed. Update your other devices and vault now.');
         await refreshStatus();
       } catch (err) {
+        // Never leave the current password or its confirmation in the DOM;
+        // the new password stays so only the proof has to be retyped.
+        input('m-current-password').value = '';
+        input('m-new-password-confirm').value = '';
         sectionError('pw-error', (err as Error).message);
       }
     }),
@@ -514,18 +526,19 @@ function renderAbout(): void {
   $('about-api').textContent = `v${ApiVersion}`;
   $('about-minapi').textContent = `v${MinApiVersion}`;
   $('about-syncver').textContent = `v${SyncClientVersion}`;
-  $('about-bug').addEventListener(
-    'click',
-    () => {
+  // Registered on every section visit: guard so N visits stack a single handler.
+  const bug = $('about-bug');
+  if (!bug.dataset.bound) {
+    bug.dataset.bound = '1';
+    bug.addEventListener('click', () => {
       const version = browser.runtime.getManifest().version;
       const subject = encodeURIComponent(`[Keepmark ${version}] Bug report`);
       const body = encodeURIComponent(
         `App version: ${version}\nAPI version: ${ApiVersion}\nSync format: ${SyncClientVersion}\n\nDescribe the issue:\n`,
       );
       location.href = `mailto:keepmark@proton.me?subject=${subject}&body=${body}`;
-    },
-    { once: true },
-  );
+    });
+  }
 }
 
 function init(): void {

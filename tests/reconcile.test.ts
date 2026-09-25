@@ -64,11 +64,42 @@ describe('reconcileContainer', () => {
     expect(res.bookmarks[0].children![0]).toMatchObject({ id: 1, title: 'A renamed' });
   });
 
-  it('follows native child order (move/reorder)', () => {
+  it('pure reorder marks changed so the new order is pushed', () => {
     const nn: NativeNode[] = [natives()[1], natives()[0]];
     const res = reconcileContainer(nn, BookmarkContainer.Other, syncedTree(), mappings(), NEW_TAB);
-    expect(res.changed).toBe(false); // same set, order is structural
+    expect(res.changed).toBe(true);
     expect(res.bookmarks[0].children!.map((b) => b.id)).toEqual([2, 1]);
+  });
+
+  it('preserves description/tags owned by the synced side', () => {
+    const tree = syncedTree();
+    tree[0].children![0].description = 'keep me';
+    tree[0].children![0].tags = ['k'];
+    const res = reconcileContainer(natives(), BookmarkContainer.Other, tree, mappings(), NEW_TAB);
+    expect(res.changed).toBe(false);
+    expect(res.bookmarks[0].children![0]).toMatchObject({ description: 'keep me', tags: ['k'] });
+  });
+
+  it('folder<->bookmark type flip is a change with normalized shape', () => {
+    // Synced folder id 2 becomes a plain bookmark natively.
+    const nn: NativeNode[] = [
+      { id: 'n1', title: 'A', url: 'https://a.test' },
+      { id: 'n2', title: 'Folder', url: 'https://f.test' },
+    ];
+    const res = reconcileContainer(nn, BookmarkContainer.Other, syncedTree(), mappings(), NEW_TAB);
+    expect(res.changed).toBe(true);
+    const flipped = res.bookmarks[0].children!.find((b) => b.id === 2)!;
+    expect(flipped.url).toBe('https://f.test');
+    expect(flipped.children).toBeUndefined();
+  });
+
+  it('uses the platform separator predicate (chromium dashes)', () => {
+    const nn: NativeNode[] = [{ id: 'n1', title: '---' }];
+    const chromiumSep = (n: NativeNode): boolean => n.title === '---';
+    const res = reconcileContainer(nn, BookmarkContainer.Other, syncedTree(), mappings(), NEW_TAB, chromiumSep);
+    expect(res.changed).toBe(true);
+    const added = res.bookmarks[0].children!.find((b) => b.title === undefined);
+    expect(added?.url).toBe('xbs:separator');
   });
 
   it('emptied native folder clears synced children', () => {

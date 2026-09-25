@@ -32,6 +32,8 @@ export interface ReconcileResult {
 /**
  * Reconcile one native container subtree into its synced container.
  * nativeChildren come from getSubTree(containerId).children.
+ * isSeparator detects platform-native separators (Firefox: type or legacy
+ * titles; Chromium: dashes-titles) — never hardcode one platform here.
  */
 export function reconcileContainer(
   nativeChildren: NativeNode[],
@@ -39,6 +41,7 @@ export function reconcileContainer(
   bookmarks: BookmarkNode[],
   mappings: BookmarkIdMapping[],
   newTabUrl: string,
+  isSeparator: (node: NativeNode) => boolean = (n) => nativeIsSeparator(n, newTabUrl),
 ): ReconcileResult {
   const byNative = new Map(mappings.map((m) => [m.nativeId, m.syncedId]));
   const taken: number[] = [];
@@ -62,14 +65,31 @@ export function reconcileContainer(
 
   const convert = (native: NativeNode): BookmarkNode => {
     const knownId = byNative.get(native.id);
-    const url = nativeIsSeparator(native, newTabUrl) ? SeparatorUrl : native.url?.trim();
+    const url = isSeparator(native) ? SeparatorUrl : native.url?.trim();
     if (knownId !== undefined) {
       const current = findSynced(knownId, bookmarks);
+      // Normalize by NATIVE type: a bookmark never carries children, a folder
+      // never carries a url. A folder<->bookmark flip is always a change.
+      const wasFolder = current !== undefined && Array.isArray(current.children);
+      const isFolder = !url;
+      if (!current || wasFolder !== isFolder) changed = true;
       const meta = newBookmark(native.title, url);
+      // NOTE: description/tags live only on the synced side (natives can't
+      // express them), so they are preserved below but never a diff source —
+      // otherwise every reconcile would push.
       if (!current || current.title !== meta.title || current.url !== meta.url) changed = true;
-      const node: BookmarkNode = { ...meta, id: knownId };
+      // Preserve description/tags: native nodes don't carry them, the synced
+      // side owns them. Dropping them here deleted metadata on every push.
+      const node: BookmarkNode = {
+        ...meta,
+        description: current?.description,
+        tags: current?.tags,
+        id: knownId,
+      };
+      if (node.description === undefined) delete node.description;
+      if (node.tags === undefined) delete node.tags;
       liveSynced.add(knownId);
-      if (!url) {
+      if (isFolder) {
         // Folder: children follow the native side exactly (empty stays empty).
         const before = current?.children?.length ?? -1;
         node.children = (native.children ?? []).map(convert);
@@ -93,18 +113,28 @@ export function reconcileContainer(
 
   const children = nativeChildren.map(convert);
 
-  // Detect removals: previous container children whose ids are not live.
+  // Detect removals AND pure reorders: previous container children whose ids
+  // are not live, or whose live order differs from the native order.
   const prev = bookmarks.find((b) => b.title === container);
   if (prev?.children) {
-    const prevIds = new Set<number>();
+    const prevIds: number[] = [];
     eachBookmark((b) => {
-      if (b.id !== undefined) prevIds.add(b.id);
+      if (b.id !== undefined) prevIds.push(b.id);
     }, prev.children);
+    const liveTopIds = children.map((c) => c.id).filter((id): id is number => id !== undefined);
+    const prevTopIds = prev.children.map((c) => c.id).filter((id): id is number => id !== undefined);
     for (const id of prevIds) {
       if (!liveSynced.has(id)) {
         changed = true;
         break;
       }
+    }
+    if (
+      !changed &&
+      prevTopIds.length === liveTopIds.length &&
+      prevTopIds.some((id, i) => id !== liveTopIds[i])
+    ) {
+      changed = true;
     }
   }
 

@@ -17,6 +17,7 @@ import {
   type NativeNode,
 } from './bookmarks.js';
 import { HorizontalSeparatorTitle, VerticalSeparatorTitle } from './bookmarks.js';
+import { SeparatorUrl } from './constants.js';
 import type { BookmarkIdMapping } from './id-mapper.js';
 import type { BookmarkNode } from './models.js';
 
@@ -110,11 +111,11 @@ export async function readAll(
     collect(menuTree.children);
   } else if (opts.menuFolderInOther) {
     // The synced Menu container is a folder inside Other (chromium model).
-    const menuFolder = otherChildren.find((c) => c.title === BookmarkContainer.Menu);
+    const menuFolder = otherChildren.find((c) => c.title === BookmarkContainer.Menu && !c.url);
     if (menuFolder?.children) {
       menu = toSynced(menuFolder.children, opts);
     }
-    otherChildren = otherChildren.filter((c) => c.title !== BookmarkContainer.Menu);
+    otherChildren = otherChildren.filter((c) => c.title !== BookmarkContainer.Menu || !!c.url);
   }
   const other = toSynced(otherChildren, opts);
 
@@ -174,7 +175,7 @@ async function createTree(
 ): Promise<number> {
   let total = 0;
   for (const b of bookmarks) {
-    if (b.url === 'xbs:separator') {
+    if (b.url === SeparatorUrl) {
       await opts.createSeparator(api, parentId, parentId === toolbarId);
     } else if (b.children) {
       const created = await api.create({ parentId, title: b.title });
@@ -248,12 +249,12 @@ export async function buildMappings(
     let natives = tree.children ?? [];
     if (container === BookmarkContainer.Other) {
       // Skip the chromium Menu folder: it maps under the Menu container instead.
-      const menuFolder = natives.find((c) => c.title === BookmarkContainer.Menu);
+      const menuFolder = natives.find((c) => c.title === BookmarkContainer.Menu && !c.url);
       const menuTarget = getContainer(BookmarkContainer.Menu, bookmarks);
       if (menuFolder?.children && menuTarget?.children?.length) {
         out.push(...mapIds(menuFolder.children, menuTarget.children));
       }
-      natives = natives.filter((c) => c.title !== BookmarkContainer.Menu);
+      natives = natives.filter((c) => c.title !== BookmarkContainer.Menu || !!c.url);
     }
     out.push(...mapIds(natives, target.children!));
   };

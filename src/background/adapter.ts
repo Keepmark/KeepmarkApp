@@ -18,6 +18,8 @@ export interface AddNativeInput {
 export interface NativeAdapter extends NativeOps {
   readonly platformName: 'firefox' | 'chromium';
   readonly newTabUrl: string;
+  /** Platform separator predicate (must match the read path). */
+  readonly isSeparatorNode: (node: NativeNode) => boolean;
   /** Containers reconciled on native changes (chromium skips Menu root). */
   readonly syncContainers: BookmarkContainer[];
   /** Native children of one synced container (chromium Menu = folder in Other). */

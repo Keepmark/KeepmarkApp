@@ -8,6 +8,7 @@ import { XSyncApiClient } from '../src/shared/api';
 import { decryptData, deriveKey } from '../src/shared/crypto';
 import { SyncClientVersion } from '../src/shared/constants';
 import {
+  DailyNewSyncLimitException,
   DataOutOfSyncException,
   InvalidCredentialsException,
   SyncNotFoundException,
@@ -90,7 +91,18 @@ live('e2e probe', () => {
 });
 
 live('e2e v1.2 link lifecycle', () => {
-  it('create -> 304 -> push -> stale 409 -> delete -> gone', async () => {
+  it('create -> 304 -> push -> stale 409 -> delete -> gone', async (ctx) => {
+    try {
+      await lifecycleBody();
+    } catch (err) {
+      // Tired quota is not a broken contract: skip instead of failing.
+      if (err instanceof DailyNewSyncLimitException) ctx.skip();
+      throw err;
+    }
+  });
+});
+
+async function lifecycleBody(): Promise<void> {
     const api = liveApi();
     const { deps, store, mockApi } = makeDeps(api);
     const password = PW('lifecycle');
@@ -123,11 +135,20 @@ live('e2e v1.2 link lifecycle', () => {
 
     await deleteRemoteSync(api, id);
     await expect(api.getBookmarksV12(id)).rejects.toBeInstanceOf(SyncNotFoundException);
+}
+
+live('e2e legacy path on the v1.2 server', () => {
+  it('links without meta; the delete gate stays client-side', async (ctx) => {
+    try {
+      await legacyBody();
+    } catch (err) {
+      if (err instanceof DailyNewSyncLimitException) ctx.skip();
+      throw err;
+    }
   });
 });
 
-live('e2e legacy path on the v1.2 server', () => {
-  it('links without meta; the delete gate stays client-side', async () => {
+async function legacyBody(): Promise<void> {
     const api = liveApi();
     const { deps, store, mockApi } = makeDeps(api);
     await mockApi.create({ parentId: 'unfiled_____', title: 'Legacy', url: 'https://legacy.test' });
@@ -141,11 +162,20 @@ live('e2e legacy path on the v1.2 server', () => {
     // server honors it. A legacy server would answer 412 here (unit-covered).
     await deleteRemoteSync(api, id);
     await expect(api.getBookmarks(id)).rejects.toBeInstanceOf(SyncNotFoundException);
+}
+
+live('e2e background core', () => {
+  it('connect -> wrong current rejected -> change -> server delete unlinks', async (ctx) => {
+    try {
+      await coreBody();
+    } catch (err) {
+      if (err instanceof DailyNewSyncLimitException) ctx.skip();
+      throw err;
+    }
   });
 });
 
-live('e2e background core', () => {
-  it('connect -> wrong current rejected -> change -> server delete unlinks', async () => {
+async function coreBody(): Promise<void> {
     const log = new InMemoryLogger();
     const store = new Store(new MemoryBackend());
     const mockApi = makeMockApi();
@@ -187,5 +217,4 @@ live('e2e background core', () => {
     await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     await expect(liveApi().getBookmarksV12(id)).rejects.toBeInstanceOf(SyncNotFoundException);
-  });
-});
+}

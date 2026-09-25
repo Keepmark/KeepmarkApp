@@ -15,9 +15,9 @@ export function urlIsNativeConfigPage(url?: string): boolean {
   return !!url && /^about:/.test(url);
 }
 
-/** Firefox supports everything except chrome:/data: urls. */
+/** Firefox supports everything except chrome:/data: urls (case-insensitive like upstream). */
 export function urlIsSupported(url: string): boolean {
-  return /^(?!chrome|data)[\w-]+:/.test(url);
+  return /^(?!chrome|data)[\w-]+:/i.test(url);
 }
 
 export function getSupportedUrl(url: string | undefined): string {
