@@ -59,6 +59,8 @@ export function errorForStatus(status: number, serverMessage: string, local: (ke
     return `${msg}${suffix}`;
   };
   switch (status) {
+    case 400:
+      return new UnexpectedResponseException(withServer(local('ErrUnexpectedResponse')));
     case 401:
       return new SyncNotFoundException(withServer(local('ErrSyncNotFound')));
     case 404:

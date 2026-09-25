@@ -39,7 +39,9 @@ const opts: NativeOpts = {
 async function menuFolderId(api: BookmarkApi, createIfMissing: boolean): Promise<string | undefined> {
   const c = await getContainerIds(api);
   const children = await api.getChildren(c.other);
-  const folder = children.find((n) => n.title === BookmarkContainer.Menu && n.children !== undefined);
+  // NOTE: getChildren nodes carry no `children` array — folders are nodes
+  // without a url. Checking `children !== undefined` never matches on Chrome.
+  const folder = children.find((n) => n.title === BookmarkContainer.Menu && !n.url);
   if (folder) return folder.id;
   if (!createIfMissing) return undefined;
   const created = await api.create({ parentId: c.other, title: BookmarkContainer.Menu });
@@ -52,6 +54,7 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
   return {
     platformName: 'chromium',
     newTabUrl,
+    isSeparatorNode: opts.isSeparatorNode,
     syncContainers: [BookmarkContainer.Other, BookmarkContainer.Toolbar],
 
     readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),
@@ -74,10 +77,12 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
       }
       const c = await ids();
       const [tree] = await api.getSubTree(container === BookmarkContainer.Other ? c.other : c.toolbar);
-      // Hide the Menu folder from Other (it reconciles under Menu instead).
       const children = tree.children ?? [];
+      // Hide the Menu folder from Other (it reconciles under Menu instead).
+      // Match folders only: a user bookmark legitimately titled "[xbs] Menu"
+      // must never be swallowed (it would desync in a loop).
       return container === BookmarkContainer.Other
-        ? children.filter((n) => n.title !== BookmarkContainer.Menu)
+        ? children.filter((n) => n.title !== BookmarkContainer.Menu || !!n.url)
         : children;
     },
 

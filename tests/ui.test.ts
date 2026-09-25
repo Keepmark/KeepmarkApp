@@ -25,6 +25,7 @@ function mountCard(prefix: string, withCount: boolean): void {
     <span id="${prefix}-pill"></span>
     <span id="${prefix}-service-badge"></span>
     <dd id="${prefix}-server"></dd>
+    <dd id="${prefix}-swversion"></dd>
     <dd><code id="${prefix}-syncid"></code></dd>
     <dd id="${prefix}-last"></dd>
     <div><div id="${prefix}-space-fill"></div></div>
@@ -99,6 +100,18 @@ describe('status card (popup + manager share this renderer)', () => {
     expect(document.getElementById('t-pill')!.textContent).toBe('Checking…');
     renderStatusCard('t', { status: { ...linked(), syncing: true }, ping: { reachable: true } });
     expect(document.getElementById('t-pill')!.textContent).toBe('Syncing…');
+  });
+
+  it('prefers Offline over Syncing when queued but unreachable', () => {
+    renderStatusCard('t', { status: { ...linked(), syncing: true, queueLength: 2 }, ping: { reachable: false } });
+    expect(document.getElementById('t-pill')!.textContent).toBe('Offline');
+  });
+
+  it('contract suffix falls back to the stored flag when offline', () => {
+    renderStatusCard('t', { status: { ...linked(), supportsV12: true }, ping: undefined });
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service · API v1.2');
+    renderStatusCard('t', { status: { ...linked(), supportsV12: true }, ping: { reachable: true, supportsV12: false } });
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
   });
 
   it('works without max size and without the count element', () => {
@@ -212,7 +225,7 @@ describe('formatBytes', () => {
 
 describe('describeUndo', () => {
   it('covers every kind with count and date', () => {
-    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'switch-new', 'switch-pull', 'switch-push', 'import']) {
+    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'switch-new', 'switch-pull', 'switch-push', 'change-password', 'import']) {
       const text = describeUndo(kind, 42, 0);
       expect(text).toContain('42 bookmarks');
       expect(text).toContain('Undo restores');

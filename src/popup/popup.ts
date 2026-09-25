@@ -133,6 +133,9 @@ async function initConnect(): Promise<void> {
         showView('main');
         await refreshAll();
       } catch (err) {
+        // Never leave the confirmation in the DOM; the main password stays so
+        // a transient failure doesn't force a full retype from the vault.
+        input('confirm-password').value = '';
         showError('connect', (err as Error).message);
       }
     }),

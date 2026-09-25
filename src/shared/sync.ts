@@ -135,6 +135,9 @@ export async function createNewSync(
  * Shared create+upload used by connect-new and move-service-new.
  * v1.2 path speaks the extended contract throughout (create meta → revision
  * CAS upload), so the stored revision/hash is populated from the start.
+ * A 412 anywhere on the v1.2 path (downgraded service) retries the whole
+ * create on the legacy contract and reports the effective contract back, so
+ * the caller never caches a poisoned capability.
  */
 export async function createAndUpload(
   api: XSyncApiClient,
@@ -143,16 +146,49 @@ export async function createAndUpload(
   password: string,
   serviceUrl: string | undefined,
   v12: boolean,
-): Promise<{ id: string; lastUpdated: string }> {
-  const created = v12 ? await api.createSyncV12() : await api.createSync();
+): Promise<{ id: string; lastUpdated: string; v12: boolean }> {
+  if (v12) {
+    try {
+      return { ...(await createAndUploadV12(api, store, bookmarks, password, serviceUrl)), v12: true };
+    } catch (err) {
+      if (!(err instanceof UnsupportedVersionException)) throw err;
+    }
+  }
+  const created = await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
     throw new UnexpectedResponseException('Unexpected response from the service.');
   }
   const derived = await deriveKey(password, created.id, created.version);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
-  // Pre-v1.2 syncs report revision 0: the first write bumps 0 -> 1.
+  const updated = await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
+  await saveSyncState(
+    store,
+    { id: created.id, password: derived, version: created.version },
+    updated.lastUpdated!,
+    encrypted,
+    serviceUrl,
+    updated.meta,
+    false,
+  );
+  return { id: created.id, lastUpdated: updated.lastUpdated!, v12: false };
+}
+
+async function createAndUploadV12(
+  api: XSyncApiClient,
+  store: Store,
+  bookmarks: BookmarkNode[],
+  password: string,
+  serviceUrl: string | undefined,
+): Promise<{ id: string; lastUpdated: string }> {
+  const created = await api.createSyncV12();
+  if (!created.id || !created.lastUpdated || !created.version) {
+    throw new UnexpectedResponseException('Unexpected response from the service.');
+  }
+  const derived = await deriveKey(password, created.id, created.version);
+  const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
+  // Fresh v1.2 creates report revision 1 (pre-v1.2 docs read back as 0).
   const updated =
-    v12 && created.meta?.revision !== undefined
+    created.meta?.revision !== undefined
       ? await api.updateBookmarksV12(created.id, encrypted, created.meta.revision, true)
       : await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
   await saveSyncState(
@@ -162,7 +198,7 @@ export async function createAndUpload(
     encrypted,
     serviceUrl,
     updated.meta,
-    v12,
+    true,
   );
   return { id: created.id, lastUpdated: updated.lastUpdated! };
 }
@@ -242,7 +278,10 @@ export async function pullWithDerivedKey(
     updateRemote = true;
   }
   const withContainers = ensureContainersExist(bookmarks);
-  if (JSON.stringify(withContainers) !== JSON.stringify(bookmarks)) {
+  // Order-insensitive check: only missing containers flip updateRemote.
+  // (JSON.stringify comparison misfires on key order from other clients.)
+  const before = new Set(bookmarks.map((b) => b.title));
+  if (withContainers.some((b) => !before.has(b.title))) {
     bookmarks = withContainers;
     updateRemote = true;
   }

@@ -84,7 +84,10 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   $(`${prefix}-server`).textContent = serviceUrl;
   if (swversion) swversion.textContent = status.serviceVersion ?? ping?.version ?? '—';
   const official = serviceUrl.replace(/\/+$/, '') === DefaultServiceUrl;
-  const contract = ping?.supportsV12 ? ' · API v1.2' : '';
+  // Stored flag is the offline fallback: without it an unreachable service
+  // would flicker the contract suffix on every failed probe.
+  const v12 = ping?.supportsV12 ?? status?.supportsV12 ?? false;
+  const contract = v12 ? ' · API v1.2' : '';
   badge.textContent = `${official ? 'Official service' : 'Custom service'}${contract}`;
   badge.className = `badge ${official ? 'official' : 'custom'}`;
   $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
@@ -101,12 +104,13 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
     if (countEl) countEl.textContent = `${status.bookmarkCount} bookmarks`;
   }
 
-  if (status.syncing || status.queueLength > 0) {
+  // Reachability first: a queued-but-offline client is Offline, not Syncing.
+  if (ping && !ping.reachable) {
+    setPill(pill, 'Offline', 'bad');
+  } else if (status.syncing || status.queueLength > 0) {
     setPill(pill, 'Syncing…', 'busy');
   } else if (!ping) {
     setPill(pill, 'Checking…', 'busy');
-  } else if (!ping.reachable) {
-    setPill(pill, 'Offline', 'bad');
   } else if (ping.remoteLastUpdated && status.lastUpdated && ping.remoteLastUpdated !== status.lastUpdated) {
     setPill(pill, 'Behind', 'warn');
   } else {

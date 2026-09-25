@@ -213,6 +213,30 @@ describe('v1.2 sync paths', () => {
     expect((await fb.store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(false);
   });
 
+  it('createAndUpload falls back to legacy on 412 and reports the contract', async () => {
+    const { UnsupportedVersionException } = await import('../src/shared/errors');
+    const { createAndUpload } = await import('../src/shared/sync');
+    const { deps, store, mockApi } = makeDeps({
+      createSyncV12: async () => {
+        throw new UnsupportedVersionException('downgraded');
+      },
+      createSync: async () => ({ id: 'fb-id', lastUpdated: 't0', version: SyncClientVersion }),
+      updateBookmarks: async () => ({ lastUpdated: 't1' }),
+    });
+    await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
+    const { id, v12 } = await createAndUpload(
+      deps.api,
+      store,
+      [{ id: 1, title: '[xbs] Other', children: [] }],
+      'correct horse battery staple',
+      'https://x.test/',
+      true,
+    );
+    expect(id).toBe('fb-id');
+    expect(v12).toBe(false);
+    expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(false);
+  });
+
   it('deleteRemoteSync performs the DELETE and renames a 412 honestly', async () => {
     let deleted: string | undefined;
     const { deps } = makeDeps({

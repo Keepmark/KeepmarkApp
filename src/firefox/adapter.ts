@@ -32,6 +32,7 @@ export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
   return {
     platformName: 'firefox',
     newTabUrl: opts.newTabUrl,
+    isSeparatorNode: opts.isSeparatorNode,
     syncContainers: [BookmarkContainer.Menu, BookmarkContainer.Other, BookmarkContainer.Toolbar],
 
     readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),

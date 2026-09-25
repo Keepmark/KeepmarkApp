@@ -186,7 +186,10 @@ export function repairBookmarkIds(bookmarks: BookmarkNode[]): BookmarkNode[] {
   for (const b of flat) {
     if (typeof b.id !== 'number') delete b.id;
   }
-  flat.sort((x, y) => (x.id ?? 0) - (y.id ?? 0));
+  // Sort exactly like the original client (plain `id - id`, so missing ids
+  // compare as NaN and keep their relative order) — otherwise two clients
+  // repair the same tree differently and chase each other on every push.
+  flat.sort((x, y) => Number(x.id) - Number(y.id));
   flat.forEach((b, i) => {
     b.id = i + 1;
   });
