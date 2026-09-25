@@ -359,7 +359,7 @@ export class XSyncApiClient {
         throw errorForStatus(res.status, await readMessage(res), tr);
       }
       // DELETE answers `{}` (possibly an empty body): never fail the shape check.
-      const dto = ((await res.json().catch(() => ({}))) as T);
+      const dto = ((await res.json().catch(() => ({}))) ?? {}) as T;
       if (!dto || !valid(dto)) throw new UnexpectedResponseException(tr('ErrUnexpectedResponse'));
       return dto;
     } catch (err) {

@@ -65,6 +65,8 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const { status, ping } = view;
   const pill = $(`${prefix}-pill`);
   const badge = $(`${prefix}-service-badge`);
+  // Service version row is optional (older test mounts lack it).
+  const swversion = document.getElementById(`${prefix}-swversion`);
   if (!status?.syncEnabled) {
     setPill(pill, 'Not connected', 'bad');
     badge.textContent = '—';
@@ -73,12 +75,14 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
     $(`${prefix}-last`).textContent = '—';
     $(`${prefix}-space`).textContent = '—';
     ($(`${prefix}-space-fill`) as HTMLElement).style.width = '0%';
+    if (swversion) swversion.textContent = '—';
     const countEl = document.getElementById(`${prefix}-count`);
     if (countEl) countEl.textContent = '—';
     return;
   }
   const serviceUrl = status.serviceUrl ?? DefaultServiceUrl;
   $(`${prefix}-server`).textContent = serviceUrl;
+  if (swversion) swversion.textContent = status.serviceVersion ?? ping?.version ?? '—';
   const official = serviceUrl.replace(/\/+$/, '') === DefaultServiceUrl;
   const contract = ping?.supportsV12 ? ' · API v1.2' : '';
   badge.textContent = `${official ? 'Official service' : 'Custom service'}${contract}`;
@@ -161,7 +165,9 @@ export function describeUndo(kind: string, count: number | undefined, when: numb
               ? 'moved and downloaded the server copy'
               : kind === 'switch-push'
                 ? 'moved and uploaded over the server copy'
-                : 'imported a backup';
+                : kind === 'change-password'
+                  ? 'changed the sync password'
+                  : 'imported a backup';
   const n = count !== undefined ? ` (${count} bookmarks)` : '';
   return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
 }
@@ -184,6 +190,15 @@ export function validateConnect(input: {
   if (input.direction === 'push' && !input.pushConfirmed) {
     return 'Tick the confirmation to overwrite the server copy.';
   }
+  return null;
+}
+
+/** Pure password-change validation. Null = valid. */
+export function validatePasswordChange(input: { current: string; next: string; confirm: string }): string | null {
+  if (!input.current) return 'Current password is required.';
+  if (!input.next) return 'A new password is required.';
+  if (input.next === input.current) return 'The new password must be different from the current one.';
+  if (input.next !== input.confirm) return 'New passwords do not match.';
   return null;
 }
 

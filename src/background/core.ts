@@ -11,6 +11,7 @@ import { compareVersions, DefaultServiceUrl, MinApiVersion, ServiceProbeTimeoutM
 import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
+  InvalidCredentialsException,
   SyncNotFoundException,
   UnexpectedResponseException,
   UnsupportedSyncVersionException,
@@ -47,6 +48,7 @@ import {
   persistMeta,
   pullWithDerivedKey,
   pushBookmarks,
+  pushEncrypted,
   switchService,
   v12Usable,
   type SyncDeps,
@@ -198,6 +200,8 @@ export class BackgroundCore {
         return this.undoLastLink();
       case MessageCommand.DismissUndo:
         return this.clearUndo();
+      case MessageCommand.ChangePassword:
+        return this.changePassword(msg.currentPassword, msg.newPassword);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
     }
@@ -440,7 +444,7 @@ export class BackgroundCore {
     await this.setBadge(true);
     try {
       const api = this.makeApi(serviceUrl);
-      await checkService(api, this.log);
+      const svc = await checkService(api, this.log);
       const v12 = await this.isV12(serviceUrl);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       const prev = await this.capturePrev();
@@ -455,7 +459,7 @@ export class BackgroundCore {
         opServiceUrl: serviceUrl,
         ...prev,
       });
-      await this.afterLink();
+      await this.afterLink(svc.version);
       return { id };
     } finally {
       this.connecting = false;
@@ -474,7 +478,7 @@ export class BackgroundCore {
     await this.setBadge(true);
     try {
       const api = this.makeApi(serviceUrl);
-      await checkService(api, this.log);
+      const svc = await checkService(api, this.log);
       const v12 = await this.isV12(serviceUrl);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       if (direction === 'push') {
@@ -530,7 +534,7 @@ export class BackgroundCore {
           await this.pushCurrent(api, linked, pulled.bookmarks);
         }
       }
-      await this.afterLink();
+      await this.afterLink(svc.version);
       return { id: syncId };
     } finally {
       this.connecting = false;
@@ -602,7 +606,15 @@ export class BackgroundCore {
     await this.store.set(StoreKey.SyncEnabled, true);
   }
 
-  private async afterLink(): Promise<void> {
+  private async afterLink(serviceVersion?: string): Promise<void> {
+    // Remember the service version for the status card (offline fallback —
+    // the live ping refreshes it whenever reachable).
+    if (serviceVersion) {
+      const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      if (linked?.id) {
+        await this.store.set(StoreKey.SyncInfo, { ...linked, serviceVersion });
+      }
+    }
     await this.ports.alarms.schedule(UpdatesAlarmName, (this.options.pollMinutes ?? 15));
     await this.setBadge(false);
   }
@@ -641,6 +653,59 @@ export class BackgroundCore {
     const { info } = await this.requireCreds();
     const tree = await this.cachedTree(info);
     return exportBackup(tree, password);
+  }
+
+  /**
+   * Password change = re-encrypt the current tree under a new key derived
+   * from (newPassword, same syncId) and PUT it. Version unchanged. The old
+   * password stops working everywhere immediately: plaintext safety-backup
+   * first, undo slot covers rollback (old blob PUT-back with the old key).
+   * Dual-stack: revision CAS on v1.2 links (timestamp fallback on 412),
+   * timestamp on legacy links.
+   */
+  private async changePassword(currentPassword: string, newPassword: string): Promise<{ lastUpdated: string }> {
+    if (!currentPassword) throw new IncompleteSyncInfoException('Current password is required.');
+    if (!newPassword) throw new IncompleteSyncInfoException('A new password is required.');
+    const { info } = await this.requireCreds();
+    const version = info.version ?? SyncClientVersion;
+    // Prove the current password BEFORE touching anything: the derived key
+    // must match the stored one, otherwise nothing is downloaded, queued or
+    // overwritten.
+    const currentDerived = await deriveKey(currentPassword, info.id!, version);
+    if (currentDerived !== info.password) {
+      throw new InvalidCredentialsException('Current password is incorrect.');
+    }
+    const tree = await this.cachedTree(info);
+    const derived = await deriveKey(newPassword, info.id!, version);
+    const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
+    const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
+    if (!lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
+    await this.ports.chrome.download(`keepmark-pre-pwchange-${Date.now()}.json`, JSON.stringify(tree));
+    await this.saveUndo({
+      kind: 'change-password',
+      opDerivedKey: info.password!,
+      opSyncId: info.id!,
+      opServiceUrl: info.serviceUrl ?? DefaultServiceUrl,
+      ...(await this.capturePrev()),
+      remotePreBlob: currentBlob,
+      localCount: countNodes(tree),
+    });
+    const encrypted = await encryptData(JSON.stringify(tree), derived);
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    // Dual-stack PUT: revision CAS when the link is v1.2 (with honest 412
+    // fallback for a downgraded service), timestamp otherwise.
+    const tryV12 = v12Usable(info) ? await getStoredRevision(this.store) : undefined;
+    let updatedLast: string;
+    try {
+      updatedLast = await pushEncrypted(api, this.store, info.id!, encrypted, lastUpdated, false, tryV12);
+    } catch (err) {
+      if (!(err instanceof UnsupportedVersionException) || tryV12 === undefined) throw err;
+      await this.downgradeV12(info);
+      updatedLast = await pushEncrypted(api, this.store, info.id!, encrypted, lastUpdated);
+    }
+    await this.store.set(StoreKey.SyncInfo, { ...info, password: derived });
+    this.log.log(XbsLogLevel.Info, 'sync', 'Password changed, blob re-encrypted');
+    return { lastUpdated: updatedLast };
   }
 
   private async importBackup(json: string, password: string): Promise<{ count: number }> {
@@ -685,7 +750,7 @@ export class BackgroundCore {
     // Safety-backup of the scrapped side before moving (plaintext, like Keepmark).
     await this.ports.chrome.download(`keepmark-safety-${Date.now()}.json`, JSON.stringify(tree));
     const newApi = this.makeApi(target.newServiceUrl);
-    await checkService(newApi, this.log);
+    const svc = await checkService(newApi, this.log);
     const v12 = await this.isV12(target.newServiceUrl);
 
     if (target.mode === 'new') {
@@ -699,7 +764,7 @@ export class BackgroundCore {
         opServiceUrl: target.newServiceUrl,
         ...prev,
       });
-      await this.afterLink();
+      await this.afterLink(svc.version);
       return { id };
     }
 
@@ -768,7 +833,7 @@ export class BackgroundCore {
       await persistMeta(this.store, updated.meta);
       await this.store.set(StoreKey.SyncEnabled, true);
     }
-    await this.afterLink();
+    await this.afterLink(svc.version);
     return { id: syncId };
   }
 
@@ -975,6 +1040,7 @@ export class BackgroundCore {
       syncEnabled,
       syncId: info?.id,
       serviceUrl: info?.serviceUrl,
+      serviceVersion: info?.serviceVersion,
       lastUpdated,
       queueLength: this.queue.length,
       syncing: this.queue.syncing || this.connecting,
@@ -1017,6 +1083,14 @@ export class BackgroundCore {
         await this.store.set(StoreKey.SyncInfo, { ...info, supportsV12: v12 });
         this.v12cache.set(info.serviceUrl ?? DefaultServiceUrl, v12);
         this.log.log(XbsLogLevel.Info, 'sync', `Capability refresh for ${info.serviceUrl}: v12=${v12}`);
+      }
+      // Remember the live service version for the status card; offline probes
+      // never touch the last-known value.
+      if (service.version && service.version !== info.serviceVersion) {
+        const current = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+        if (current?.id === info.id) {
+          await this.store.set(StoreKey.SyncInfo, { ...current, serviceVersion: service.version });
+        }
       }
       return {
         reachable: true,

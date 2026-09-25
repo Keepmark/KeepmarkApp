@@ -38,6 +38,8 @@ export interface SyncInfo {
   password?: string;
   serviceUrl?: string;
   version?: string;
+  /** Last-known service API version (link-time probe, refreshed by ping). */
+  serviceVersion?: string;
   /**
    * Whether the linked service speaks the v1.2 extended contract (probed at
    * link time, refreshed by ping/preview). Gates every v1.2-only feature in

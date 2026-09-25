@@ -4,6 +4,7 @@ import {
   IncompleteSyncInfoException,
   ServiceOfflineException,
   SyncNotFoundException,
+  UnsupportedVersionException,
   XbsException,
 } from '../src/shared/errors';
 import { InMemoryLogger } from '../src/shared/logging';
@@ -24,8 +25,17 @@ describe('message error wire format', () => {
     expect(toWireError(new Error('plain'))).toEqual({ errorName: 'XbsException', message: 'plain' });
   });
 
+  it('round-trips the v1.2 gate error so the popup shows the reason', () => {
+    const wire = toWireError(new UnsupportedVersionException('Not supported (requires service v1.2).'));
+    expect(wire.errorName).toBe('UnsupportedVersionException');
+    const rebuilt = fromWireError(wire);
+    expect(rebuilt).toBeInstanceOf(UnsupportedVersionException);
+    expect(rebuilt.message).toContain('Not supported');
+  });
+
   it('commands are stable strings', () => {
     expect(MessageCommand.SyncBookmarks).toBe('sync-bookmarks');
+    expect(MessageCommand.DeleteRemoteSync).toBe('delete-remote-sync');
   });
 });
 

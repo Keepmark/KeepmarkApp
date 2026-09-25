@@ -282,6 +282,24 @@ export async function pushBookmarks(
   const lastUpdated = await store.get<string>(StoreKey.LastUpdated);
   if (!syncId || !derivedKey || !lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
   const encrypted = await encryptData(JSON.stringify(bookmarks), derivedKey);
+  return pushEncrypted(api, store, syncId, encrypted, lastUpdated, updateVersion, baseRevision);
+}
+
+/**
+ * PUT a pre-encrypted blob (password change, undo PUT-backs). Same contract
+ * choice as pushBookmarks: revision CAS when baseRevision is given, timestamp
+ * otherwise. Persists lastUpdated/blob/meta.
+ */
+export async function pushEncrypted(
+  api: XSyncApiClient,
+  store: Store,
+  syncId: string,
+  encrypted: string,
+  lastUpdated: string,
+  updateVersion = false,
+  baseRevision?: number,
+): Promise<string> {
+  if (!syncId || !encrypted || !lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
   const res =
     baseRevision === undefined
       ? await api.updateBookmarks(syncId, encrypted, lastUpdated, updateVersion)

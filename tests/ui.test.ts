@@ -9,10 +9,12 @@ vi.mock('webextension-polyfill', () => ({
 }));
 
 import {
+  contractGate,
   describeUndo,
   formatBytes,
   renderStatusCard,
   validateConnect,
+  validatePasswordChange,
   validateSwitch,
   withBusy,
 } from '../src/popup/ui';
@@ -104,6 +106,71 @@ describe('status card (popup + manager share this renderer)', () => {
     renderStatusCard('x', { status: linked(), ping: { reachable: true } });
     expect(document.getElementById('x-space')!.textContent).toBe('152.3 KB');
     expect(document.getElementById('x-pill')!.textContent).toBe('Synced');
+  });
+
+  it('tags the v1.2 contract on the badge, legacy badge unchanged', () => {
+    renderStatusCard('t', { status: linked(), ping: { reachable: true, supportsV12: true } });
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service · API v1.2');
+    renderStatusCard('t', { status: linked(), ping: { reachable: true } });
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+    renderStatusCard('t', { status: linked(), ping: { reachable: true, supportsV12: false } });
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+  });
+
+  it('shows the service version when the row exists, ignores its absence', () => {
+    // Old mounts without the row keep working (no throw).
+    renderStatusCard('t', { status: { ...linked(), serviceVersion: '1.2.0' }, ping: { reachable: true } });
+    document.body.innerHTML = `
+      <span id="v-pill"></span><span id="v-service-badge"></span>
+      <dd id="v-server"></dd><dd id="v-swversion"></dd><dd><code id="v-syncid"></code></dd>
+      <dd id="v-last"></dd><div><div id="v-space-fill"></div></div><span id="v-space"></span>
+    `;
+    renderStatusCard('v', { status: { ...linked(), serviceVersion: '1.2.0' }, ping: { reachable: true } });
+    expect(document.getElementById('v-swversion')!.textContent).toBe('1.2.0');
+    renderStatusCard('v', { status: linked(), ping: { reachable: true, version: '1.1.13' } });
+    expect(document.getElementById('v-swversion')!.textContent).toBe('1.1.13');
+    renderStatusCard('v', { status: { ...linked(), syncEnabled: false }, ping: undefined });
+    expect(document.getElementById('v-swversion')!.textContent).toBe('—');
+  });
+});
+
+describe('contractGate (v1.2-only UI)', () => {
+  it('enables only on v1.2, with badge and no hint', () => {
+    const g = contractGate({ liveV12: true, storedV12: false, syncEnabled: true });
+    expect(g.enabled).toBe(true);
+    expect(g.title).toBe('');
+    expect(g.hintHidden).toBe(true);
+    expect(g.badge).toBe('API v1.2');
+  });
+
+  it('live probe wins over a stale stored flag', () => {
+    expect(contractGate({ liveV12: false, storedV12: true, syncEnabled: true }).enabled).toBe(false);
+    expect(contractGate({ liveV12: true, storedV12: false, syncEnabled: true }).enabled).toBe(true);
+  });
+
+  it('offline falls back to the stored link flag', () => {
+    expect(contractGate({ liveV12: undefined, storedV12: true, syncEnabled: true }).enabled).toBe(true);
+    expect(contractGate({ liveV12: undefined, storedV12: false, syncEnabled: true }).enabled).toBe(false);
+  });
+
+  it('legacy disables with the reason and shows the hint', () => {
+    const g = contractGate({ liveV12: false, storedV12: false, syncEnabled: true });
+    expect(g.enabled).toBe(false);
+    expect(g.title).toBe('Not supported (requires service v1.2)');
+    expect(g.hintHidden).toBe(false);
+    expect(g.badge).toBe('API v1.1');
+  });
+
+  it('never probed counts as legacy (old links)', () => {
+    const g = contractGate({ liveV12: undefined, storedV12: undefined, syncEnabled: true });
+    expect(g.enabled).toBe(false);
+    expect(g.title).toContain('Not supported');
+  });
+
+  it('unlinked hides hint and badge', () => {
+    const g = contractGate({ liveV12: false, storedV12: false, syncEnabled: false });
+    expect(g.hintHidden).toBe(true);
+    expect(g.badge).toBe('');
   });
 });
 
@@ -198,5 +265,26 @@ describe('validateSwitch', () => {
     expect(
       validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'a' }),
     ).toBeNull();
+  });
+});
+
+describe('validatePasswordChange', () => {
+  const base = { current: 'old-pw', next: 'new-pw', confirm: 'new-pw' };
+  it('passes when everything lines up', () => {
+    expect(validatePasswordChange(base)).toBeNull();
+  });
+  it('requires the current password first', () => {
+    expect(validatePasswordChange({ ...base, current: '' })).toBe('Current password is required.');
+  });
+  it('requires a new password', () => {
+    expect(validatePasswordChange({ ...base, next: '', confirm: '' })).toBe('A new password is required.');
+  });
+  it('rejects reusing the current password', () => {
+    expect(validatePasswordChange({ current: 'same', next: 'same', confirm: 'same' })).toBe(
+      'The new password must be different from the current one.',
+    );
+  });
+  it('requires the confirmation to match', () => {
+    expect(validatePasswordChange({ ...base, confirm: 'typo' })).toBe('New passwords do not match.');
   });
 });

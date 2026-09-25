@@ -34,6 +34,7 @@ export enum MessageCommand {
   GetUndoState = 'get-undo-state',
   UndoLastLink = 'undo-last-link',
   DismissUndo = 'dismiss-undo',
+  ChangePassword = 'change-password',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -56,6 +57,8 @@ export interface StatusResponse {
   syncEnabled: boolean;
   syncId?: string;
   serviceUrl?: string;
+  /** Last-known service API version (refreshed on link + live ping). */
+  serviceVersion?: string;
   lastUpdated?: string;
   queueLength: number;
   syncing: boolean;
@@ -116,6 +119,7 @@ export type UndoKind =
   | 'switch-new'
   | 'switch-pull'
   | 'switch-push'
+  | 'change-password'
   | 'import';
 
 export interface UndoState {
@@ -157,6 +161,7 @@ export type MessagePayload =
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
   | { command: MessageCommand.DismissUndo }
+  | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =

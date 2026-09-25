@@ -9,6 +9,7 @@ import {
   contractGate,
   copyText,
   describeUndo,
+  validatePasswordChange,
   validateSwitch,
   input,
   renderStatusCard,
@@ -484,6 +485,28 @@ function initSettingsSection(): void {
       sectionError('settings-error', (err as Error).message);
     }
   });
+  $('m-btn-password').addEventListener('click', () =>
+    withBusy('m-btn-password', 'Changing…', async () => {
+      hideErrors();
+      const current = input('m-current-password').value;
+      const next = input('m-new-password').value;
+      const invalid = validatePasswordChange({ current, next, confirm: input('m-new-password-confirm').value });
+      if (invalid) {
+        sectionError('pw-error', invalid);
+        return;
+      }
+      try {
+        await send({ command: MessageCommand.ChangePassword, currentPassword: current, newPassword: next });
+        input('m-current-password').value = '';
+        input('m-new-password').value = '';
+        input('m-new-password-confirm').value = '';
+        showResult('pw-result', 'Password changed. Update your other devices and vault now.');
+        await refreshStatus();
+      } catch (err) {
+        sectionError('pw-error', (err as Error).message);
+      }
+    }),
+  );
 }
 
 function renderAbout(): void {
