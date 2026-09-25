@@ -28,7 +28,6 @@
     "page": "background.html"
   },
   "permissions": ["activeTab", "alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"],
-  "optional_permissions": ["http://*/", "https://*/"],
   "content_security_policy": "connect-src *; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';",
   "incognito": "not_allowed"
 }

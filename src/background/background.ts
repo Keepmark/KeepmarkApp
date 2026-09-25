@@ -65,6 +65,7 @@ function ports(): CorePorts {
     alarms: {
       schedule: (name, periodMinutes) => browser.alarms.create(name, { periodInMinutes: periodMinutes }).then(() => undefined),
       clear: (name) => browser.alarms.clear(name).then(() => undefined),
+      once: (name, whenMs) => browser.alarms.create(name, { when: whenMs }).then(() => undefined),
       onAlarm: (cb) => browser.alarms.onAlarm.addListener((alarm) => cb(alarm.name)),
     },
     listeners: {

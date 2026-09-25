@@ -48,10 +48,13 @@ import { SyncQueue, type SyncJob } from '../shared/sync-queue.js';
 import { overwriteAll, type NativeAdapter } from './adapter.js';
 
 export const UpdatesAlarmName = 'xbs-sync-updates-check';
+export const NativeDebounceAlarmName = 'xbs-native-debounce';
 
 export interface AlarmPort {
   schedule(name: string, periodMinutes: number): Promise<void>;
   clear(name: string): Promise<void>;
+  /** One-shot alarm (debounce-safe: same name overwrites). Survives MV3 SW sleep. */
+  once(name: string, whenMs: number): Promise<void>;
   onAlarm(cb: (name: string) => void): void;
 }
 
@@ -92,7 +95,6 @@ interface Creds {
 export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
-  private debounceTimer?: ReturnType<typeof setTimeout>;
   private connecting = false;
 
   constructor(
@@ -112,7 +114,12 @@ export class BackgroundCore {
     ports.listeners.removed.add(onEvent);
     ports.listeners.moved.add(onEvent);
     ports.alarms.onAlarm((name) => {
-      if (name === UpdatesAlarmName) void this.checkForUpdates().catch((err) => this.onBackgroundError(err));
+      if (name === UpdatesAlarmName) {
+        void this.checkForUpdates().catch((err) => this.onBackgroundError(err));
+      } else if (name === NativeDebounceAlarmName) {
+        this.queue.enqueue('remote', false);
+        void this.drain().catch((err) => this.onBackgroundError(err));
+      }
     });
   }
 
@@ -274,14 +281,11 @@ export class BackgroundCore {
   // ---------------------------------------------------------- native events
 
   onNativeEvent(): void {
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(
-      () => {
-        this.queue.enqueue('remote', false);
-        void this.drain().catch((err) => this.onBackgroundError(err));
-      },
-      this.options.debounceMs ?? 300,
-    );
+    // Alarm-based debounce (not setTimeout): creating the same alarm twice
+    // overwrites it, and alarms wake a sleeping MV3 service worker.
+    void this.ports.alarms
+      .once(NativeDebounceAlarmName, Date.now() + (this.options.debounceMs ?? 300))
+      .catch((err) => this.onBackgroundError(err));
   }
 
   async checkForUpdates(): Promise<void> {

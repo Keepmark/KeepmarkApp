@@ -5,7 +5,7 @@ import { SyncClientVersion } from '../src/shared/constants';
 import { BookmarkContainer } from '../src/shared/bookmarks';
 import type { BookmarkNode } from '../src/shared/models';
 import { makeFirefoxAdapter } from '../src/firefox/adapter';
-import { BackgroundCore, UpdatesAlarmName, type CorePorts } from '../src/background/core';
+import { BackgroundCore, NativeDebounceAlarmName, UpdatesAlarmName, type CorePorts } from '../src/background/core';
 import { BookmarkIdMapper } from '../src/shared/id-mapper';
 import { InMemoryLogger } from '../src/shared/logging';
 import { MessageCommand } from '../src/shared/messages';
@@ -23,6 +23,7 @@ function makePorts(): CorePorts & {
   fireAlarm(name: string): void;
   fireNative(): void;
   scheduled: { name: string; minutes: number }[];
+  onceFired: string[];
 } {
   const alarmCbs: ((name: string) => void)[] = [];
   const handlers: (() => void)[] = [];
@@ -33,9 +34,11 @@ function makePorts(): CorePorts & {
     notices: [] as { title: string; message: string }[],
     downloads: [] as { filename: string; text: string }[],
     scheduled: [] as { name: string; minutes: number }[],
+    onceFired: [] as string[],
     alarms: {
       schedule: async (name: string, minutes: number) => void ports.scheduled.push({ name, minutes }),
       clear: async () => undefined,
+      once: async (name: string) => void ports.onceFired.push(name),
       onAlarm: (cb: (name: string) => void) => void alarmCbs.push(cb),
     },
     listeners: { created: listener, changed: listener, removed: listener, moved: listener },
@@ -185,12 +188,14 @@ describe('background core', () => {
 
   it('native event reconciles and pushes', async () => {
     const state = baseState();
-    const { core, mockApi, derived } = await linkedCore(state);
+    const { core, mockApi, derived, ports } = await linkedCore(state);
     const putsBefore = state.puts.length;
-    // User adds a bookmark natively; the listener path reconciles + pushes.
+    // User adds a bookmark natively; the listener path schedules a debounce
+    // alarm (SW-safe), whose firing reconciles + pushes.
     await mockApi.create({ parentId: 'unfiled_____', title: 'Fresh', url: 'https://fresh.test' });
     core.onNativeEvent();
-    await sleep(50);
+    expect(ports.onceFired).toContain(NativeDebounceAlarmName);
+    ports.fireAlarm(NativeDebounceAlarmName);
     await vi.waitFor(() => expect(state.puts.length).toBeGreaterThan(putsBefore));
     const latest = JSON.parse(await decrypt_blob(state.puts[state.puts.length - 1].blob, derived));
     expect(JSON.stringify(latest)).toContain('https://fresh.test');

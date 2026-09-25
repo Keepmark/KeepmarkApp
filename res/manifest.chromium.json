@@ -19,6 +19,5 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"],
-  "optional_host_permissions": ["http://*/", "https://*/"]
+  "permissions": ["alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"]
 }
