@@ -10,7 +10,7 @@
   },
   "action": {
     "default_icon": {
-      "32": "assets/icon32.png"
+      "32": "assets/notsynced32.png"
     },
     "default_popup": "popup.html",
     "default_title": "Keepmark"

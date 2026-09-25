@@ -89,7 +89,8 @@ function ports(): CorePorts {
     chrome: {
       setBadge: async (text, title) => {
         if (!action) return;
-        await action.setIcon({ path: text === '!' ? 'assets/notsynced32.png' : 'assets/icon32.png' }).catch(() => undefined);
+        const icon = text === '!' ? 'assets/notsynced32.png' : 'assets/synced32.png';
+        await action.setIcon({ path: icon }).catch(() => undefined);
         await action.setBadgeText({ text }).catch(() => undefined);
         await action.setTitle({ title }).catch(() => undefined);
       },

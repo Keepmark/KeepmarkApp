@@ -97,8 +97,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `vite.chromium-sw.ts` (service worker, single-file ESM lib build),
   `vite.shared.ts` (`platformAlias` + `copyStatic` manifest+assets plugin).
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;
-  `res/assets/` → output `assets/`. Icons generated from
-  `../Keepmark/src/Keepmark/Resources/AppIcon/appicon.png` (see §7).
+  `res/assets/` → output `assets/`. Icons rebuilt from the official Keepmark
+  brand (`../Keepmark/brand/04-adaptive-foreground.png`: navy `#162350`,
+  keyhole x0.354–0.655/y0.286–0.624): full ribbon icon (48/128), navy-tile +
+  keyhole toolbar icons (16/32, grayscale notsynced), white mark chip in pages.
 - `scripts/package.mjs` zips `build/*` → `dist/`.
 
 ## 4. Load-bearing contracts (do NOT change lightly)
