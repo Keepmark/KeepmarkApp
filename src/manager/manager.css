@@ -48,6 +48,20 @@ body {
   padding: 4px 8px 12px;
 }
 
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #0a323d;
+  border-radius: 7px;
+  padding: 3px 7px;
+  line-height: 0;
+}
+
+.brand-chip img {
+  height: 22px;
+  width: auto;
+}
+
 #sidebar button {
   text-align: left;
   background: none;
