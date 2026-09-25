@@ -80,7 +80,8 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const serviceUrl = status.serviceUrl ?? DefaultServiceUrl;
   $(`${prefix}-server`).textContent = serviceUrl;
   const official = serviceUrl.replace(/\/+$/, '') === DefaultServiceUrl;
-  badge.textContent = official ? 'Official service' : 'Custom service';
+  const contract = ping?.supportsV12 ? ' · API v1.2' : '';
+  badge.textContent = `${official ? 'Official service' : 'Custom service'}${contract}`;
   badge.className = `badge ${official ? 'official' : 'custom'}`;
   $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
   $(`${prefix}-last`).textContent = status.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : '—';
@@ -115,6 +116,34 @@ export async function copyText(text: string, fallbackLabel: string): Promise<voi
   } catch {
     window.prompt(fallbackLabel, text);
   }
+}
+
+/** v1.2 gating for v1.2-only UI (e.g. server delete). Pure for testability.
+ * Live probe wins; the stored link flag is the offline fallback. Legacy (or
+ * unknown) services get the button disabled plus the reason. */
+export interface ContractGate {
+  /** Whether the v1.2-only action may run. */
+  enabled: boolean;
+  /** Button tooltip when disabled. */
+  title: string;
+  /** Whether to hide the "requires v1.2" hint. */
+  hintHidden: boolean;
+  /** Contract badge text (empty when unlinked). */
+  badge: string;
+}
+
+export function contractGate(input: {
+  liveV12?: boolean;
+  storedV12?: boolean;
+  syncEnabled: boolean;
+}): ContractGate {
+  const v12 = input.liveV12 ?? input.storedV12 ?? false;
+  return {
+    enabled: v12,
+    title: v12 ? '' : 'Not supported (requires service v1.2)',
+    hintHidden: v12 || !input.syncEnabled,
+    badge: !input.syncEnabled ? '' : v12 ? 'API v1.2' : 'API v1.1',
+  };
 }
 
 /** Human-readable undo slot description for banners. */
