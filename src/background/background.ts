@@ -78,8 +78,8 @@ function ports(): CorePorts {
   const reorderEvent = (
     browser.bookmarks as unknown as {
       onChildrenReordered?: {
-        addListener(h: () => void): void;
-        removeListener(h: () => void): void;
+        addListener(h: (id: string, info: unknown) => void): void;
+        removeListener(h: (id: string, info: unknown) => void): void;
       };
     }
   ).onChildrenReordered;

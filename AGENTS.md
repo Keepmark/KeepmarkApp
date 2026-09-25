@@ -23,7 +23,8 @@ interop, English-only).
 ```sh
 npm install
 npm test              # vitest run — must be green before any commit
-npm run lint          # tsc --noEmit — must be clean before any commit
+npm run lint          # tsc --noEmit — must be clean before any commit (grep for
+                      # "error", never trust tail: tsc errors hide above the last line)
 npm run build         # both platforms -> build/firefox, build/chromium
 npm run build:firefox
 npm run build:chromium
