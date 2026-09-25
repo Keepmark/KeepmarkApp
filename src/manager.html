@@ -40,6 +40,8 @@
           </dl>
         </div>
         <div id="status-error" class="error" role="alert" hidden></div>
+        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the extension popup to connect a sync first.
+          (“Move service” needs an existing link to move from.)</p>
         <div class="row">
           <button id="m-btn-sync-now">⇅ Sync now</button>
           <button id="m-btn-refresh">Refresh status</button>
@@ -55,7 +57,8 @@
           <button id="m-btn-delete-remote" class="danger" disabled title="Not supported (requires service v1.2)">Delete server copy…</button>
           <span id="m-api-contract" class="badge"></span>
         </div>
-        <p id="m-delete-v12-hint" class="hint" hidden>Delete requires service v1.2 — not supported by this service.</p>
+        <p id="m-delete-v12-hint" class="hint" hidden>Server delete needs API v1.2 — this service speaks v1.1, so the server copy
+          cannot be deleted from here (Unlink above only removes this device; the server copy stays).</p>
         <div id="status-result" class="result" hidden></div>
       </section>
 
@@ -99,6 +102,8 @@
         <label id="m-switch-confirm-row">Confirm password <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
         <div id="move-summary" class="hint"></div>
         <div class="row"><button id="m-btn-switch" disabled>Move sync</button></div>
+        <p id="move-gate-hint" class="hint">“Move sync” unlocks only after a successful “Check target”,
+          and stays locked to those exact inputs — change anything and check again.</p>
         <div id="move-result" class="result" hidden></div>
       </section>
 

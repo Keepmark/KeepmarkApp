@@ -1022,15 +1022,15 @@ export class BackgroundCore {
       throw new UnsupportedVersionException('Not supported (requires service v1.2).');
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
-    // Per-feature check: a partial advertisement (revision without delete)
-    // refuses proactively instead of relying on the server 412 below. An
-    // unobtainable probe falls through to the stored flag; the DELETE then
-    // either succeeds or 412s honestly with downgrade.
+    // Per-feature check: the delete capability is required proactively
+    // instead of relying on the server 412 below. An unobtainable probe
+    // falls through to the stored flag; the DELETE then either succeeds
+    // or 412s honestly with downgrade.
     const caps = await api.getInfoV12().then(
       (r) => r.capabilities,
       (): undefined => undefined,
     );
-    if (caps && caps.delete !== true && caps.revision !== true) {
+    if (caps && caps.delete !== true) {
       throw new UnsupportedVersionException('Not supported (requires service v1.2).');
     }
     const tree = await this.cachedTree(info);

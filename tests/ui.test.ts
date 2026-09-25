@@ -210,6 +210,18 @@ describe('withBusy', () => {
     expect(btn.disabled).toBe(false);
     expect(btn.textContent).toBe('Go');
   });
+
+  it('keeps a pre-disabled (gated) button disabled', async () => {
+    // Regression: gated buttons (v1.2 delete, move preview lock) must not
+    // be force-enabled by the busy wrapper.
+    const btn = document.getElementById('btn-busy') as HTMLButtonElement;
+    btn.disabled = true;
+    await withBusy('btn-busy', 'Working…', async () => {
+      expect(btn.disabled).toBe(true);
+    });
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toBe('Go');
+  });
 });
 
 describe('formatBytes', () => {

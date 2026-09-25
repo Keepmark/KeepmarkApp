@@ -12,6 +12,12 @@
   box-sizing: border-box;
 }
 
+/* Author display rules override the UA [hidden] style, so re-assert it:
+ * hidden must always win or conditional rows leak into view. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   width: 360px;
   max-height: 560px;

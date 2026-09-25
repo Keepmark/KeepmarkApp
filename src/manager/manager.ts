@@ -77,6 +77,7 @@ async function refreshStatus(): Promise<void> {
     ping = undefined;
     renderStatusCard('m', { status, ping });
     updateDangerZone();
+    ($('m-notlinked-hint') as HTMLElement).hidden = true;
     sectionError('status-error', (err as Error).message);
     return;
   }
@@ -91,6 +92,7 @@ async function refreshStatus(): Promise<void> {
   if (my !== statusSeq) return;
   renderStatusCard('m', { status, ping });
   updateDangerZone();
+  ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
   await refreshUndoBanner();
 }
 
@@ -175,30 +177,36 @@ function initStatusSection(): void {
     }),
   );
   $('m-btn-delete-remote').addEventListener('click', () =>
-    withBusy('m-btn-delete-remote', 'Deleting…', async () => {
-      hideErrors();
-      // Defense in depth: the background re-gates, but a disabled button
-      // must never even reach the confirms.
-      if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
-      // No undo exists for this (the server has no undelete): two explicit
-      // confirms plus the automatic backup download in the background.
-      if (
-        !window.confirm(
-          'Delete the SERVER copy of your sync? Local bookmarks stay, but the server copy is gone forever. A backup file is downloaded first.',
+    void (async () => {
+      await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
+        hideErrors();
+        // Defense in depth: the background re-gates, but a disabled button
+        // must never even reach the confirms.
+        if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
+        // No undo exists for this (the server has no undelete): two explicit
+        // confirms plus the automatic backup download in the background.
+        if (
+          !window.confirm(
+            'Delete the SERVER copy of your sync? Local bookmarks stay, but the server copy is gone forever. A backup file is downloaded first.',
+          )
         )
-      )
-        return;
-      if (!window.confirm('Last chance: confirm deletion of the server copy.')) return;
-      try {
-        await send({ command: MessageCommand.DeleteRemoteSync });
-        showResult('status-result', 'Server copy deleted. Device unlinked; local bookmarks untouched.');
-        status = undefined;
-        ping = undefined;
-        await refreshStatus();
-      } catch (err) {
-        sectionError('status-error', (err as Error).message);
-      }
-    }),
+          return;
+        if (!window.confirm('Last chance: confirm deletion of the server copy.')) return;
+        try {
+          await send({ command: MessageCommand.DeleteRemoteSync });
+          showResult('status-result', 'Server copy deleted. Device unlinked; local bookmarks untouched.');
+          status = undefined;
+          ping = undefined;
+          await refreshStatus();
+        } catch (err) {
+          sectionError('status-error', (err as Error).message);
+        }
+      });
+      // withBusy restores the pre-click disabled state last: re-assert the
+      // v1.2 gate after it, so neither success (now unlinked) nor failure
+      // (legacy service) leaves a stale enabled button behind.
+      updateDangerZone();
+    })(),
   );
 }
 
@@ -359,15 +367,18 @@ function updateMoveForm(): void {
   preview = undefined;
   previewFor = undefined;
   $('m-btn-switch').toggleAttribute('disabled', true);
+  ($('move-gate-hint') as HTMLElement).hidden = false;
   $('move-error').hidden = true;
   $('move-preview').hidden = true;
-  $('move-result').hidden = true;
+  const result = $('move-result') as HTMLElement;
+  result.hidden = true;
+  result.textContent = '';
   const url = input('m-switch-url').value.trim() || '…';
   const n = status?.bookmarkCount;
   const direction = switchDirection();
   $('move-summary').textContent =
     mode === 'new'
-      ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks.`
+      ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks. No sync ID needed — a new one is shown after the move.`
       : direction === 'push'
         ? `Will overwrite the remote sync on ${url} with ${n ?? 'your'} local bookmarks.`
         : `Will replace local bookmarks with the remote sync from ${url}.`;
@@ -417,6 +428,9 @@ async function previewTarget(): Promise<void> {
       preview.versionCompatible !== false &&
       (mode === 'new' || preview.remoteExists === true);
     ($('m-btn-switch') as HTMLButtonElement).disabled = !ok;
+    // The gate hint doubles as the enable signal: hidden only when the
+    // button actually unlocked.
+    ($('move-gate-hint') as HTMLElement).hidden = ok;
   });
 }
 
@@ -443,6 +457,8 @@ async function submitMove(): Promise<void> {
     sectionError('move-error', 'Inputs changed since the check — press “Check target” again.');
     return;
   }
+  // Set on success so the post-busy gate below knows the preview was spent.
+  let movedId: string | undefined;
   await withBusy('m-btn-switch', 'Moving…', async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
@@ -452,13 +468,29 @@ async function submitMove(): Promise<void> {
       });
       input('m-switch-password').value = '';
       input('m-switch-confirm').value = '';
-      showResult('move-result', `Moved. New sync ID: ${res.id}`);
-      await refreshStatus();
+      movedId = res.id;
     } catch (err) {
       input('m-switch-confirm').value = '';
       sectionError('move-error', (err as Error).message);
     }
   });
+  if (movedId) {
+    // Consume the preview AFTER withBusy (it restores the pre-click state
+    // last): the unlocked button must never re-fire with stale inputs.
+    updateMoveForm();
+    showResult('move-result', `Moved. New sync ID: ${movedId}`);
+    const copy = document.createElement('button');
+    copy.textContent = 'Copy ID';
+    copy.className = 'mini';
+    copy.setAttribute('aria-label', 'Copy the new sync ID');
+    copy.addEventListener('click', () => void copyText(movedId!, 'Copy sync ID:'));
+    $('move-result').append(' ', copy);
+    await refreshStatus();
+  } else {
+    // Failed: the still-valid preview keeps the button unlocked, so keep
+    // the gate hint in sync with the button (hint shown only while locked).
+    ($('move-gate-hint') as HTMLElement).hidden = !($('m-btn-switch') as HTMLButtonElement).disabled;
+  }
 }
 
 function initMoveSection(): void {

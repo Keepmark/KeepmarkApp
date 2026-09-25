@@ -14,6 +14,12 @@
   box-sizing: border-box;
 }
 
+/* Author display rules (label, .row, …) override the UA [hidden] style,
+ * so re-assert it: hidden must always win or wizard rows leak into view. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font: 14px/1.5 system-ui, sans-serif;
