@@ -1,13 +1,34 @@
 // Duplicate-URL detection + cleanup plan. Ports the Keepmark /duplicates
-// page rule: group by normalized URL, the LAST copy in each group is locked
+// page rule: group by normalized URL, the newest copy (max id) is locked
 // (structural enforcement — it can never be selected for deletion).
 
 import { eachBookmark } from './bookmarks.js';
 import type { DuplicateGroup } from './messages.js';
 import type { BookmarkNode } from './models.js';
 
+/**
+ * Normalize a URL for duplicate grouping: lowercase host, strip default
+ * ports/fragments/trailing slashes (non-root), drop common tracking params.
+ * Falls back to the legacy trim+lowercase for unparsable input.
+ */
 export function normalizeUrl(url: string): string {
-  return url.trim().toLowerCase().replace(/\/$/, '');
+  const raw = url.trim();
+  try {
+    const parsed = new URL(raw);
+    parsed.hostname = parsed.hostname.toLowerCase();
+    if ((parsed.protocol === 'http:' && parsed.port === '80') || (parsed.protocol === 'https:' && parsed.port === '443')) {
+      parsed.port = '';
+    }
+    parsed.hash = '';
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (/^(utm_|fbclid$|gclid$|msclkid$|mc_|igshid$)/i.test(key)) parsed.searchParams.delete(key);
+    }
+    let out = parsed.toString();
+    if (parsed.pathname !== '/' && out.endsWith('/')) out = out.slice(0, -1);
+    return out.toLowerCase();
+  } catch {
+    return raw.toLowerCase().replace(/\/$/, '');
+  }
 }
 
 export interface LocatedNode {
@@ -35,15 +56,24 @@ export function getDuplicateGroups(bookmarks: BookmarkNode[]): DuplicateGroup[] 
   }
   const groups: DuplicateGroup[] = [];
   for (const [url, entries] of byUrl) {
-    if (entries.length > 1) groups.push({ url, entries });
+    if (entries.length <= 1) continue;
+    // Deterministic order: ascending id, so the locked survivor (max id,
+    // i.e. the newest bookmark) is stable no matter how the UI sorts groups.
+    entries.sort((a, b) => a.id - b.id);
+    groups.push({ url, entries });
   }
   return groups.sort((a, b) => b.entries.length - a.entries.length || (a.url < b.url ? -1 : 1));
 }
 
 /**
- * Ids to delete for the given groups. The last entry of each group is locked
- * and never returned. Pass a subset of entry ids to delete only those
- * (locked entries in the subset are silently ignored).
+ * Ids to delete for the given groups. Entries are id-sorted with the max id
+ * locked (the newest copy always survives, deterministically). Pass a subset
+ * of entry ids to delete only those (locked entries in the subset are
+ * silently ignored).
+ *
+ * Atomicity note: deletions run as sequential whole-blob reconcile+push
+ * steps, so no partial blob is ever persisted — each step leaves a
+ * consistent state behind.
  */
 export function planDuplicateDeletion(groups: DuplicateGroup[], onlyIds?: Set<number>): number[] {
   const out: number[] = [];

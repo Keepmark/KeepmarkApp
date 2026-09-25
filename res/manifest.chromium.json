@@ -19,5 +19,14 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"]
+  "permissions": [
+    "alarms",
+    "bookmarks",
+    "downloads",
+    "notifications",
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "minimum_chrome_version": "109"
 }

@@ -53,6 +53,33 @@ describe('backup envelope', () => {
     await expect(importBackup('not json', 'backup-password')).rejects.toThrow(/valid JSON/);
   });
 
+  it('rejects foreign apps and corrupted payloads', async () => {
+    const json = await exportBackup(tree, 'backup-password');
+    const foreign = { ...JSON.parse(json), app: 'OtherApp' };
+    await expect(importBackup(JSON.stringify(foreign), 'backup-password')).rejects.toThrow(/Unsupported backup/);
+    // Valid envelope shape but garbage blob under the right password path:
+    // craft by re-encrypting non-JSON plaintext with the same salt.
+    const { salt } = JSON.parse(json);
+    const { encryptData } = await import('../src/shared/crypto');
+    const key = await deriveKey('backup-password', salt, SyncClientVersion);
+    const badBlob = await encryptData('not-json{{{', key);
+    const bad = JSON.stringify({ app: 'KeepmarkApp', format: 1, salt, blob: badBlob });
+    await expect(importBackup(bad, 'backup-password')).rejects.toThrow(/corrupted/);
+  });
+
+  it('uses a fresh random salt per export', async () => {
+    const a = JSON.parse(await exportBackup(tree, 'backup-password'));
+    const b = JSON.parse(await exportBackup(tree, 'backup-password'));
+    expect(a.salt).not.toBe(b.salt);
+    expect(a.blob).not.toBe(b.blob);
+  });
+
+  it('rejects malformed nodes by type', () => {
+    expect(() => validateTree([{ id: 'x' }] as never)).toThrow(/invalid id/);
+    expect(() => validateTree([{ url: 123 }] as never)).toThrow(/invalid url/);
+    expect(() => validateTree([{ tags: ['ok', 7] }] as never)).toThrow(/invalid tags/);
+  });
+
   it('validateTree rejects null nodes and counts nodes', () => {
     expect(countNodes(tree)).toBe(5);
     expect(() => validateTree([null as never])).toThrow(/invalid node/);
@@ -74,9 +101,12 @@ describe('duplicates', () => {
   it('groups by normalized url, sorted by size', () => {
     const groups = getDuplicateGroups(tree);
     expect(groups).toHaveLength(1);
-    expect(groups[0].url).toBe('https://a.test');
+    expect(groups[0].url).toBe('https://a.test/');
     expect(groups[0].entries.map((e) => e.id)).toEqual([1, 2, 3]);
-    expect(normalizeUrl('HTTPS://X.test/')).toBe('https://x.test');
+    expect(normalizeUrl('HTTPS://X.test/')).toBe('https://x.test/');
+    expect(normalizeUrl('https://x.test/?utm_source=feed#frag')).toBe('https://x.test/');
+    expect(normalizeUrl('http://x.test:80/a/')).toBe('http://x.test/a');
+    expect(normalizeUrl('https://x.test/a?b=1&utm_medium=x')).toBe('https://x.test/a?b=1');
   });
 
   it('plan locks the last copy', () => {

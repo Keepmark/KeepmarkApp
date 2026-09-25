@@ -8,7 +8,7 @@
 // Guards mirror BackupGuard: password >= 8 chars, .json suffix on paths,
 // 50MB / 200k nodes bounds, BFS tree validation.
 
-import { decryptData, deriveKey, encryptData } from './crypto.js';
+import { bytesToBase64, decryptData, deriveKey, encryptData } from './crypto.js';
 import { SyncClientVersion } from './constants.js';
 import type { BookmarkNode } from './models.js';
 import { eachBookmark } from './bookmarks.js';
@@ -27,10 +27,7 @@ export interface BackupEnvelope {
 }
 
 function randomSalt(): string {
-  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return globalThis.btoa(bin);
+  return bytesToBase64(globalThis.crypto.getRandomValues(new Uint8Array(16)));
 }
 
 export function requireBackupPassword(password: string): void {
@@ -45,17 +42,36 @@ export function countNodes(nodes: BookmarkNode[]): number {
   return n;
 }
 
-/** BFS validation: rejects null nodes and oversized trees. */
+/** BFS validation: shape-checked nodes, rejects nulls and oversized trees. */
 export function validateTree(nodes: BookmarkNode[]): void {
   if (!Array.isArray(nodes)) throw new Error('Backup does not contain a bookmark tree.');
+  // Index queue, not shift(): shift() is O(n²) on 200k nodes.
   const queue: BookmarkNode[] = [...nodes];
+  let head = 0;
   let seen = 0;
-  while (queue.length > 0) {
-    const node = queue.shift()!;
-    if (!node || typeof node !== 'object') throw new Error('Backup contains an invalid node.');
+  while (head < queue.length) {
+    const node = queue[head++];
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {
+      throw new Error('Backup contains an invalid node.');
+    }
+    if (node.id !== undefined && typeof node.id !== 'number') {
+      throw new Error('Backup contains a node with an invalid id.');
+    }
+    if (node.title !== undefined && typeof node.title !== 'string') {
+      throw new Error('Backup contains a node with an invalid title.');
+    }
+    if (node.url !== undefined && typeof node.url !== 'string') {
+      throw new Error('Backup contains a node with an invalid url.');
+    }
+    if (node.description !== undefined && typeof node.description !== 'string') {
+      throw new Error('Backup contains a node with an invalid description.');
+    }
+    if (node.tags !== undefined && (!Array.isArray(node.tags) || node.tags.some((t) => typeof t !== 'string'))) {
+      throw new Error('Backup contains a node with invalid tags.');
+    }
     seen += 1;
     if (seen > MaxBackupNodes) throw new Error('Backup exceeds the node limit.');
-    if (node.children) {
+    if (node.children !== undefined) {
       if (!Array.isArray(node.children)) throw new Error('Backup contains an invalid node.');
       queue.push(...node.children);
     }
@@ -74,21 +90,32 @@ export async function exportBackup(nodes: BookmarkNode[], password: string): Pro
 
 export async function importBackup(json: string, password: string): Promise<BookmarkNode[]> {
   requireBackupPassword(password);
-  if (json.length > MaxBackupBytes) throw new Error('Backup file too large.');
+  // Real bytes, not UTF-16 code units: the limit is a byte budget.
+  if (new TextEncoder().encode(json).length > MaxBackupBytes) throw new Error('Backup file too large.');
   let envelope: BackupEnvelope;
   try {
     envelope = JSON.parse(json) as BackupEnvelope;
   } catch {
     throw new Error('Backup file is not valid JSON.');
   }
-  if (envelope.format !== BackupFormat || typeof envelope.blob !== 'string' || typeof envelope.salt !== 'string') {
+  if (
+    envelope.app !== BackupAppName ||
+    envelope.format !== BackupFormat ||
+    typeof envelope.blob !== 'string' ||
+    typeof envelope.salt !== 'string'
+  ) {
     throw new Error('Unsupported backup format.');
   }
   const key = await deriveKey(password, envelope.salt, SyncClientVersion);
   const plain = await decryptData(envelope.blob, key).catch(() => {
     throw new Error('Wrong backup password or corrupted file.');
   });
-  const nodes = JSON.parse(plain) as BookmarkNode[];
+  let nodes: BookmarkNode[];
+  try {
+    nodes = JSON.parse(plain) as BookmarkNode[];
+  } catch {
+    throw new Error('Backup file is corrupted.');
+  }
   validateTree(nodes);
   return nodes;
 }

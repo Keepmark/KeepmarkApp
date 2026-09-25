@@ -10,10 +10,12 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "keepmark-firefox@proton.me",
+      "id": "keepmark@proton.me",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -27,7 +29,14 @@
   "background": {
     "page": "background.html"
   },
-  "permissions": ["activeTab", "alarms", "bookmarks", "downloads", "notifications", "storage", "tabs", "unlimitedStorage"],
-  "content_security_policy": "connect-src *; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';",
+  "permissions": [
+    "alarms",
+    "bookmarks",
+    "downloads",
+    "notifications",
+    "storage",
+    "unlimitedStorage"
+  ],
+  "content_security_policy": "connect-src https: http://localhost:* http://127.0.0.1:*; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';",
   "incognito": "not_allowed"
 }

@@ -33,6 +33,25 @@ export function sanitizePath(template: string, syncId?: string): string {
   return template.split(syncId).join(sanitizeSyncId(syncId)).replaceAll('{id}', sanitizeSyncId(syncId));
 }
 
+/**
+ * Central redaction gate. Key=value secrets and bearer-like IDs never reach
+ * stored log entries, no matter the call site: every message is sanitized
+ * inside InMemoryLogger.log, so redaction is a mechanism, not discipline.
+ */
+export const LogSanitizer = {
+  sanitize(message: string): string {
+    return message
+      .replace(
+        /\b(password|passwd|pwd|secret|derivedKey|privateKey|bearer|blob|encryptedBookmarks)\s*[:=]\s*\S+/gi,
+        '$1=[redacted]',
+      )
+      .replace(
+        /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+        (id) => sanitizeSyncId(id),
+      );
+  },
+};
+
 export class InMemoryLogger implements IXbsLogger {
   minLevel: XbsLogLevel = XbsLogLevel.Info;
   private queue: LogEntry[] = [];
@@ -41,7 +60,7 @@ export class InMemoryLogger implements IXbsLogger {
 
   log(level: XbsLogLevel, tag: string, message: string): void {
     if (level > this.minLevel) return;
-    this.queue.push({ timestamp: new Date().toISOString(), level, tag, message });
+    this.queue.push({ timestamp: new Date().toISOString(), level, tag, message: LogSanitizer.sanitize(message) });
     while (this.queue.length > this.capacity) this.queue.shift();
   }
 

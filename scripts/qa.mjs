@@ -13,6 +13,8 @@ const fail = (msg) => {
   failures += 1;
 };
 const ok = (msg) => console.log(`QA ok: ${msg}`);
+const version = () =>
+  JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 
 /** Collect id="..." from an HTML file. */
 function htmlIds(file) {
@@ -102,9 +104,13 @@ ok('background/shared/platform DOM-free (if no failure above)');
   else ok('storage access goes through StoreKey/backend');
 }
 
-// 7. Build outputs coherent with manifests.
+// 7. Build outputs coherent with manifests (missing build dir = clean FAIL).
 for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'background.js']]) {
   const dir = path.join(root, 'build', platform);
+  if (!existsSync(path.join(dir, 'manifest.json'))) {
+    fail(`${platform} build missing — run npm run build first`);
+    continue;
+  }
   const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
   const need = ['popup.html', 'manager.html', bg];
   const missing = need.filter((f) => !existsSync(path.join(dir, f)));
@@ -113,6 +119,40 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
   const missingIcons = icons.filter((f) => !existsSync(path.join(dir, f)));
   if (missingIcons.length > 0) fail(`${platform} manifest icons missing: ${missingIcons.join(', ')}`);
   if (missing.length === 0 && missingIcons.length === 0) ok(`${platform} build coherent`);
+}
+
+// 7c. Pinned build invariants: relative asset base + dual tsconfig coverage.
+{
+  for (const cfg of ['vite.firefox.ts', 'vite.chromium.ts']) {
+    const src = readFileSync(path.join(root, cfg), 'utf8');
+    if (!src.includes("base: './'")) fail(`${cfg} must pin base: './' (absolute asset URLs break)`);
+  }
+  if (!existsSync(path.join(root, 'tsconfig.chromium.json'))) {
+    fail('tsconfig.chromium.json missing — lint would be blind on Chromium');
+  } else ok('build invariants pinned (base, dual tsconfig)');
+}
+
+// 7d. Permissions must be used: every manifest permission needs a matching
+// browser.* usage in src (unlimitedStorage/host_permissions are documented
+// in README instead of code-matched).
+{
+  const srcFiles = execFileSync('git', ['ls-files', 'src'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
+  const src = srcFiles.filter((f) => f.endsWith('.ts')).map((f) => readFileSync(path.join(root, f), 'utf8')).join('\n');
+  const usage = {
+    alarms: 'browser.alarms',
+    bookmarks: 'browser.bookmarks',
+    downloads: 'browser.downloads',
+    notifications: 'browser.notifications',
+    storage: 'browser.storage',
+  };
+  for (const p of ['res/manifest.firefox.json', 'res/manifest.chromium.json']) {
+    const manifest = JSON.parse(readFileSync(path.join(root, p), 'utf8'));
+    for (const perm of manifest.permissions ?? []) {
+      if (perm === 'unlimitedStorage') continue;
+      if (usage[perm] && !src.includes(usage[perm])) fail(`${p}: permission "${perm}" has no matching usage`);
+    }
+  }
+  ok('manifest permissions all used (if no failure above)');
 }
 
 // 7b. Chromium MV3 specifics: no Firefox-only keys, SW entry valid,
@@ -131,14 +171,20 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
   else ok('chromium SW bundle self-contained');
 }
 
-// 8. Mozilla linter on the firefox zip (0 errors required).
+// 8. Mozilla linter on the firefox zip (0 errors required). Local binary,
+// versioned artifact name (see scripts/package.mjs).
 try {
-  const out = execFileSync('npx', ['-y', 'addons-linter', 'dist/keepmark-firefox.zip', '--self-hosted'], {
-    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  const errors = out.match(/errors\s+(\d+)/)?.[1];
-  if (errors !== '0') fail(`addons-linter reports ${errors} errors`);
-  else ok('addons-linter: 0 errors');
+  const zip = `dist/keepmark-firefox-${version()}.zip`;
+  if (!existsSync(path.join(root, zip))) {
+    fail(`missing ${zip} — run npm run package first`);
+  } else {
+    const out = execFileSync('node_modules/.bin/addons-linter', [zip, '--self-hosted'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const errors = out.match(/errors\s+(\d+)/)?.[1];
+    if (errors !== '0') fail(`addons-linter reports ${errors} errors`);
+    else ok('addons-linter: 0 errors');
+  }
 } catch (e) {
   fail(`addons-linter failed to run: ${(e.message ?? e).split('\n')[0]}`);
 }

@@ -64,6 +64,19 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
 - Sync loss (401): queue cleared, credentials wiped, notification.
 - "Sync now" = pull-if-newer then push.
 
+## Permissions (why each one)
+
+- `alarms` — 15-min remote-change poll + SW-safe native-edit debounce.
+- `bookmarks` — read/clear/populate native containers + change listeners.
+- `downloads` — conflict files, safety backups, backup export (data: URLs).
+- `notifications` — sync-removed / conflict notices.
+- `storage` + `unlimitedStorage` — encrypted blob (up to service maxSyncSize),
+  id mappings, install backup, trace log in `storage.local` beyond the 5–10 MB
+  default quota.
+- Chromium `host_permissions https/http */*` — MV3 service workers need an
+  explicit host grant for `fetch()` to user-configured services (any origin).
+  No content scripts, no page access: the grant covers API calls only.
+
 ## Platform differences (from the original client)
 
 - Firefox: roots `menu________/unfiled_____/toolbar_____`, all 3 containers,
