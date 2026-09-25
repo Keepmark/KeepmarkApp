@@ -63,37 +63,50 @@ async function refreshAll(): Promise<void> {
 
 async function initConnect(): Promise<void> {
   input('service-url').value = DefaultServiceUrl;
-  const connect = async (existing: boolean): Promise<void> => {
-    clearErrors();
-    const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
-    const syncId = input('sync-id').value.trim();
-    const password = input('password').value;
-    if (!password) {
-      showError('connect', 'Password is required.');
-      return;
-    }
-    if (existing && !syncId) {
-      showError('connect', 'Sync ID is required for an existing sync.');
-      return;
-    }
-    try {
-      if (existing) {
-        await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password });
-      } else {
-        await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
-      }
-      input('password').value = '';
-      showView('main');
-      await refreshAll();
-    } catch (err) {
-      showError('connect', (err as Error).message);
-    }
+  const updateMode = (): void => {
+    const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+    ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
+    ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
   };
-  $('btn-new-sync').addEventListener('click', () =>
-    withBusy('btn-new-sync', 'Connecting…', () => connect(false)),
-  );
-  $('btn-existing-sync').addEventListener('click', () =>
-    withBusy('btn-existing-sync', 'Connecting…', () => connect(true)),
+  document.querySelectorAll('input[name="conn-mode"]').forEach((el) => {
+    el.addEventListener('change', updateMode);
+  });
+  updateMode();
+  $('btn-connect').addEventListener('click', () =>
+    withBusy('btn-connect', 'Connecting…', async () => {
+      clearErrors();
+      const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
+        | 'new'
+        | 'existing';
+      const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
+      const syncId = input('sync-id').value.trim();
+      const password = input('password').value;
+      if (!password) {
+        showError('connect', 'Password is required.');
+        return;
+      }
+      try {
+        if (mode === 'new') {
+          if (password !== input('confirm-password').value) {
+            showError('connect', 'Passwords do not match.');
+            return;
+          }
+          await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
+        } else {
+          if (!syncId) {
+            showError('connect', 'Sync ID is required for an existing sync.');
+            return;
+          }
+          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password });
+        }
+        input('password').value = '';
+        input('confirm-password').value = '';
+        showView('main');
+        await refreshAll();
+      } catch (err) {
+        showError('connect', (err as Error).message);
+      }
+    }),
   );
   $('btn-open-tab').addEventListener('click', () => {
     // Popups close on focus loss (by design) — a full tab stays open while

@@ -14,19 +14,29 @@
 
   <section id="view-connect">
     <h2>Connect</h2>
+    <label class="check"><input type="radio" name="conn-mode" value="new" checked />
+      <span><b>New sync</b> — create a sync on the service and upload this browser's bookmarks.</span></label>
+    <label class="check"><input type="radio" name="conn-mode" value="existing" />
+      <span><b>Use existing</b> — link this browser to a sync ID; remote bookmarks will replace the local ones.</span></label>
     <label>Service URL
       <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
     </label>
-    <label>Sync ID <span class="hint">(existing sync only)</span>
-      <input id="sync-id" type="text" placeholder="optional for a new sync" />
-    </label>
+    <div id="conn-existing-only" hidden>
+      <label>Sync ID
+        <input id="sync-id" type="text" placeholder="sync id from your other device" />
+      </label>
+    </div>
     <label>Password
       <input id="password" type="password" autocomplete="current-password" />
     </label>
+    <div id="conn-new-only">
+      <label>Confirm password
+        <input id="confirm-password" type="password" autocomplete="new-password" />
+      </label>
+    </div>
     <div id="connect-error" class="error" hidden></div>
     <div class="row">
-      <button id="btn-new-sync">New sync</button>
-      <button id="btn-existing-sync">Use existing</button>
+      <button id="btn-connect">Connect</button>
       <button id="btn-open-tab" title="Open in a full tab (stays open while you copy from your vault)">⧉ Tab</button>
     </div>
   </section>
