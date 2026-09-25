@@ -131,6 +131,7 @@ function initMain(): void {
 async function init(): Promise<void> {
   if (new URLSearchParams(location.search).has('fullpage')) {
     document.body.classList.add('fullpage');
+    ($('btn-open-tab') as HTMLButtonElement).hidden = true;
   }
   await initConnect();
   initMain();
