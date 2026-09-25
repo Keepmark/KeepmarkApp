@@ -16,7 +16,7 @@ import {
   UnsupportedSyncVersionException,
   XbsException,
 } from './errors.js';
-import type { BookmarkNode } from './models.js';
+import type { BookmarkNode, ServiceStatus } from './models.js';
 
 export enum MessageCommand {
   SyncBookmarks = 'sync-bookmarks',
@@ -27,6 +27,7 @@ export enum MessageCommand {
   DisableSync = 'disable-sync',
   GetStatus = 'get-status',
   GetLogs = 'get-logs',
+  Ping = 'ping',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -51,6 +52,19 @@ export interface StatusResponse {
   lastUpdated?: string;
   queueLength: number;
   syncing: boolean;
+  /** Size of the stored encrypted blob in bytes (base64 chars). */
+  usedBytes?: number;
+}
+
+/** Live server probe result (fast timeout, never throws). */
+export interface PingResponse {
+  reachable: boolean;
+  status?: ServiceStatus;
+  version?: string;
+  location?: string;
+  message?: string;
+  maxSyncSize?: number;
+  remoteLastUpdated?: string;
 }
 
 export interface DuplicateEntry {
@@ -73,6 +87,7 @@ export type MessagePayload =
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
   | { command: MessageCommand.GetLogs }
+  | { command: MessageCommand.Ping }
   | { command: MessageCommand.GetDuplicates }
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }

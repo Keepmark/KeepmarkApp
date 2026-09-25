@@ -7,7 +7,7 @@
 
 import { XSyncApiClient } from '../shared/api.js';
 import { decryptData } from '../shared/crypto.js';
-import { DefaultServiceUrl } from '../shared/constants.js';
+import { DefaultServiceUrl, ServiceProbeTimeoutMs } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
@@ -26,6 +26,7 @@ import {
   MessageCommand,
   type DuplicateGroup,
   type MessagePayload,
+  type PingResponse,
   type StatusResponse,
   type SyncJobType,
 } from '../shared/messages.js';
@@ -97,7 +98,8 @@ export class BackgroundCore {
     private log: IXbsLogger,
     private adapter: NativeAdapter,
     private ports: CorePorts,
-    private makeApi: (serviceUrl: string) => XSyncApiClient = (url) => new XSyncApiClient(url, this.log),
+    private makeApi: (serviceUrl: string, timeoutMs?: number) => XSyncApiClient = (url, timeoutMs) =>
+      new XSyncApiClient(url, this.log, undefined, timeoutMs),
     private options: CoreOptions = {},
   ) {
     this.queue = new SyncQueue((job) => this.runJob(job), log, (err) => this.disableSync(err));
@@ -133,6 +135,8 @@ export class BackgroundCore {
         return this.getStatus();
       case MessageCommand.GetLogs:
         return this.getLogs();
+      case MessageCommand.Ping:
+        return this.ping();
       case MessageCommand.GetDuplicates:
         return this.getDuplicates();
       case MessageCommand.ExportBackup:
@@ -417,9 +421,11 @@ export class BackgroundCore {
     }));
   }
 
-  private async getStatus(): Promise<StatusResponse> {    const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
+  private async getStatus(): Promise<StatusResponse> {
+    const syncEnabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
+    const blob = await this.store.get<string>(StoreKey.Bookmarks);
     return {
       syncEnabled,
       syncId: info?.id,
@@ -427,7 +433,36 @@ export class BackgroundCore {
       lastUpdated,
       queueLength: this.queue.length,
       syncing: this.queue.syncing || this.connecting,
+      usedBytes: blob?.length ?? 0,
     };
+  }
+
+  /**
+   * Fast live probe of the service (3s timeout, never throws): reachability,
+   * service status/version/location/message/max size + remote lastUpdated.
+   * Powers the popup status card without touching sync state.
+   */
+  private async ping(): Promise<PingResponse> {
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (!info?.id) return { reachable: false };
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl, ServiceProbeTimeoutMs);
+    try {
+      const [service, remote] = await Promise.all([
+        api.getInfo(),
+        api.getLastUpdated(info.id).catch(() => undefined),
+      ]);
+      return {
+        reachable: true,
+        status: service.status,
+        version: service.version ?? undefined,
+        location: service.location ?? undefined,
+        message: service.message ?? undefined,
+        maxSyncSize: service.maxSyncSize,
+        remoteLastUpdated: remote?.lastUpdated ?? undefined,
+      };
+    } catch {
+      return { reachable: false };
+    }
   }
 
   async disableSync(err?: Error): Promise<void> {

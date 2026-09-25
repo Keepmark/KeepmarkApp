@@ -312,8 +312,7 @@ describe('background core', () => {
     expect(status.queueLength).toBe(0);
   });
 
-  it('get-logs exposes background entries without secrets', async () => {
-    const state = baseState();
+  it('get-logs exposes background entries without secrets', async () => {    const state = baseState();
     const { core } = await linkedCore(state);
     const entries = (await core.handleMessage({ command: MessageCommand.GetLogs })) as {
       timestamp: string;
@@ -324,6 +323,47 @@ describe('background core', () => {
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.some((e) => e.tag === 'sync')).toBe(true);
     expect(JSON.stringify(entries)).not.toContain(PASSWORD);
+  });
+
+  it('ping reports live service state and status carries used bytes', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const pong = (await core.handleMessage({ command: MessageCommand.Ping })) as {
+      reachable: boolean;
+      version?: string;
+      maxSyncSize?: number;
+      remoteLastUpdated?: string;
+    };
+    expect(pong.reachable).toBe(true);
+    expect(pong.version).toBe('1.1.13');
+    expect(pong.maxSyncSize).toBe(512000);
+    const status = (await core.handleMessage({ command: MessageCommand.GetStatus })) as {
+      usedBytes?: number;
+    };
+    expect(status.usedBytes).toBeGreaterThan(0);
+  });
+
+  it('ping never throws when the service is down', async () => {
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      ports,
+      ((_url: string) => ({
+        getInfo: async () => {
+          throw new Error('down');
+        },
+      })) as unknown as (url: string) => XSyncApiClient,
+      { debounceMs: 5 },
+    );
+    await store.set(StoreKey.SyncInfo, { id: SYNC_ID, password: 'x' });
+    const pong = (await core.handleMessage({ command: MessageCommand.Ping })) as {
+      reachable: boolean;
+    };
+    expect(pong.reachable).toBe(false);
   });
 });
 

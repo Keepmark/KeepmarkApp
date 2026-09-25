@@ -32,32 +32,37 @@
   </section>
 
   <section id="view-main" hidden>
-    <div class="toolbar">
-      <input id="search" type="search" placeholder="Search bookmarks…" />
-      <button id="btn-sync-now" title="Sync now">⇅</button>
-      <button id="btn-settings" title="Settings">⚙</button>
+    <div class="card">
+      <div class="status-row">
+        <span id="pill" class="pill">…</span>
+        <span id="service-badge" class="badge"></span>
+      </div>
+      <dl class="status-grid">
+        <dt>Server</dt>
+        <dd id="st-server">…</dd>
+        <dt>Sync ID</dt>
+        <dd><code id="st-syncid">…</code> <button id="btn-copy-id" class="mini">Copy</button></dd>
+        <dt>Last sync</dt>
+        <dd id="st-last">…</dd>
+        <dt>Space used</dt>
+        <dd>
+          <div class="meter"><div id="space-fill"></div></div>
+          <span id="st-space">…</span>
+        </dd>
+      </dl>
     </div>
     <div id="main-error" class="error" hidden></div>
-    <ul id="results"></ul>
-    <details id="add-box">
-      <summary>Add bookmark</summary>
-      <label>Title <input id="add-title" type="text" /></label>
-      <label>URL <input id="add-url" type="url" /></label>
-      <label>Folder
-        <select id="add-container">
-          <option value="[xbs] Other">Other</option>
-          <option value="[xbs] Menu">[xbs] Menu</option>
-          <option value="[xbs] Toolbar">Toolbar</option>
-        </select>
-      </label>
-      <button id="btn-add">Add + sync</button>
-    </details>
+    <div class="row">
+      <button id="btn-sync-now">⇅ Sync now</button>
+      <button id="btn-settings">⚙ Manage</button>
+    </div>
   </section>
 
   <section id="view-settings" hidden>
-    <h2>Settings</h2>
+    <h2>Service</h2>
     <div id="settings-error" class="error" hidden></div>
     <dl id="service-info"></dl>
+    <h2>Sync</h2>
     <label class="check"><input id="opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
     <div class="row">
       <button id="btn-export">Export backup</button>
@@ -68,16 +73,16 @@
       <summary>Duplicates <span id="dup-count"></span></summary>
       <div id="dup-list"></div>
     </details>
-    <details id="log-box">
-      <summary>Logs</summary>
-      <div class="row"><button id="btn-logs">Refresh logs</button></div>
-      <pre id="log-list"></pre>
-    </details>
     <details id="switch-box">
       <summary>Move to another service</summary>
       <label>New service URL <input id="switch-url" type="url" /></label>
       <label>New password <input id="switch-password" type="password" /></label>
       <button id="btn-switch">Move sync</button>
+    </details>
+    <details id="log-box">
+      <summary>Logs</summary>
+      <div class="row"><button id="btn-logs">Refresh logs</button></div>
+      <pre id="log-list"></pre>
     </details>
     <div class="row">
       <button id="btn-back">← Back</button>

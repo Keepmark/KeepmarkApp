@@ -1,13 +1,21 @@
-// Popup UI (vanilla TS, no framework). Display reads storage.local +
-// decrypts locally; every mutation goes through background messages so the
-// sync queue stays the only writer.
+// Popup: server-link management panel (status, space, backup, move, logs).
+// Display reads storage.local directly; ALL mutations go through background
+// messages so the sync queue stays the only writer. Bookmark browsing lives
+// in the browser's native UI — this panel manages the link, like the
+// official xBrowserSync app.
 
 import browser from 'webextension-polyfill';
-import { decryptData } from '../shared/crypto.js';
 import { DefaultServiceUrl } from '../shared/constants.js';
-import { fromWireError, MessageCommand, type MessagePayload, type MessageResponse, type StatusResponse, type DuplicateGroup } from '../shared/messages.js';
-import type { BookmarkNode } from '../shared/models.js';
-import { StoreKey, type SyncInfo } from '../shared/store.js';
+import {
+  fromWireError,
+  MessageCommand,
+  type MessagePayload,
+  type MessageResponse,
+  type PingResponse,
+  type StatusResponse,
+  type DuplicateGroup,
+} from '../shared/messages.js';
+import { StoreKey } from '../shared/store.js';
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -49,15 +57,34 @@ function showView(name: 'connect' | 'main' | 'settings'): void {
   ($('view-settings') as HTMLElement).hidden = name !== 'settings';
 }
 
-let cachedTree: BookmarkNode[] = [];
-let status: StatusResponse | undefined;
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
 
-async function refreshStatus(): Promise<void> {
+let status: StatusResponse | undefined;
+let ping: PingResponse | undefined;
+
+function setPill(text: string, kind: 'ok' | 'warn' | 'bad' | 'busy'): void {
+  const pill = $('pill');
+  pill.textContent = text;
+  pill.className = `pill ${kind}`;
+}
+
+async function refreshAll(): Promise<void> {
   try {
     status = await send<StatusResponse>({ command: MessageCommand.GetStatus });
   } catch {
     status = undefined;
   }
+  renderStatus();
+  try {
+    ping = await send<PingResponse>({ command: MessageCommand.Ping });
+  } catch {
+    ping = undefined;
+  }
+  renderStatus();
   const state = $('sync-state');
   if (!status?.syncEnabled) {
     state.textContent = 'Not synced';
@@ -68,88 +95,32 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
-async function loadTree(): Promise<boolean> {
-  const info = await readStorage<SyncInfo>(StoreKey.SyncInfo);
-  const blob = await readStorage<string>(StoreKey.Bookmarks);
-  if (!info?.id || !info.password || !blob) return false;
-  try {
-    const plain = await decryptData(blob, info.password);
-    cachedTree = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
-    return true;
-  } catch {
-    return false;
-  }
-}
+function renderStatus(): void {
+  if (!status?.syncEnabled) return;
+  const serviceUrl = status.serviceUrl ?? DefaultServiceUrl;
+  $('st-server').textContent = serviceUrl;
+  const badge = $('service-badge');
+  const official = serviceUrl.replace(/\/+$/, '') === DefaultServiceUrl;
+  badge.textContent = official ? 'Official service' : 'Custom service';
+  badge.className = `badge ${official ? 'official' : 'custom'}`;
+  $('st-syncid').textContent = status.syncId ?? '—';
+  $('st-last').textContent = status.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : '—';
 
-interface FlatHit {
-  id?: number;
-  title?: string;
-  url?: string;
-  path: string;
-}
+  const used = status.usedBytes ?? 0;
+  const max = ping?.maxSyncSize;
+  $('st-space').textContent = max ? `${formatBytes(used)} of ${formatBytes(max)}` : formatBytes(used);
+  $('space-fill').style.width = max ? `${Math.min(100, (used / max) * 100).toFixed(1)}%` : '0%';
 
-function flatten(query: string): FlatHit[] {
-  const q = query.trim().toLowerCase();
-  const hits: FlatHit[] = [];
-  const walk = (nodes: BookmarkNode[] | undefined, trail: string[]): void => {
-    for (const node of nodes ?? []) {
-      const here = [...trail, node.title ?? ''];
-      if (node.url && node.url !== 'xbs:separator') {
-        const hay = `${node.title ?? ''} ${(node.description ?? '')} ${(node.tags ?? []).join(' ')} ${node.url}`.toLowerCase();
-        if (!q || q.length < 2 || hay.includes(q)) {
-          hits.push({ id: node.id, title: node.title, url: node.url, path: trail.join(' / ') });
-        }
-      }
-      if (node.children) walk(node.children, here);
-    }
-  };
-  for (const root of cachedTree) {
-    if (root.children) walk(root.children, [root.title ?? '']);
-  }
-  return hits.slice(0, 100);
-}
-
-function renderResults(query: string): void {
-  const list = $('results');
-  list.textContent = '';
-  for (const hit of flatten(query)) {
-    const li = document.createElement('li');
-    const link = document.createElement('span');
-    link.className = 'link';
-    link.textContent = hit.title || hit.url || '';
-    link.title = hit.url ?? '';
-    link.addEventListener('click', () => {
-      if (hit.url) void browser.tabs.create({ url: hit.url }).then(() => window.close());
-    });
-    const path = document.createElement('span');
-    path.className = 'path';
-    path.textContent = hit.path;
-    const del = document.createElement('button');
-    del.className = 'del';
-    del.textContent = '✕';
-    del.title = 'Delete bookmark';
-    del.addEventListener('click', async () => {
-      clearErrors();
-      try {
-        if (hit.id !== undefined) await send({ command: MessageCommand.RemoveBookmark, id: hit.id });
-        await reloadMain();
-      } catch (err) {
-        showError('main', (err as Error).message);
-      }
-    });
-    const wrap = document.createElement('span');
-    wrap.style.flex = '1';
-    wrap.style.minWidth = '0';
-    wrap.append(link, path);
-    li.append(wrap, del);
-    list.append(li);
-  }
-}
-
-async function reloadMain(): Promise<void> {
-  await refreshStatus();
-  if (await loadTree()) {
-    renderResults(input('search').value);
+  if (status.syncing || status.queueLength > 0) {
+    setPill('Syncing…', 'busy');
+  } else if (!ping) {
+    setPill('Checking…', 'busy');
+  } else if (!ping.reachable) {
+    setPill('Offline', 'bad');
+  } else if (ping.remoteLastUpdated && status.lastUpdated && ping.remoteLastUpdated !== status.lastUpdated) {
+    setPill('Behind', 'warn');
+  } else {
+    setPill('Synced', 'ok');
   }
 }
 
@@ -176,7 +147,7 @@ async function initConnect(): Promise<void> {
       }
       input('password').value = '';
       showView('main');
-      await reloadMain();
+      await refreshAll();
     } catch (err) {
       showError('connect', (err as Error).message);
     }
@@ -192,33 +163,24 @@ async function initConnect(): Promise<void> {
 }
 
 function initMain(): void {
-  input('search').addEventListener('input', (e) => renderResults((e.target as HTMLInputElement).value));
   $('btn-sync-now').addEventListener('click', async () => {
     clearErrors();
     try {
       await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
-      await reloadMain();
+      await refreshAll();
     } catch (err) {
       showError('main', (err as Error).message);
+      await refreshAll();
     }
   });
   $('btn-settings').addEventListener('click', () => void openSettings());
-  $('btn-add').addEventListener('click', async () => {
-    clearErrors();
-    const title = input('add-title').value.trim();
-    const url = input('add-url').value.trim();
-    const container = ($('add-container') as HTMLSelectElement).value;
-    if (!title || !url) {
-      showError('main', 'Title and URL are required.');
-      return;
-    }
+  $('btn-copy-id').addEventListener('click', async () => {
+    const id = status?.syncId ?? '';
+    if (!id) return;
     try {
-      await send({ command: MessageCommand.AddBookmark, container, title, url });
-      input('add-title').value = '';
-      input('add-url').value = '';
-      await reloadMain();
-    } catch (err) {
-      showError('main', (err as Error).message);
+      await navigator.clipboard.writeText(id);
+    } catch {
+      window.prompt('Copy sync ID:', id);
     }
   });
 }
@@ -228,9 +190,14 @@ async function openSettings(): Promise<void> {
   showView('settings');
   const info = $('service-info');
   info.textContent = '';
+  const statusName = ping?.reachable ? `Online${ping.status !== undefined ? ` (${ping.status})` : ''}` : 'Unreachable';
   const rows: [string, string][] = [
-    ['Sync ID', status?.syncId ?? '—'],
+    ['Reachability', statusName],
     ['Service', status?.serviceUrl ?? '—'],
+    ['API version', ping?.version ?? '—'],
+    ['Location', ping?.location ?? '—'],
+    ['Message', ping?.message ?? '—'],
+    ['Sync ID', status?.syncId ?? '—'],
     ['Last updated', status?.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : '—'],
   ];
   for (const [k, v] of rows) {
@@ -274,7 +241,7 @@ async function loadDuplicates(): Promise<void> {
           try {
             await send({ command: MessageCommand.RemoveBookmark, id: entry.id });
             await openSettings();
-            await reloadMain();
+            await refreshAll();
           } catch (err) {
             showError('settings', (err as Error).message);
           }
@@ -294,15 +261,15 @@ function initSettings(): void {
   });
   $('btn-back').addEventListener('click', () => {
     showView('main');
-    void reloadMain();
+    void refreshAll();
   });
   $('btn-unlink').addEventListener('click', async () => {
     clearErrors();
     try {
       await send({ command: MessageCommand.DisableSync });
-      cachedTree = [];
+      ping = undefined;
       showView('connect');
-      await refreshStatus();
+      await refreshAll();
     } catch (err) {
       showError('settings', (err as Error).message);
     }
@@ -331,11 +298,9 @@ function initSettings(): void {
     if (!password) return;
     try {
       const json = await file.text();
-      const res = await send<{ count: number }>({ command: MessageCommand.ImportBackup, json, password });
-      await reloadMain();
+      await send<{ count: number }>({ command: MessageCommand.ImportBackup, json, password });
+      await refreshAll();
       await openSettings();
-      showError('settings', `Imported ${res.count} nodes.`);
-      ($('settings-error') as HTMLElement).hidden = false;
     } catch (err) {
       showError('settings', (err as Error).message);
     }
@@ -351,7 +316,7 @@ function initSettings(): void {
     try {
       await send({ command: MessageCommand.SwitchService, newServiceUrl, newPassword });
       input('switch-password').value = '';
-      await reloadMain();
+      await refreshAll();
       await openSettings();
     } catch (err) {
       showError('settings', (err as Error).message);
@@ -380,21 +345,9 @@ async function init(): Promise<void> {
   await initConnect();
   initMain();
   initSettings();
-  // Prefill the add form with the current tab.
-  try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    if (tab?.url && /^https?:/.test(tab.url)) {
-      if (!input('add-url').value) input('add-url').value = tab.url;
-      if (!input('add-title').value && tab.title) input('add-title').value = tab.title;
-    }
-  } catch {
-    // No tab access (or no active tab); the form stays empty.
-  }
-  await refreshStatus();
-  if (status?.syncEnabled && (await loadTree())) {
+  await refreshAll();
+  if (status?.syncEnabled) {
     showView('main');
-    renderResults('');
   } else {
     showView('connect');
   }
