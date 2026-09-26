@@ -27,6 +27,8 @@ export enum StoreKey {
   SyncHash = 'syncHash',
   SyncInfo = 'syncInfo',
   SyncRevision = 'syncRevision',
+  /** Safety-backup manifest (index rows; payloads live under safetyFileKey). */
+  SafetyIndex = 'safetyIndex',
   TelemetryEnabled = 'telemetryEnabled',
   TraceLog = 'traceLog',
   UndoSlot = 'undoSlot',
@@ -53,6 +55,8 @@ export interface KeyValueBackend {
   get<T>(key: string): Promise<T | undefined>;
   set(key: string, value: unknown): Promise<void>;
   remove(key: string): Promise<void>;
+  /** Keys starting with prefix (for indexed payloads like safety files). */
+  list(prefix: string): Promise<string[]>;
 }
 
 const defaults = new Map<StoreKey, unknown>([
@@ -65,18 +69,20 @@ const defaults = new Map<StoreKey, unknown>([
 export class Store {
   constructor(private backend: KeyValueBackend) {}
 
-  async get<T>(key: StoreKey): Promise<T | undefined> {
+  // Fixed keys come from the StoreKey enum; dynamic payload keys (safety
+  // files) go through the safetyFileKey helper — same backend, no literals.
+  async get<T>(key: StoreKey | string): Promise<T | undefined> {
     const value = await this.backend.get<T>(key);
     // storage.local may resolve null for removed keys: fall back to defaults.
     if (value !== undefined && value !== null) return value;
-    return defaults.get(key) as T | undefined;
+    return defaults.get(key as StoreKey) as T | undefined;
   }
 
-  set(key: StoreKey, value: unknown): Promise<void> {
+  set(key: StoreKey | string, value: unknown): Promise<void> {
     return this.backend.set(key, value);
   }
 
-  remove(key: StoreKey): Promise<void> {
+  remove(key: StoreKey | string): Promise<void> {
     return this.backend.remove(key);
   }
 }
@@ -96,6 +102,18 @@ export class MemoryBackend implements KeyValueBackend {
   async remove(key: string): Promise<void> {
     this.data.delete(key);
   }
+
+  async list(prefix: string): Promise<string[]> {
+    return [...this.data.keys()].filter((k) => k.startsWith(prefix));
+  }
+}
+
+/** Payload key for one safety file. Single helper (not enum members):
+ * per-file keys are dynamic by nature; the prefix is the fixed contract. */
+export const safetyFilePrefix = 'safetyFile:';
+
+export function safetyFileKey(fileName: string): string {
+  return `${safetyFilePrefix}${fileName}`;
 }
 
 /**
@@ -105,7 +123,7 @@ export class MemoryBackend implements KeyValueBackend {
 export class BrowserLocalBackend implements KeyValueBackend {
   constructor(
     private area: {
-      get(keys: string | string[]): Promise<Record<string, unknown>>;
+      get(keys: string | string[] | null): Promise<Record<string, unknown>>;
       set(items: Record<string, unknown>): Promise<void>;
       remove(keys: string | string[]): Promise<void>;
     },
@@ -114,6 +132,12 @@ export class BrowserLocalBackend implements KeyValueBackend {
   async get<T>(key: string): Promise<T | undefined> {
     const result = await this.area.get(key);
     return result[key] as T | undefined;
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    // get(null) returns the whole area; filtered client-side.
+    const all = await this.area.get(null);
+    return Object.keys(all).filter((k) => k.startsWith(prefix));
   }
 
   set(key: string, value: unknown): Promise<void> {

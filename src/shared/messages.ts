@@ -20,6 +20,7 @@ import {
   XbsException,
 } from './errors.js';
 import type { BookmarkNode, ServiceStatus } from './models.js';
+import type { SafetyEntry } from './safety.js';
 
 export enum MessageCommand {
   SyncBookmarks = 'sync-bookmarks',
@@ -41,6 +42,11 @@ export enum MessageCommand {
   ClearRemovedSync = 'clear-removed-sync',
   GetToolbarSync = 'get-toolbar-sync',
   SetToolbarSync = 'set-toolbar-sync',
+  PreviewBackup = 'preview-backup',
+  GetSafetyList = 'get-safety-list',
+  RestoreSafety = 'restore-safety',
+  DeleteSafety = 'delete-safety',
+  RemoveDuplicates = 'remove-duplicates',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -137,7 +143,8 @@ export type UndoKind =
   | 'switch-push'
   | 'change-password'
   | 'restore'
-  | 'import';
+  | 'import'
+  | 'duplicates';
 
 export interface UndoState {
   kind: UndoKind;
@@ -185,7 +192,15 @@ export type MessagePayload =
   | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
   | { command: MessageCommand.GetToolbarSync }
   | { command: MessageCommand.SetToolbarSync; enabled: boolean }
+  | { command: MessageCommand.PreviewBackup; json: string; password: string }
+  | { command: MessageCommand.GetSafetyList }
+  | { command: MessageCommand.RestoreSafety; fileName: string }
+  | { command: MessageCommand.DeleteSafety; fileName: string }
+  | { command: MessageCommand.RemoveDuplicates; ids: number[] }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
+
+/** Safety list rows cross the wire as-is (manifest rows, no secrets). */
+export type { SafetyEntry };
 
 export type MessageResponse =
   | { ok: true; data?: unknown }

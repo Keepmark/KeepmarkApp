@@ -1,10 +1,13 @@
-// Encrypted backup export/import. Ports Keepmark BackupGuard + the
-// BackupEnvelope idea (App stays "KeepmarkApp", Format 1):
+// Encrypted backup export/import. Envelope shared with the Keepmark Android
+// app (same crypto, same guards) so files are cross-readable:
 //
 //   { app, format, salt, blob }
 //   blob = base64(IV16B || AES-GCM(lzutf8(JSON tree))) under
 //          PBKDF2-SHA256/250k(password, salt)
 //
+// Written with App = "xBrowserSyncNg" (the shared family tag the Android
+// client requires); files stamped with the legacy "KeepmarkApp" tag still
+// import. Anything else is refused.
 // Guards mirror BackupGuard: password >= 8 chars, .json suffix on paths,
 // 50MB / 200k nodes bounds, BFS tree validation.
 
@@ -14,6 +17,8 @@ import type { BookmarkNode } from './models.js';
 import { eachBookmark } from './bookmarks.js';
 
 export const BackupAppName = 'KeepmarkApp';
+/** Family tag written on new exports (required by the Android client). */
+export const SharedBackupAppName = 'xBrowserSyncNg';
 export const BackupFormat = 1;
 export const MinBackupPasswordLength = 8;
 export const MaxBackupBytes = 50 * 1024 * 1024;
@@ -88,7 +93,7 @@ export async function exportBackup(nodes: BookmarkNode[], password: string): Pro
   const salt = randomSalt();
   const key = await deriveKey(password, salt, SyncClientVersion);
   const blob = await encryptData(JSON.stringify(nodes), key);
-  const envelope: BackupEnvelope = { app: BackupAppName, format: BackupFormat, salt, blob };
+  const envelope: BackupEnvelope = { app: SharedBackupAppName, format: BackupFormat, salt, blob };
   return JSON.stringify(envelope);
 }
 
@@ -103,7 +108,7 @@ export async function importBackup(json: string, password: string): Promise<Book
     throw new Error('Backup file is not valid JSON.');
   }
   if (
-    envelope.app !== BackupAppName ||
+    (envelope.app !== SharedBackupAppName && envelope.app !== BackupAppName) ||
     envelope.format !== BackupFormat ||
     typeof envelope.blob !== 'string' ||
     typeof envelope.salt !== 'string'

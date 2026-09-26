@@ -35,9 +35,17 @@ describe('backup envelope', () => {
   it('round-trips through export/import', async () => {
     const json = await exportBackup(tree, 'backup-password');
     const parsed = JSON.parse(json);
-    expect(parsed.app).toBe('KeepmarkApp');
+    // Shared family tag: readable by the Android client too.
+    expect(parsed.app).toBe('xBrowserSyncNg');
     expect(parsed.format).toBe(1);
     const back = await importBackup(json, 'backup-password');
+    expect(back).toEqual(tree);
+  });
+
+  it('still imports the legacy KeepmarkApp tag', async () => {
+    const json = await exportBackup(tree, 'backup-password');
+    const legacy = { ...JSON.parse(json), app: 'KeepmarkApp' };
+    const back = await importBackup(JSON.stringify(legacy), 'backup-password');
     expect(back).toEqual(tree);
   });
 

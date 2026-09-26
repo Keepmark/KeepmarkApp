@@ -25,7 +25,15 @@ import type { BookmarkNode } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer } from '../shared/bookmarks.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
-import { getDuplicateGroups } from '../shared/duplicates.js';
+import { deleteByIds, getDuplicateGroups } from '../shared/duplicates.js';
+import {
+  deleteSafety,
+  listSafety,
+  readSafetyTree,
+  rekeySafety,
+  writeSafety,
+  type SafetyEntry,
+} from '../shared/safety.js';
 import { BookmarkIdMapper } from '../shared/id-mapper.js';
 import {
   MessageCommand,
@@ -231,6 +239,16 @@ export class BackgroundCore {
       case MessageCommand.SetToolbarSync:
         await this.store.set(StoreKey.SyncBookmarksToolbar, msg.enabled);
         return { enabled: msg.enabled };
+      case MessageCommand.PreviewBackup:
+        return this.previewBackup(msg.json, msg.password);
+      case MessageCommand.GetSafetyList:
+        return listSafety(this.store);
+      case MessageCommand.RestoreSafety:
+        return this.restoreSafety(msg.fileName);
+      case MessageCommand.DeleteSafety:
+        return { deleted: await deleteSafety(this.store, msg.fileName) };
+      case MessageCommand.RemoveDuplicates:
+        return this.removeDuplicates(msg.ids);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
       default:
@@ -288,23 +306,6 @@ export class BackgroundCore {
     }
     if (this.queue.length === 0) return last;
     return new Error('Sync queue did not drain.', { cause: last });
-  }
-
-  /**
-   * Best-effort plaintext safety backup before a destructive step. A download
-   * failure never blocks the operation (the encrypted undo slot is the
-   * primary net); it is logged loudly instead.
-   */
-  private async safetyDownload(filename: string, text: string): Promise<void> {
-    try {
-      await this.ports.chrome.download(filename, text);
-    } catch (err) {
-      this.log.log(
-        XbsLogLevel.Warning,
-        'sync',
-        `Safety backup download failed (continuing): ${(err as Error)?.message ?? err}`,
-      );
-    }
   }
 
   /**
@@ -494,6 +495,14 @@ export class BackgroundCore {
     const { info, syncToolbar } = await this.requireCreds();
     // Restore overwrites natives: snapshot first like every mutating flow.
     const natives = await this.adapter.readAll(syncToolbar);
+    // Fail-closed safety net alongside the undo slot.
+    await writeSafety(this.store, {
+      operation: 'restore',
+      side: 'local',
+      tree: natives,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
     await this.saveUndo({
       kind: 'restore',
@@ -640,6 +649,15 @@ export class BackgroundCore {
           localEnc: await encryptData(JSON.stringify(natives), derived),
           localCount: countNodes(natives),
         });
+        // Fail-closed safety net: the pull destroys the local tree. If the
+        // snapshot cannot be written, abort before mutating anything.
+        await writeSafety(this.store, {
+          operation: 'take-remote',
+          side: 'local',
+          tree: natives,
+          syncId,
+          derivedKey: derived,
+        });
         const pulled = await this.withSuspended(() =>
           pullWithDerivedKey(this.depsFor(api, syncToolbar), {
             syncId,
@@ -710,7 +728,15 @@ export class BackgroundCore {
     }
     const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
     const remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
-    await this.safetyDownload(`keepmark-pre-push-${Date.now()}.json`, JSON.stringify(remoteTree));
+    // Fail-closed: the PUT destroys the server copy. Abort before uploading
+    // when the snapshot cannot be written.
+    await writeSafety(this.store, {
+      operation: 'upload-local',
+      side: 'remote',
+      tree: remoteTree,
+      syncId,
+      derivedKey: derived,
+    });
     // Snapshot first, persist the slot only after the remote write lands: a
     // failed PUT must not clobber the previous undo.
     const prev = await this.capturePrev();
@@ -834,7 +860,15 @@ export class BackgroundCore {
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     if (!lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
-    await this.safetyDownload(`keepmark-pre-pwchange-${Date.now()}.json`, JSON.stringify(tree));
+    // Fail-closed: the PUT re-encrypts the server copy. Abort when the
+    // pre-change snapshot cannot be written.
+    await writeSafety(this.store, {
+      operation: 'change-password',
+      side: 'remote',
+      tree,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
     // Snapshot now, persist the slot only after the PUT lands: a failed
     // password change must not clobber the previous undo.
     const prev = await this.capturePrev();
@@ -864,6 +898,19 @@ export class BackgroundCore {
     const current = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (current?.id !== info.id) throw new IncompleteSyncInfoException('Sync changed during password rotation.');
     await this.store.set(StoreKey.SyncInfo, { ...current, password: derived });
+    // Migrate safety entries to the new key (best-effort: rotation never
+    // fails the flow; unmigrated entries refuse honestly via keyId).
+    const rekeyed = await rekeySafety(this.store, info.password!, derived).catch(() => ({
+      rekeyed: 0,
+      skipped: ['rotation'],
+    }));
+    if (rekeyed.skipped.length > 0) {
+      this.log.log(
+        XbsLogLevel.Warning,
+        'sync',
+        `Safety rekey skipped ${rekeyed.skipped.length} entries (kept under the old key)`,
+      );
+    }
     this.log.log(XbsLogLevel.Info, 'sync', 'Password changed, blob re-encrypted');
     return { lastUpdated: updatedLast };
   }
@@ -878,6 +925,15 @@ export class BackgroundCore {
     );
     const count = countNodes(tree);
     const natives = await this.adapter.readAll(syncToolbar);
+    // Fail-closed: the import destroys the local tree. Abort when the
+    // snapshot cannot be written.
+    await writeSafety(this.store, {
+      operation: 'import-backup',
+      side: 'local',
+      tree: natives,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
     await this.saveUndo({
       kind: 'import',
@@ -900,10 +956,119 @@ export class BackgroundCore {
   }
 
   /**
+   * Import dry-run: validates + decrypts, returns the node count without
+   * touching natives, queue or storage. The manager shows the count and
+   * only then enables the confirmed ImportBackup.
+   */
+  private async previewBackup(json: string, password: string): Promise<{ count: number }> {
+    await this.requireCreds();
+    const tree = await importBackup(json, password);
+    return { count: countNodes(tree) };
+  }
+
+  /**
+   * Restore a safety entry. Local-side entries replace the natives (and push
+   * when linked); remote-side entries re-upload the server copy (link +
+   * matching key required). A pre-restore snapshot of the current state is
+   * taken fail-closed first; the used entry is never deleted.
+   */
+  private async restoreSafety(fileName: string): Promise<{ count: number }> {
+    const rows = await listSafety(this.store);
+    const entry = rows.find((e) => e.fileName === fileName);
+    if (!entry) throw new UnexpectedResponseException(`Safety backup ${fileName} not found.`);
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (entry.side === 'remote' && (!info?.id || !info.password)) {
+      throw new IncompleteSyncInfoException('Link the sync this backup belongs to first.');
+    }
+    const tree = await readSafetyTree(this.store, entry, info?.password);
+    const toolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+    // Snapshot the state being replaced, fail-closed.
+    if (entry.side === 'local') {
+      const natives = await this.adapter.readAll(toolbar);
+      await writeSafety(this.store, {
+        operation: 'pre-restore',
+        side: 'local',
+        tree: natives,
+        syncId: info?.id,
+        derivedKey: info?.password,
+      });
+      await this.withSuspended(async () => {
+        const mappings = await overwriteAll(this.adapter, tree, toolbar);
+        await this.idMapper.set(mappings);
+      });
+      if (info?.id && info.password) {
+        // Dirty → push like any local change (queued remote job, 409 honest).
+        this.queue.enqueue('remote', false);
+        const err = await this.drain();
+        if (err) throw err;
+      }
+    } else {
+      if (!info?.id || !info.password) {
+        throw new IncompleteSyncInfoException('Link the sync this backup belongs to first.');
+      }
+      await writeSafety(this.store, {
+        operation: 'pre-restore',
+        side: 'remote',
+        tree: await this.cachedTree(info),
+        syncId: info.id,
+        derivedKey: info.password,
+      });
+      const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+      await this.pushCurrent(api, info, tree);
+      await this.withSuspended(async () => {
+        const mappings = await overwriteAll(this.adapter, tree, toolbar);
+        await this.idMapper.set(mappings);
+      });
+    }
+    return { count: countNodes(tree) };
+  }
+
+  /**
+   * Bulk duplicate cleanup: ONE safety snapshot (fail-closed), ONE native
+   * overwrite, ONE push. The result names the safety net (R7.5).
+   */
+  private async removeDuplicates(ids: number[]): Promise<{ deleted: number; safety: string }> {
+    const { info, syncToolbar } = await this.requireCreds();
+    const tree = await this.cachedTree(info);
+    const doomed = new Set(ids);
+    const pruned = deleteByIds(tree, doomed);
+    const deleted = countNodes(tree) - countNodes(pruned);
+    if (deleted === 0) return { deleted: 0, safety: '' };
+    const natives = await this.adapter.readAll(syncToolbar);
+    const safety = await writeSafety(this.store, {
+      operation: 'duplicates-cleanup',
+      side: 'local',
+      tree: natives,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
+    const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
+    await this.saveUndo({
+      kind: 'duplicates',
+      opDerivedKey: info.password!,
+      opSyncId: info.id!,
+      opServiceUrl: info.serviceUrl ?? DefaultServiceUrl,
+      ...(await this.capturePrev()),
+      localEnc: await encryptData(JSON.stringify(natives), info.password!),
+      localCount: countNodes(natives),
+      remotePreBlob: currentBlob,
+    });
+    await this.withSuspended(async () => {
+      const mappings = await overwriteAll(this.adapter, ensureContainersExist(pruned), syncToolbar);
+      await this.idMapper.set(mappings);
+    });
+    this.queue.enqueue('remote', false);
+    const err = await this.drain();
+    if (err) throw err;
+    return { deleted, safety: safety.fileName };
+  }
+
+  /**
    * Move-service wizard. NOTHING syncs until the popup submits an explicit
-   * SwitchTarget (mode + direction + passwords). Both branches start with a
-   * plaintext safety-backup download of the scrapped side; the existing
-   * branch verifies the password by decrypting BEFORE mutating anything.
+   * SwitchTarget (mode + direction + passwords). The existing branch verifies
+   * the password by decrypting BEFORE mutating anything, and each direction
+   * snapshots its destroyed side fail-closed first (switch-new destroys
+   * nothing: the local tree is uploaded as-is to a fresh sync).
    */
   private async switchService(target: SwitchTarget): Promise<{ id: string }> {
     const { info, syncToolbar } = await this.requireCreds();
@@ -913,8 +1078,6 @@ export class BackgroundCore {
     if (target.mode === 'existing' && !target.syncId) {
       throw new IncompleteSyncInfoException('A sync ID is required for an existing sync.');
     }
-    // Safety-backup of the scrapped side before moving (plaintext, like Keepmark).
-    await this.safetyDownload(`keepmark-safety-${Date.now()}.json`, JSON.stringify(tree));
     const newApi = this.makeApi(target.newServiceUrl);
     const svc = await checkService(newApi, this.log);
     const v12 = await this.isV12(target.newServiceUrl);
@@ -972,6 +1135,14 @@ export class BackgroundCore {
 
     if (target.direction === 'pull') {
       const natives = await this.adapter.readAll(syncToolbar);
+      // Fail-closed: the pull destroys the local tree.
+      await writeSafety(this.store, {
+        operation: 'switch-take-remote',
+        side: 'local',
+        tree: natives,
+        syncId: info.id,
+        derivedKey: info.password,
+      });
       await this.saveUndo({
         kind: 'switch-pull',
         opDerivedKey: derived,
@@ -994,10 +1165,26 @@ export class BackgroundCore {
       );
     } else {
       // Push the local tree onto the existing remote (revision CAS on v1.2,
-      // timestamp otherwise, with 412 fallback). A 409 surfaces honestly,
-      // nothing is lost: the safety backup above plus the undo slot hold the
-      // pre-push state. The slot is persisted only after the PUT lands so a
-      // failed push never clobbers the previous undo.
+      // timestamp otherwise, with 412 fallback). Fail-closed first: the push
+      // destroys the server copy, so snapshot it before the PUT.
+      const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
+      let remoteTree: BookmarkNode[];
+      try {
+        remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
+      } catch (err) {
+        throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+      }
+      await writeSafety(this.store, {
+        operation: 'switch-upload',
+        side: 'remote',
+        tree: remoteTree,
+        syncId,
+        derivedKey: info.password,
+      });
+      // A 409 surfaces honestly, nothing is lost: the safety backup above
+      // plus the undo slot hold the pre-push state. The slot is persisted
+      // only after the PUT lands so a failed push never clobbers the
+      // previous undo.
       const prev = await this.capturePrev();
       const encrypted = await encryptData(JSON.stringify(tree), derived);
       let updated: import('../shared/api.js').UpdateBookmarksResponse;
@@ -1048,7 +1235,7 @@ export class BackgroundCore {
    * device (natives are untouched). Gated behind the stored supportsV12 flag:
    * on legacy services it throws UnsupportedVersionException and NOTHING is
    * deleted. There is no server-side undelete, so the safety net is a
-   * plaintext backup download taken BEFORE the DELETE plus a double confirm
+   * fail-closed snapshot taken BEFORE the DELETE plus a double confirm
    * in the UI — deliberately no undo slot (a PUT-back would 401).
    */
   private async deleteRemoteSync(): Promise<{ deleted: boolean }> {
@@ -1070,7 +1257,15 @@ export class BackgroundCore {
       throw new UnsupportedVersionException('Not supported (requires service v1.2).');
     }
     const tree = await this.cachedTree(info);
-    await this.safetyDownload(`keepmark-server-backup-${Date.now()}.json`, JSON.stringify(tree));
+    // Fail-closed: no undelete exists server-side. Abort when the snapshot
+    // cannot be written.
+    await writeSafety(this.store, {
+      operation: 'delete-remote',
+      side: 'remote',
+      tree,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
     try {
       await deleteRemoteSync(api, info.id!);
     } catch (err) {

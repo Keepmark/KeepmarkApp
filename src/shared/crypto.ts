@@ -39,6 +39,24 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return globalThis.btoa(bin);
 }
 
+const HEX = '0123456789abcdef';
+
+export function bytesToHex(bytes: Uint8Array): string {
+  let out = '';
+  for (const b of bytes) out += HEX[b >> 4]! + HEX[b & 0x0f]!;
+  return out;
+}
+
+/**
+ * Stable id for a stored derived key (first 8 hex of SHA-256 over the raw
+ * key bytes). Safety entries record it so restores under a rotated key
+ * refuse honestly instead of decrypting garbage.
+ */
+export async function derivedKeyId(derivedKeyB64: string): Promise<string> {
+  const digest = await subtle().digest('SHA-256', base64ToBytes(derivedKeyB64) as BufferSource);
+  return bytesToHex(new Uint8Array(digest)).slice(0, 8);
+}
+
 /**
  * Mirrors getPasswordHash(password, syncId): PBKDF2-SHA256, 250k, salt = sync ID.
  * Legacy syncs without a version are rejected (open once in the original client).

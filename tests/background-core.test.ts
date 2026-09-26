@@ -447,9 +447,68 @@ describe('background core', () => {
       password: 'backup-password',
     })) as { count: number };
     expect(res.count).toBeGreaterThan(0);
+    // Import snapshots the destroyed local tree fail-closed.
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.map((s) => s.operation)).toContain('import-backup');
   });
 
-  it('switch-service moves to the new service with safety backup', async () => {
+  it('bulk duplicate cleanup snapshots once, pushes once, restores', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    await core.handleMessage({
+      command: MessageCommand.AddBookmark,
+      container: BookmarkContainer.Other,
+      title: 'A copy',
+      url: 'https://a.test',
+    });
+    const putsBefore = state.puts.length;
+    const groups = (await core.handleMessage({ command: MessageCommand.GetDuplicates })) as {
+      url: string;
+      entries: { id: number }[];
+    }[];
+    expect(groups).toHaveLength(1);
+    const victim = groups[0].entries[0].id;
+    const res = (await core.handleMessage({
+      command: MessageCommand.RemoveDuplicates,
+      ids: [victim],
+    })) as { deleted: number; safety: string };
+    expect(res.deleted).toBe(1);
+    expect(res.safety).toMatch(/^safety-.*-duplicates-cleanup\.json$/);
+    // One push for the whole bulk, not one per item.
+    expect(state.puts.length).toBe(putsBefore + 1);
+    expect((await core.handleMessage({ command: MessageCommand.GetDuplicates })) as unknown[]).toHaveLength(0);
+    // The snapshot restores the deleted bookmark.
+    const restored = (await core.handleMessage({
+      command: MessageCommand.RestoreSafety,
+      fileName: res.safety,
+    })) as { count: number };
+    expect(restored.count).toBeGreaterThan(0);
+    expect(((await core.handleMessage({ command: MessageCommand.GetDuplicates })) as unknown[])).toHaveLength(1);
+  });
+
+  it('backup preview counts without mutating', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    const putsBefore = state.puts.length;
+    const json = (await core.handleMessage({
+      command: MessageCommand.ExportBackup,
+      password: 'backup-password',
+    })) as string;
+    const preview = (await core.handleMessage({
+      command: MessageCommand.PreviewBackup,
+      json,
+      password: 'backup-password',
+    })) as { count: number };
+    expect(preview.count).toBeGreaterThan(0);
+    expect(state.puts).toHaveLength(putsBefore);
+    await expect(
+      core.handleMessage({ command: MessageCommand.PreviewBackup, json, password: 'wrong-password' }),
+    ).rejects.toThrow(/Wrong backup password/);
+  });
+
+  it('switch-service moves to the new service (nothing destroyed, no safety file)', async () => {
     const state = baseState();
     const { core, store, ports } = await linkedCore(state);
     const res = (await core.handleMessage({
@@ -462,8 +521,11 @@ describe('background core', () => {
       },
     })) as { id: string };
     expect(res.id).toBe(SYNC_ID);
-    expect(ports.downloads).toHaveLength(1); // safety backup
-    expect(ports.downloads[0].filename).toMatch(/^keepmark-safety-/);
+    // Mode new uploads the local tree as-is to a fresh sync: nothing is
+    // destroyed, so no safety file (the undo slot covers the link swap).
+    expect(ports.downloads).toHaveLength(0);
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as { fileName: string }[];
+    expect(safeties).toHaveLength(0);
     const info = await store.get<{ serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info!.serviceUrl).toBe('https://new.test/');
   });
@@ -1025,13 +1087,24 @@ describe('background core v1.2', () => {
     expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
   });
 
-  it('delete on v1.2 backs up, deletes, unlinks, keeps natives', async () => {
+  it('delete on v1.2 snapshots safety, deletes, unlinks, keeps natives', async () => {
     const state = v12State();
-    const { core, store, ports, mockApi } = await linkedV12Core(state);
+    const { core, store, ports, mockApi, derived } = await linkedV12Core(state);
     await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
-    expect(ports.downloads).toHaveLength(1);
-    expect(ports.downloads[0].filename).toMatch(/^keepmark-server-backup-/);
-    expect(JSON.parse(ports.downloads[0].text)).toBeInstanceOf(Array);
+    // Fail-closed safety entry (not a plaintext download anymore).
+    expect(ports.downloads).toHaveLength(0);
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      fileName: string;
+      operation: string;
+      side: string;
+      enc: string | null;
+    }[];
+    expect(safeties).toHaveLength(1);
+    expect(safeties[0]).toMatchObject({ operation: 'delete-remote', side: 'remote', enc: 'derived' });
+    // After unlink the remote-side entry refuses honestly (needs the link).
+    await expect(
+      core.handleMessage({ command: MessageCommand.RestoreSafety, fileName: safeties[0].fileName }),
+    ).rejects.toThrow(/Link the sync/);
     expect(state.deleted).toEqual([SYNC_ID]);
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
@@ -1042,6 +1115,7 @@ describe('background core v1.2', () => {
     // Natives untouched: the local bookmark survives the server wipe.
     const children = await mockApi.getChildren('unfiled_____');
     expect(children.map((c) => c.title)).toContain('A');
+    void derived;
   });
 
   it('ping heals the capability flag after a server upgrade (no relink)', async () => {
@@ -1221,11 +1295,16 @@ describe('background core v1.2', () => {
     expect(info!.serviceVersion).toBe('1.1.13');
   });
 
-  it('a failing safety download does not block the operation', async () => {
+  it('a failing safety snapshot aborts the destructive operation (fail closed)', async () => {
     const state = baseState();
-    const store = new Store(new MemoryBackend());
+    const failing = new (class extends MemoryBackend {
+      async set(key: string, value: unknown): Promise<void> {
+        if (key.startsWith('safetyFile:')) throw new Error('quota exceeded');
+        return super.set(key, value);
+      }
+    })();
+    const store = new Store(failing);
     const ports = makePorts();
-    const failing = { ...ports, chrome: { ...ports.chrome, download: async () => { throw new Error('no dl'); } } };
     const mockApi = makeMockApi();
     await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
     const core = new BackgroundCore(
@@ -1233,17 +1312,20 @@ describe('background core v1.2', () => {
       new BookmarkIdMapper(store),
       new InMemoryLogger(),
       makeFirefoxAdapter(mockApi),
-      failing,
+      ports,
       makeFakeApi(state),
       { debounceMs: 5 },
     );
     await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
-    const res = (await core.handleMessage({
-      command: MessageCommand.ChangePassword,
-      currentPassword: PASSWORD,
-      newPassword: 'rotated password',
-    })) as { lastUpdated: string };
-    expect(res.lastUpdated).toBeTruthy();
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ChangePassword,
+        currentPassword: PASSWORD,
+        newPassword: 'rotated password',
+      }),
+    ).rejects.toThrow(/quota/);
+    // No PUT landed: the server copy is untouched.
+    expect(state.puts).toHaveLength(1); // connect-time upload only
   });
 });
 
