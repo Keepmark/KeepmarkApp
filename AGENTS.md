@@ -55,7 +55,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline→front, 409→local-first, 401→sync-lost) | `app/sync.service.ts` |
 | `reconcile.ts` | `reconcileContainer`: whole-tree native→synced pass via mappings (replaces Add/Modify/Remove/Move/Reorder cases) | new design (equivalent semantics) |
 | `messages.ts` | `MessageCommand` + payload/response types + `toWireError/fromWireError` (name-based rehydration) | `app/webext.interface.ts` + sendMessage |
-| `backup.ts` | Encrypted envelope `{app,format,salt,blob}` + guards (pwd≥8, 50MB, 200k nodes) | Keepmark `BackupGuard.cs` + envelope |
+| `backup.ts` | Encrypted envelope `{app,format,salt,blob}` (writes shared `xBrowserSyncNg` tag, reads legacy `KeepmarkApp` too) + guards (pwd≥8, 50MB, 200k nodes, depth cap) | Keepmark `BackupGuard.cs` + envelope |
+| `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention 5, derived-key encryption + keyId, fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
 | `duplicates.ts` | URL groups, last-copy-locked deletion plan, `deleteByIds` | Keepmark `/duplicates` page |
 
 ### Platform layers (thin)

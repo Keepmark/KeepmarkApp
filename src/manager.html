@@ -72,13 +72,21 @@
           <button id="m-btn-import">Import backup</button>
           <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
+        <div id="m-import-preview" class="preview" hidden></div>
+        <div class="row"><button id="m-btn-import-confirm" disabled>Confirm import</button></div>
         <div id="backup-result" class="result" hidden></div>
+        <h3>Safety backups</h3>
+        <p class="hint">Automatic snapshots taken before every destructive step (newest 5 kept).
+          Encrypted entries need the current sync link to restore.</p>
+        <div class="row"><button id="m-btn-safety">Refresh safety list</button></div>
+        <div id="m-safety-list"></div>
       </section>
 
       <section id="sec-duplicates" hidden>
         <h2>Duplicates</h2>
         <div id="dup-error" class="error" role="alert" hidden></div>
-        <div class="row"><button id="m-btn-duplicates">Scan now</button></div>
+        <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete all listed</button></div>
+        <div id="dup-result" class="result" hidden></div>
         <div id="m-dup-list"></div>
       </section>
 

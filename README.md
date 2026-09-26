@@ -64,15 +64,43 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
 - Sync loss (401): queue cleared, credentials wiped, notification.
 - "Sync now" = pull-if-newer then push.
 
+## Safety backups
+
+Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,
+ported from the Keepmark Android safety spec): connect pull/push, switch
+pull/push, change-password, import, restore, server delete, bulk duplicate
+cleanup. Snapshot write failure aborts the operation (fail closed); single
+bookmark add/remove is exempt (mirrors the Android single-delete exception).
+
+- Stored in `storage.local`: `SafetyIndex` manifest rows
+  (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated
+  syncId, enc`) + one `safetyFile:` payload each. Newest 5 kept, older
+  pruned (payload + row together). Listed/restored/deleted from Manager →
+  Backup → Safety backups.
+- Encrypted with the sync-derived key (`keyId` = SHA-256/8 recorded);
+  restores under a rotated key refuse honestly. Pre-link writes stay
+  plaintext flagged "not encrypted". Password change re-encrypts entries
+  best-effort (never fails the flow).
+- Restore: local-side entries replace natives (push-if-linked);
+  remote-side entries require the link and re-push (409 honest). The used
+  entry is never deleted; counts are validated, damage refused.
+- Success messages name the safety net ("see Backup → Safety backups").
+
+## Backup interop (Keepmark Android)
+
+Export envelope `{app, format, salt, blob}` is byte-compatible with the
+Android client: new exports are stamped `app: "xBrowserSyncNg"` (the tag
+Android requires) and legacy `"KeepmarkApp"` files still import here.
+
 ## Permissions (why each one)
 
 - `alarms` — 15-min remote-change poll + SW-safe native-edit debounce.
 - `bookmarks` — read/clear/populate native containers + change listeners.
-- `downloads` — conflict files, safety backups, backup export (data: URLs).
+- `downloads` — conflict files, backup export (data: URLs).
 - `notifications` — sync-removed / conflict notices.
 - `storage` + `unlimitedStorage` — encrypted blob (up to service maxSyncSize),
-  id mappings, install backup, trace log in `storage.local` beyond the 5–10 MB
-  default quota.
+  id mappings, install backup, safety files + index, trace log in
+  `storage.local` beyond the 5–10 MB default quota.
 - Chromium `host_permissions https://*/*` + loopback http (`localhost`,
   `127.0.0.1`) — MV3 service workers need an explicit host grant for
   `fetch()` to user-configured services. Plain-http LAN hosts are rejected

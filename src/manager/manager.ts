@@ -9,6 +9,7 @@ import {
   contractGate,
   copyText,
   describeUndo,
+  formatBytes,
   validatePasswordChange,
   validateServiceUrl,
   validateSwitch,
@@ -22,11 +23,13 @@ import {
   MessageCommand,
   type DuplicateGroup,
   type PingResponse,
+  type SafetyEntry,
   type StatusResponse,
   type SwitchPreviewResult,
   type UndoState,
 } from '../shared/messages.js';
 import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
+import { planDuplicateDeletion } from '../shared/duplicates.js';
 
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
@@ -74,6 +77,7 @@ function showSection(name: string, moveFocus = false): void {
     }
   }
   if (name === 'status') void refreshStatus();
+  if (name === 'backup') void refreshSafety();
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
@@ -283,6 +287,9 @@ function initBackupSection(): void {
   $('m-btn-import').addEventListener('click', () => ($('m-import-file') as HTMLInputElement).click());
   ($('m-import-file') as HTMLInputElement).addEventListener('change', async (e) => {
     hideErrors();
+    ($('m-import-preview') as HTMLElement).hidden = true;
+    ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
+    importPreview = undefined;
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const password = input('m-backup-password').value;
@@ -296,51 +303,199 @@ function initBackupSection(): void {
       (e.target as HTMLInputElement).value = '';
       return;
     }
-    if (
-      !window.confirm(
-        'Import replaces your local bookmarks and pushes the backup to the service. Continue? (Undo is in Status.)',
-      )
-    ) {
-      (e.target as HTMLInputElement).value = '';
-      return;
-    }
-    await withBusy('m-btn-import', 'Importing…', async () => {
+    // Step 1: preview (count) — nothing mutates. Step 2 arms Confirm import.
+    await withBusy('m-btn-import', 'Reading…', async () => {
       try {
         const json = await file.text();
-        const res = await send<{ count: number }>({ command: MessageCommand.ImportBackup, json, password });
+        const preview = await send<{ count: number }>({
+          command: MessageCommand.PreviewBackup,
+          json,
+          password,
+        });
+        importPreview = { name: file.name, size: file.size, lastModified: file.lastModified };
+        const box = $('m-import-preview');
+        box.textContent =
+          `${file.name}: ${preview.count} nodes — Confirm import replaces your local ` +
+          `bookmarks and pushes to the service (a safety snapshot is taken first).`;
+        box.hidden = false;
+        ($('m-btn-import-confirm') as HTMLButtonElement).disabled = false;
+      } catch (err) {
         input('m-backup-password').value = '';
-        (input('m-import-file') as HTMLInputElement).value = '';
-        showResult('backup-result', `Imported ${res.count} nodes and pushed to the service.`);
+        (e.target as HTMLInputElement).value = '';
+        sectionError('backup-error', (err as Error).message);
+      }
+    });
+  });
+  $('m-btn-import-confirm').addEventListener('click', () =>
+    withBusy('m-btn-import-confirm', 'Importing…', async () => {
+      hideErrors();
+      const fileEl = $('m-import-file') as HTMLInputElement;
+      const file = fileEl.files?.[0];
+      const password = input('m-backup-password').value;
+      if (
+        !file ||
+        !importPreview ||
+        importPreview.name !== file.name ||
+        importPreview.size !== file.size ||
+        importPreview.lastModified !== file.lastModified
+      ) {
+        sectionError('backup-error', 'File changed since the preview — choose it again.');
+        return;
+      }
+      if (
+        !window.confirm(
+          `Import replaces your local bookmarks and pushes to the service. Continue? (Undo is in Status.)`,
+        )
+      ) {
+        return;
+      }
+      try {
+        const json = await file.text();
+        const res = await send<{ count: number; safety: string }>({
+          command: MessageCommand.ImportBackup,
+          json,
+          password,
+        });
+        input('m-backup-password').value = '';
+        fileEl.value = '';
+        importPreview = undefined;
+        ($('m-import-preview') as HTMLElement).hidden = true;
+        ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
+        showResult(
+          'backup-result',
+          `Imported ${res.count} nodes and pushed to the service (safety: ${res.safety} — see Safety backups below).`,
+        );
+        await refreshSafety();
       } catch (err) {
         // Never leave a failed password in the DOM.
         input('m-backup-password').value = '';
         sectionError('backup-error', (err as Error).message);
       }
+    }),
+  );
+  $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', 'Loading…', () => refreshSafety()));
+}
+
+/** File the current import preview was made for — confirm requires identity. */
+let importPreview: { name: string; size: number; lastModified: number } | undefined;
+
+const SafetyOperations: Record<string, string> = {
+  'take-remote': 'link: took remote',
+  'upload-local': 'link: uploaded local',
+  'create-empty': 'link: created empty',
+  'import-backup': 'backup import',
+  'change-password': 'password change',
+  'switch-take-remote': 'move: took remote',
+  'switch-upload': 'move: uploaded local',
+  'duplicates-cleanup': 'duplicates cleanup',
+  'pre-restore': 'pre-restore snapshot',
+  restore: 'restore',
+  'delete-remote': 'server delete',
+};
+
+async function refreshSafety(): Promise<void> {
+  const box = $('m-safety-list');
+  box.textContent = '';
+  let entries: SafetyEntry[] = [];
+  try {
+    entries = await send<SafetyEntry[]>({ command: MessageCommand.GetSafetyList });
+  } catch (err) {
+    sectionError('backup-error', (err as Error).message);
+    return;
+  }
+  if (entries.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'No safety backups yet — one is taken before every destructive step.';
+    box.append(p);
+    return;
+  }
+  const ul = document.createElement('ul');
+  for (const entry of entries) {
+    const li = document.createElement('li');
+    const when = new Date(entry.createdAtUtc).toLocaleString();
+    const what = SafetyOperations[entry.operation] ?? entry.operation;
+    const side = entry.side === 'local' ? 'local tree' : 'server copy';
+    li.textContent =
+      `${when} · ${what} · ${side} · ${entry.items} items · ${formatBytes(entry.sizeBytes)} · ` +
+      `sync ${entry.syncId} · ${entry.enc ? 'encrypted' : 'not encrypted'} `;
+    const restore = document.createElement('button');
+    restore.textContent = 'Restore';
+    restore.className = 'mini';
+    restore.setAttribute('aria-label', `Restore safety backup ${entry.fileName}`);
+    restore.addEventListener('click', () => {
+      hideErrors();
+      if (!window.confirm(`Restore ${entry.fileName}? Current state is snapshotted first.`)) return;
+      restore.disabled = true;
+      send<{ count: number; safety: string }>({ command: MessageCommand.RestoreSafety, fileName: entry.fileName })
+        .then((res) => {
+          showResult(
+            'backup-result',
+            `Restored ${res.count} nodes (pre-restore snapshot: ${res.safety}).`,
+          );
+          void refreshSafety();
+          void refreshStatus();
+        })
+        .catch((err: Error) => sectionError('backup-error', err.message))
+        .finally(() => {
+          restore.disabled = false;
+        });
     });
-  });
+    const del = document.createElement('button');
+    del.textContent = 'Delete';
+    del.className = 'mini danger';
+    del.setAttribute('aria-label', `Delete safety backup ${entry.fileName}`);
+    del.addEventListener('click', () => {
+      hideErrors();
+      if (!window.confirm(`Delete safety backup ${entry.fileName}? This cannot be undone.`)) return;
+      del.disabled = true;
+      send({ command: MessageCommand.DeleteSafety, fileName: entry.fileName })
+        .then(() => {
+          showResult('backup-result', `Deleted ${entry.fileName}.`);
+          void refreshSafety();
+        })
+        .catch((err: Error) => sectionError('backup-error', err.message))
+        .finally(() => {
+          del.disabled = false;
+        });
+    });
+    li.append(restore, ' ', del);
+    ul.append(li);
+  }
+  box.append(ul);
 }
 
 let dupSeq = 0;
+/** Groups from the last scan (drives Delete-all). */
+let lastDupGroups: DuplicateGroup[] = [];
 
 async function scanDuplicates(): Promise<void> {
   const my = ++dupSeq;
   const box = $('m-dup-list');
   box.textContent = '';
   $('nav-dup-count').textContent = '';
+  ($('m-btn-duplicates-delete-all') as HTMLButtonElement).disabled = true;
+  ($('dup-result') as HTMLElement).hidden = true;
   let groups: DuplicateGroup[] = [];
   try {
     groups = await send<DuplicateGroup[]>({ command: MessageCommand.GetDuplicates });
   } catch (err) {
     if (my !== dupSeq) return;
+    lastDupGroups = [];
     sectionError('dup-error', (err as Error).message);
     return;
   }
   if (my !== dupSeq) return;
+  lastDupGroups = groups;
   if (groups.length === 0) {
     box.innerHTML = '<p class="clean">No duplicates — everything is clean ✓</p>';
     return;
   }
   $('nav-dup-count').textContent = `(${groups.length})`;
+  const deletable = planDuplicateDeletion(groups);
+  ($('m-btn-duplicates-delete-all') as HTMLButtonElement).disabled = deletable.length === 0;
+  ($('m-btn-duplicates-delete-all') as HTMLButtonElement).textContent =
+    deletable.length > 0 ? `Delete all listed (${deletable.length})` : 'Delete all listed';
   groups.forEach((group) => {
     const div = document.createElement('div');
     div.className = 'dup-group';
@@ -387,6 +542,33 @@ async function scanDuplicates(): Promise<void> {
 function initDuplicatesSection(): void {
   $('m-btn-duplicates').addEventListener('click', () =>
     withBusy('m-btn-duplicates', 'Scanning…', () => scanDuplicates()),
+  );
+  $('m-btn-duplicates-delete-all').addEventListener('click', () =>
+    withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
+      hideErrors();
+      const ids = planDuplicateDeletion(lastDupGroups);
+      if (ids.length === 0) return;
+      if (
+        !window.confirm(
+          `Delete ${ids.length} duplicates in one push? A safety snapshot is taken first — see Backup → Safety backups.`,
+        )
+      ) {
+        return;
+      }
+      try {
+        const res = await send<{ deleted: number; safety: string }>({
+          command: MessageCommand.RemoveDuplicates,
+          ids,
+        });
+        showResult(
+          'dup-result',
+          `Deleted ${res.deleted} duplicates (safety: ${res.safety} — see Backup → Safety backups).`,
+        );
+        await scanDuplicates();
+      } catch (err) {
+        sectionError('dup-error', (err as Error).message);
+      }
+    }),
   );
 }
 

@@ -915,7 +915,7 @@ export class BackgroundCore {
     return { lastUpdated: updatedLast };
   }
 
-  private async importBackup(json: string, password: string): Promise<{ count: number }> {
+  private async importBackup(json: string, password: string): Promise<{ count: number; safety: string }> {
     const { info, syncToolbar } = await this.requireCreds();
     const imported = await importBackup(json, password);
     // Backups predate validation: duplicate/non-integer ids would ride the
@@ -927,7 +927,7 @@ export class BackgroundCore {
     const natives = await this.adapter.readAll(syncToolbar);
     // Fail-closed: the import destroys the local tree. Abort when the
     // snapshot cannot be written.
-    await writeSafety(this.store, {
+    const safety = await writeSafety(this.store, {
       operation: 'import-backup',
       side: 'local',
       tree: natives,
@@ -952,7 +952,7 @@ export class BackgroundCore {
     this.queue.enqueue('remote', false);
     const err = await this.drain();
     if (err) throw err;
-    return { count };
+    return { count, safety: safety.fileName };
   }
 
   /**
@@ -972,7 +972,7 @@ export class BackgroundCore {
    * matching key required). A pre-restore snapshot of the current state is
    * taken fail-closed first; the used entry is never deleted.
    */
-  private async restoreSafety(fileName: string): Promise<{ count: number }> {
+  private async restoreSafety(fileName: string): Promise<{ count: number; safety: string }> {
     const rows = await listSafety(this.store);
     const entry = rows.find((e) => e.fileName === fileName);
     if (!entry) throw new UnexpectedResponseException(`Safety backup ${fileName} not found.`);
@@ -983,15 +983,18 @@ export class BackgroundCore {
     const tree = await readSafetyTree(this.store, entry, info?.password);
     const toolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
     // Snapshot the state being replaced, fail-closed.
+    let preFile = '';
     if (entry.side === 'local') {
       const natives = await this.adapter.readAll(toolbar);
-      await writeSafety(this.store, {
-        operation: 'pre-restore',
-        side: 'local',
-        tree: natives,
-        syncId: info?.id,
-        derivedKey: info?.password,
-      });
+      preFile = (
+        await writeSafety(this.store, {
+          operation: 'pre-restore',
+          side: 'local',
+          tree: natives,
+          syncId: info?.id,
+          derivedKey: info?.password,
+        })
+      ).fileName;
       await this.withSuspended(async () => {
         const mappings = await overwriteAll(this.adapter, tree, toolbar);
         await this.idMapper.set(mappings);
@@ -1006,13 +1009,14 @@ export class BackgroundCore {
       if (!info?.id || !info.password) {
         throw new IncompleteSyncInfoException('Link the sync this backup belongs to first.');
       }
-      await writeSafety(this.store, {
+      const pre = await writeSafety(this.store, {
         operation: 'pre-restore',
         side: 'remote',
         tree: await this.cachedTree(info),
         syncId: info.id,
         derivedKey: info.password,
       });
+      preFile = pre.fileName;
       const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
       await this.pushCurrent(api, info, tree);
       await this.withSuspended(async () => {
@@ -1020,7 +1024,7 @@ export class BackgroundCore {
         await this.idMapper.set(mappings);
       });
     }
-    return { count: countNodes(tree) };
+    return { count: countNodes(tree), safety: preFile };
   }
 
   /**
