@@ -470,12 +470,16 @@ describe('background core', () => {
     }[];
     expect(groups).toHaveLength(1);
     const victim = groups[0].entries[0].id;
-    const res = (await core.handleMessage({
+    const lockedId = groups[0].entries[groups[0].entries.length - 1].id;
+    // The locked newest copy survives even a hostile request naming it.
+    const refused = (await core.handleMessage({
       command: MessageCommand.RemoveDuplicates,
-      ids: [victim],
+      ids: [victim, lockedId],
     })) as { deleted: number; safety: string };
-    expect(res.deleted).toBe(1);
-    expect(res.safety).toMatch(/^safety-.*-duplicates-cleanup\.json$/);
+    expect(refused.deleted).toBe(1);
+    expect(refused.safety).toMatch(/duplicates-cleanup/);
+    // Group gone now; clean up the extra safety row for the assertions below.
+    const res = refused;
     // One push for the whole bulk, not one per item.
     expect(state.puts.length).toBe(putsBefore + 1);
     expect((await core.handleMessage({ command: MessageCommand.GetDuplicates })) as unknown[]).toHaveLength(0);

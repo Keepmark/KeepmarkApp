@@ -1034,7 +1034,14 @@ export class BackgroundCore {
   private async removeDuplicates(ids: number[]): Promise<{ deleted: number; safety: string }> {
     const { info, syncToolbar } = await this.requireCreds();
     const tree = await this.cachedTree(info);
-    const doomed = new Set(ids);
+    // Structural lock: the newest copy (max id) of each group can never be
+    // selected — a crafted/buggy caller cannot wipe a group silently.
+    const locked = new Set<number>();
+    for (const group of getDuplicateGroups(tree)) {
+      const idsInGroup = group.entries.map((e) => e.id);
+      if (idsInGroup.length > 1) locked.add(Math.max(...idsInGroup));
+    }
+    const doomed = new Set(ids.filter((id) => !locked.has(id)));
     const pruned = deleteByIds(tree, doomed);
     const deleted = countNodes(tree) - countNodes(pruned);
     if (deleted === 0) return { deleted: 0, safety: '' };
