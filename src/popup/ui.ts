@@ -63,6 +63,16 @@ function setPill(pill: HTMLElement, text: string, kind: 'ok' | 'warn' | 'bad' | 
   pill.className = `pill ${kind}`;
 }
 
+/** Meter fill + progressbar value stay in sync (screen readers read the value). */
+function setMeter(prefix: string, used: number, max: number | undefined): void {
+  const fill = document.getElementById(`${prefix}-space-fill`);
+  if (!fill) return;
+  const pct = max ? Math.min(100, (used / max) * 100) : 0;
+  // Exact legacy format: bare '0%' without a quota, one decimal with one.
+  (fill as HTMLElement).style.width = max ? `${pct.toFixed(1)}%` : '0%';
+  fill.parentElement?.setAttribute('aria-valuenow', String(Math.round(pct)));
+}
+
 /** Render the status card into elements with the given id prefix. */
 export function renderStatusCard(prefix: string, view: StatusView): void {
   const { status, ping } = view;
@@ -78,7 +88,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
     $(`${prefix}-syncid`).textContent = '—';
     $(`${prefix}-last`).textContent = '—';
     $(`${prefix}-space`).textContent = '—';
-    ($(`${prefix}-space-fill`) as HTMLElement).style.width = '0%';
+    setMeter(prefix, 0, undefined);
     if (swversion) swversion.textContent = '—';
     const countEl = document.getElementById(`${prefix}-count`);
     if (countEl) countEl.textContent = '—';
@@ -100,9 +110,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const used = status.usedBytes ?? 0;
   const max = ping?.maxSyncSize;
   $(`${prefix}-space`).textContent = max ? `${formatBytes(used)} of ${formatBytes(max)}` : formatBytes(used);
-  ($(`${prefix}-space-fill`) as HTMLElement).style.width = max
-    ? `${Math.min(100, (used / max) * 100).toFixed(1)}%`
-    : '0%';
+  setMeter(prefix, used, max);
   if (status.bookmarkCount !== undefined) {
     const countEl = document.getElementById(`${prefix}-count`);
     if (countEl) countEl.textContent = `${status.bookmarkCount} bookmarks`;

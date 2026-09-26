@@ -181,6 +181,9 @@ export class XSyncApiClient {
    */
   async getBookmarksIfChanged(syncId: string, knownHash: string): Promise<GetBookmarksResponse | null> {
     const label = sanitizePath('GET bookmarks/{id}', syncId);
+    // Quote defensively: a stored hash with pre-existing quotes would never
+    // match, silently losing the 304 path (bandwidth only, not correctness).
+    const tag = `"${knownHash.replace(/"/g, '')}"`;
     const started = Date.now();
     this.log.log(XbsLogLevel.Info, 'net', `→ START ${label} (If-None-Match)`);
     const ctrl = new AbortController();
@@ -190,7 +193,7 @@ export class XSyncApiClient {
         method: 'GET',
         headers: {
           'Accept-Version': ApiVersion12,
-          'If-None-Match': `"${knownHash}"`,
+          'If-None-Match': tag,
         },
         signal: ctrl.signal,
       });

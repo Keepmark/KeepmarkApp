@@ -237,6 +237,43 @@ describe('v1.2 sync paths', () => {
     expect((await store.get<{ supportsV12?: boolean }>(StoreKey.SyncInfo))?.supportsV12).toBe(false);
   });
 
+  it('createAndUpload reuses the same id when the v1.2 PUT answers 412 (no orphan sync)', async () => {
+    const { UnsupportedVersionException } = await import('../src/shared/errors');
+    const { createAndUpload } = await import('../src/shared/sync');
+    let creates = 0;
+    const puts: string[] = [];
+    const { deps, store, mockApi } = makeDeps({
+      createSyncV12: async () => {
+        creates += 1;
+        return { id: 'v12-id', lastUpdated: 't0', version: SyncClientVersion, meta: { revision: 1 } };
+      },
+      createSync: async () => {
+        creates += 1;
+        return { id: 'legacy-id', lastUpdated: 't0', version: SyncClientVersion };
+      },
+      updateBookmarksV12: async () => {
+        throw new UnsupportedVersionException('downgraded');
+      },
+      updateBookmarks: async (id: string) => {
+        puts.push(id);
+        return { lastUpdated: 't1' };
+      },
+    });
+    await mockApi.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
+    const { id, v12 } = await createAndUpload(
+      deps.api,
+      store,
+      [{ id: 1, title: '[xbs] Other', children: [] }],
+      'correct horse battery staple',
+      'https://x.test/',
+      true,
+    );
+    expect(id).toBe('v12-id');
+    expect(v12).toBe(false);
+    expect(creates).toBe(1);
+    expect(puts).toEqual(['v12-id']);
+  });
+
   it('deleteRemoteSync performs the DELETE and renames a 412 honestly', async () => {
     let deleted: string | undefined;
     const { deps } = makeDeps({

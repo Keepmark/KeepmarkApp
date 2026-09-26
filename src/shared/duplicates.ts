@@ -3,6 +3,7 @@
 // (structural enforcement — it can never be selected for deletion).
 
 import { eachBookmark } from './bookmarks.js';
+import { SeparatorUrl } from './constants.js';
 import type { DuplicateGroup } from './messages.js';
 import type { BookmarkNode } from './models.js';
 
@@ -21,13 +22,18 @@ export function normalizeUrl(url: string): string {
     }
     parsed.hash = '';
     for (const key of [...parsed.searchParams.keys()]) {
-      if (/^(utm_|fbclid$|gclid$|msclkid$|mc_|igshid$)/i.test(key)) parsed.searchParams.delete(key);
+      // Bare `mc_` matched legit params (mcfitting…): only Mailchimp ids go.
+      if (/^(utm_|fbclid$|gclid$|msclkid$|mc_(cid|eid)$|igshid$)/i.test(key)) parsed.searchParams.delete(key);
     }
     let out = parsed.toString();
     if (parsed.pathname !== '/' && out.endsWith('/')) out = out.slice(0, -1);
-    return out.toLowerCase();
+    // NOTE: host is already lowercased above; path+query stay case-sensitive
+    // per RFC (example.com/Page !== example.com/page).
+    return out;
   } catch {
-    return raw.toLowerCase().replace(/\/$/, '');
+    // Unparsable input: legacy trim+lowercase, trailing slash and fragment
+    // dropped so `x#frag` still groups with `x`.
+    return raw.toLowerCase().replace(/#.*$/, '').replace(/\/$/, '');
   }
 }
 
@@ -35,6 +41,7 @@ export interface LocatedNode {
   id: number;
   title?: string;
   path: string;
+  url: string;
 }
 
 /** Build breadcrumb paths for every bookmark, then group ids by normalized URL. */
@@ -42,18 +49,19 @@ export function getDuplicateGroups(bookmarks: BookmarkNode[]): DuplicateGroup[] 
   const byUrl = new Map<string, LocatedNode[]>();
   const walk = (nodes: BookmarkNode[] | undefined, trail: string[]): void => {
     for (const node of nodes ?? []) {
-      if (node.url && node.id !== undefined) {
+      // Separators share the marker URL but are structural, never duplicates.
+      if (node.url && node.url !== SeparatorUrl && node.id !== undefined) {
         const key = normalizeUrl(node.url);
         const list = byUrl.get(key) ?? [];
-        list.push({ id: node.id, title: node.title, path: [...trail, node.title ?? ''].join(' / ') });
+        list.push({ id: node.id, title: node.title, path: [...trail, node.title ?? ''].join(' / '), url: node.url });
         byUrl.set(key, list);
       }
       if (node.children) walk(node.children, [...trail, node.title ?? '']);
     }
   };
-  for (const root of bookmarks) {
-    if (root.children) walk(root.children, [root.title ?? '']);
-  }
+  // Walk from the roots themselves (not only root.children) so top-level
+  // bookmarks in container-less trees are grouped too.
+  walk(bookmarks, []);
   const groups: DuplicateGroup[] = [];
   for (const [url, entries] of byUrl) {
     if (entries.length <= 1) continue;
@@ -78,7 +86,8 @@ export function getDuplicateGroups(bookmarks: BookmarkNode[]): DuplicateGroup[] 
 export function planDuplicateDeletion(groups: DuplicateGroup[], onlyIds?: Set<number>): number[] {
   const out: number[] = [];
   for (const group of groups) {
-    const locked = group.entries[group.entries.length - 1].id;
+    if (!group.entries.length) continue;
+    const locked = Math.max(...group.entries.map((e) => e.id));
     for (const entry of group.entries) {
       if (entry.id === locked) continue;
       if (onlyIds && !onlyIds.has(entry.id)) continue;

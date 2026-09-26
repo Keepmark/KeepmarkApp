@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="layout">
-    <nav id="sidebar">
+    <nav id="sidebar" aria-label="Manager sections">
       <div class="brand"><span class="brand-chip"><img src="./assets/brand-mark.png" alt="" /></span> Keepmark</div>
       <button data-section="status" class="active">Status</button>
       <button data-section="backup">Backup</button>
@@ -29,12 +29,12 @@
           <dl class="status-grid">
             <dt>Server</dt><dd id="m-server">…</dd>
             <dt>Service version</dt><dd id="m-swversion">…</dd>
-            <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini">Copy</button></dd>
+            <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
             <dt>Bookmarks</dt><dd id="m-count">…</dd>
             <dt>Last sync</dt><dd id="m-last">…</dd>
             <dt>Space used</dt>
             <dd>
-              <div class="meter"><div id="m-space-fill"></div></div>
+              <div class="meter" role="progressbar" aria-label="Service space used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="m-space-fill"></div></div>
               <span id="m-space">…</span>
             </dd>
           </dl>
@@ -70,7 +70,7 @@
         <div class="row">
           <button id="m-btn-export">Export backup</button>
           <button id="m-btn-import">Import backup</button>
-          <input id="m-import-file" type="file" accept=".json,application/json" hidden />
+          <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
         <div id="backup-result" class="result" hidden></div>
       </section>
@@ -88,12 +88,16 @@
         <div id="move-error" class="error" role="alert" hidden></div>
         <h3>1. Target</h3>
         <label>New service URL <input id="m-switch-url" type="url" /></label>
+        <div role="radiogroup" aria-label="Move mode">
         <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
         <label class="check"><input type="radio" name="m-switch-mode" value="existing" /> Use existing sync</label>
+        </div>
         <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" /></label>
         <div id="m-switch-direction-row" hidden>
-          <label class="check"><input type="radio" name="m-switch-direction" value="push" checked /> Overwrite remote with my bookmarks</label>
-          <label class="check"><input type="radio" name="m-switch-direction" value="pull" /> Replace local with remote</label>
+          <div role="radiogroup" aria-label="Move direction">
+          <label class="check"><input type="radio" name="m-switch-direction" value="push" /> Overwrite remote with my bookmarks</label>
+          <label class="check"><input type="radio" name="m-switch-direction" value="pull" checked /> Replace local with remote</label>
+          </div>
         </div>
         <div class="row"><button id="m-btn-preview">Check target</button></div>
         <div id="move-preview" class="preview" hidden></div>

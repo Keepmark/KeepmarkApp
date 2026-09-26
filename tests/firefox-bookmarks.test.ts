@@ -9,7 +9,7 @@ import {
 } from '../src/firefox/bookmarks';
 import { getSupportedUrl, urlIsSupported } from '../src/firefox/platform';
 import type { NativeNode } from '../src/shared/bookmarks';
-import { BookmarkContainer } from '../src/shared/bookmarks';
+import { BookmarkContainer, HorizontalSeparatorTitle } from '../src/shared/bookmarks';
 
 /** In-memory browser.bookmarks mock with Firefox root ids. */
 export function makeMockApi(): BookmarkApi & { nodes: Map<string, NativeNode> } {
@@ -112,6 +112,33 @@ describe('firefox native service', () => {
     expect(mappings[0].syncedId).toBe(
       synced.find((c) => c.title === BookmarkContainer.Other)!.children![0].id,
     );
+  });
+
+  it('treats legacy title+newtab nodes as separators', async () => {
+    const api = makeMockApi();
+    await api.create({ parentId: 'unfiled_____', title: HorizontalSeparatorTitle, url: 'about:newtab' });
+    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
+    expect(other.children![0].url).toBe('xbs:separator');
+  });
+
+  it('matches ids by identity across containers (oldest native keeps id 1)', async () => {
+    const api = makeMockApi();
+    // Toolbar folder is OLDEST, but Other traverses first: positional
+    // assignment would give Other id 1 — identity matching must not.
+    // Folders (no url) exercise the title pool; urls exercise the url pool.
+    await api.create({ parentId: 'toolbar_____', title: 'FT' });
+    await api.create({ parentId: 'unfiled_____', title: 'FO' });
+    await api.create({ parentId: 'toolbar_____', title: 'T', url: 'https://t.test' });
+    await api.create({ parentId: 'unfiled_____', title: 'O', url: 'https://o.test' });
+    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
+    const toolbar = synced.find((c) => c.title === BookmarkContainer.Toolbar)!;
+    expect(toolbar.children!.map((b) => b.title)).toEqual(['FT', 'T']);
+    expect(toolbar.children![0].id).toBe(1);
+    expect(toolbar.children![1].id).toBe(3);
+    expect(other.children![0].id).toBe(2);
+    expect(other.children![1].id).toBe(4);
   });
 
   it('skips toolbar when syncToolbar is false', async () => {

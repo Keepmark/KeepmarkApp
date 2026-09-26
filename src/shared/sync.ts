@@ -19,7 +19,7 @@ import type { BookmarkNode, ServiceInfo } from './models.js';
 import { UnexpectedResponseException } from './errors.js';
 import { ServiceStatus } from './models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from './bookmarks.js';
-import type { SyncMeta, XSyncApiClient } from './api.js';
+import type { GetBookmarksResponse, SyncMeta, XSyncApiClient } from './api.js';
 import { Store, StoreKey, type SyncInfo } from './store.js';
 import { BookmarkIdMapper } from './id-mapper.js';
 import type { NativeOps } from './native.js';
@@ -100,12 +100,16 @@ async function saveSyncState(
   meta?: SyncMeta,
   supportsV12?: boolean,
 ): Promise<void> {
-  const next: SyncInfo = { ...info };
-  if (supportsV12 !== undefined) next.supportsV12 = supportsV12;
-  await store.set(StoreKey.SyncInfo, serviceUrl ? { ...next, serviceUrl } : next);
+  // Data first, link record last: storage.local has no transactions, so a
+  // half-write must leave the previous link pointing at data it still
+  // describes. SyncInfo changes rarely (id/url/flags) while blob+timestamp
+  // change on every sync — writing it last keeps torn states consistent.
   await store.set(StoreKey.LastUpdated, lastUpdated);
   await store.set(StoreKey.Bookmarks, encrypted);
   await persistMeta(store, meta);
+  const next: SyncInfo = { ...info };
+  if (supportsV12 !== undefined) next.supportsV12 = supportsV12;
+  await store.set(StoreKey.SyncInfo, serviceUrl ? { ...next, serviceUrl } : next);
   await store.set(StoreKey.SyncEnabled, true);
 }
 
@@ -149,9 +153,12 @@ export async function createAndUpload(
 ): Promise<{ id: string; lastUpdated: string; v12: boolean }> {
   if (v12) {
     try {
-      return { ...(await createAndUploadV12(api, store, bookmarks, password, serviceUrl)), v12: true };
+      const r = await createAndUploadV12(api, store, bookmarks, password, serviceUrl);
+      return { id: r.id, lastUpdated: r.lastUpdated, v12: r.v12 };
     } catch (err) {
       if (!(err instanceof UnsupportedVersionException)) throw err;
+      // createSyncV12 itself answered 412 (no sync created yet): safe to
+      // retry the whole create on the legacy contract.
     }
   }
   const created = await api.createSync();
@@ -179,7 +186,7 @@ async function createAndUploadV12(
   bookmarks: BookmarkNode[],
   password: string,
   serviceUrl: string | undefined,
-): Promise<{ id: string; lastUpdated: string }> {
+): Promise<{ id: string; lastUpdated: string; v12: boolean }> {
   const created = await api.createSyncV12();
   if (!created.id || !created.lastUpdated || !created.version) {
     throw new UnexpectedResponseException('Unexpected response from the service.');
@@ -187,20 +194,38 @@ async function createAndUploadV12(
   const derived = await deriveKey(password, created.id, created.version);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
   // Fresh v1.2 creates report revision 1 (pre-v1.2 docs read back as 0).
-  const updated =
-    created.meta?.revision !== undefined
-      ? await api.updateBookmarksV12(created.id, encrypted, created.meta.revision, true)
-      : await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
-  await saveSyncState(
-    store,
-    { id: created.id, password: derived, version: created.version },
-    updated.lastUpdated!,
-    encrypted,
-    serviceUrl,
-    updated.meta,
-    true,
-  );
-  return { id: created.id, lastUpdated: updated.lastUpdated! };
+  try {
+    const updated =
+      created.meta?.revision !== undefined
+        ? await api.updateBookmarksV12(created.id, encrypted, created.meta.revision, true)
+        : await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
+    const fellBack = created.meta?.revision === undefined;
+    await saveSyncState(
+      store,
+      { id: created.id, password: derived, version: created.version },
+      updated.lastUpdated!,
+      encrypted,
+      serviceUrl,
+      updated.meta,
+      !fellBack,
+    );
+    return { id: created.id, lastUpdated: updated.lastUpdated!, v12: !fellBack };
+  } catch (err) {
+    if (!(err instanceof UnsupportedVersionException)) throw err;
+    // Downgraded service mid-create: reuse the SAME sync id on the legacy
+    // contract instead of creating a second (orphan) sync.
+    const updated = await api.updateBookmarks(created.id, encrypted, created.lastUpdated, true);
+    await saveSyncState(
+      store,
+      { id: created.id, password: derived, version: created.version },
+      updated.lastUpdated!,
+      encrypted,
+      serviceUrl,
+      updated.meta,
+      false,
+    );
+    return { id: created.id, lastUpdated: updated.lastUpdated!, v12: false };
+  }
 }
 
 /**
@@ -233,7 +258,7 @@ export async function pullExistingSync(
 
   // v1.2 links read the extended shape so meta flows; a 412 (downgraded
   // service) falls back to the legacy shape instead of failing the link.
-  let res: import('./api.js').GetBookmarksResponse;
+  let res: GetBookmarksResponse;
   let effectiveV12 = v12;
   if (v12) {
     try {
@@ -275,7 +300,14 @@ export async function pullWithDerivedKey(
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
   const { store, native, idMapper, log, syncToolbar } = deps;
   const plain = await decryptData(input.blob, input.derivedKey);
-  let bookmarks = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
+  let bookmarks: BookmarkNode[];
+  try {
+    bookmarks = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
+  } catch (err) {
+    throw new UnexpectedResponseException('Remote sync data is corrupted (decrypts but is not valid JSON).', {
+      cause: err,
+    });
+  }
   let updateRemote = false;
 
   if (!validateBookmarkIds(bookmarks)) {
@@ -365,7 +397,7 @@ export async function deleteRemoteSync(api: XSyncApiClient, syncId: string): Pro
     await api.deleteBookmarks(syncId);
   } catch (err) {
     if (err instanceof UnsupportedVersionException) {
-      throw new UnsupportedVersionException('Not supported (requires service v1.2).');
+      throw new UnsupportedVersionException('Not supported (requires service v1.2).', { cause: err });
     }
     throw err;
   }

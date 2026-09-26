@@ -73,9 +73,11 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
 - `storage` + `unlimitedStorage` — encrypted blob (up to service maxSyncSize),
   id mappings, install backup, trace log in `storage.local` beyond the 5–10 MB
   default quota.
-- Chromium `host_permissions https/http */*` — MV3 service workers need an
-  explicit host grant for `fetch()` to user-configured services (any origin).
-  No content scripts, no page access: the grant covers API calls only.
+- Chromium `host_permissions https://*/*` + loopback http (`localhost`,
+  `127.0.0.1`) — MV3 service workers need an explicit host grant for
+  `fetch()` to user-configured services. Plain-http LAN hosts are rejected
+  by the URL validator anyway. No content scripts, no page access: the grant
+  covers API calls only.
 
 ## Platform differences (from the original client)
 

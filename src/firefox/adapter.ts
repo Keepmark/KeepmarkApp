@@ -8,23 +8,16 @@ import type { BookmarkIdMapping } from '../shared/id-mapper.js';
 import {
   buildMappings,
   clearAll,
+  ContainerNotFoundError,
   populate,
   readAll,
   type BookmarkApi,
   type ContainerIds,
-  type NativeOpts,
 } from '../shared/native.js';
-import { getContainerIds } from './bookmarks.js';
-import { getNewTabUrl, getSupportedUrl } from '../firefox/platform.js';
+import { firefoxNativeOpts, getContainerIds } from './bookmarks.js';
 import type { AddNativeInput, NativeAdapter } from '../background/adapter.js';
 
-const opts: NativeOpts = {
-  newTabUrl: getNewTabUrl(),
-  mapUrl: getSupportedUrl,
-  menuFolderInOther: false,
-  createSeparator: (api, parentId) => api.create({ parentId, type: 'separator' }) as Promise<unknown>,
-  isSeparatorNode: (node) => node.type === 'separator',
-};
+const opts = firefoxNativeOpts;
 
 export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
   const ids = (): Promise<Required<ContainerIds>> => getContainerIds(api);
@@ -50,6 +43,7 @@ export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
       const c = await ids();
       const id = container === BookmarkContainer.Menu ? c.menu : container === BookmarkContainer.Other ? c.other : c.toolbar;
       const [tree] = await api.getSubTree(id);
+      if (!tree) throw new ContainerNotFoundError('Native container vanished mid-read.');
       return tree.children ?? [];
     },
 
@@ -64,7 +58,7 @@ export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
       const created = await api.create({
         parentId: parentNativeId,
         title: input.title,
-        url: input.url ? getSupportedUrl(input.url) : undefined,
+        url: input.url ? opts.mapUrl(input.url) : undefined,
       });
       return created.id;
     },

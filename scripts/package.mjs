@@ -56,7 +56,8 @@ for (const platform of ['firefox', 'chromium']) {
     continue;
   }
   if (!haveZip && !havePython) {
-    console.log(`no zip tool; leaving ${dir}`);
+    console.error('no zip tool (zip or python3) — refusing to leave the release unpackaged');
+    process.exitCode = 1;
     continue;
   }
   const out = path.join(dist, `keepmark-${platform}-${version}.zip`);
@@ -76,7 +77,8 @@ for (const platform of ['firefox', 'chromium']) {
       { stdio: 'inherit' },
     );
   } else {
-    console.log(`no zip tool; leaving ${dir}`);
+    console.error('no zip tool (zip or python3) — refusing to leave the release unpackaged');
+    process.exitCode = 1;
     continue;
   }
   console.log(`wrote ${out}`);

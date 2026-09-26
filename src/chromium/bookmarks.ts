@@ -23,7 +23,8 @@ export { ensureContainersExist } from '../shared/bookmarks.js';
 
 const newTabUrl = getNewTabUrl();
 
-const opts: NativeOpts = {
+/** Canonical Chromium native opts (single source of truth for bookmarks.ts + adapter.ts). */
+export const chromiumNativeOpts: NativeOpts = {
   newTabUrl,
   mapUrl: (url) => getSupportedUrl(url, newTabUrl),
   menuFolderInOther: true,
@@ -35,6 +36,8 @@ const opts: NativeOpts = {
     }) as Promise<unknown>,
   isSeparatorNode: (node) => chromiumIsSeparator(node, newTabUrl),
 };
+
+const opts = chromiumNativeOpts;
 
 export async function getContainerIds(api: BookmarkApi): Promise<ContainerIds> {
   const [root] = await api.getTree();

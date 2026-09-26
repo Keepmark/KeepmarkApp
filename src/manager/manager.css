@@ -168,6 +168,12 @@ button.danger {
   border: 1px dashed var(--border);
   border-radius: 6px;
   max-width: 480px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+#move-summary {
+  overflow-wrap: break-word;
 }
 
 .card {

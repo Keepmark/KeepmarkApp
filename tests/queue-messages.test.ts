@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DailyNewSyncLimitException,
   DataOutOfSyncException,
   IncompleteSyncInfoException,
+  InvalidCredentialsException,
+  NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,
+  ThrottledException,
   UnsupportedVersionException,
   XbsException,
 } from '../src/shared/errors';
@@ -23,6 +27,14 @@ describe('message error wire format', () => {
   it('falls back to XbsException for unknown names', () => {
     expect(fromWireError({ errorName: 'Nope', message: 'x' })).toBeInstanceOf(XbsException);
     expect(toWireError(new Error('plain'))).toEqual({ errorName: 'XbsException', message: 'plain' });
+  });
+
+  it('round-trips the 405/406 create errors instead of degrading them', () => {
+    for (const Ctor of [NotAcceptingNewSyncsException, DailyNewSyncLimitException]) {
+      const rebuilt = fromWireError(toWireError(new Ctor('limit')));
+      expect(rebuilt).toBeInstanceOf(Ctor);
+      expect(rebuilt.message).toBe('limit');
+    }
   });
 
   it('round-trips the v1.2 gate error so the popup shows the reason', () => {
@@ -110,13 +122,48 @@ describe('sync queue', () => {
     expect(lost).toHaveLength(1);
   });
 
-  it('does not requeue offline failures for local jobs', async () => {
+  it('requeues offline failures for local jobs too (pulls need the network)', async () => {
     const q = new SyncQueue(async () => {
       throw new ServiceOfflineException('down');
     }, new InMemoryLogger());
     q.enqueue('local', false);
     await expect(q.execute()).rejects.toBeInstanceOf(ServiceOfflineException);
+    expect(q.length).toBe(1);
+  });
+
+  it('requeues throttled jobs instead of wiping the sync', async () => {
+    const lost: Error[] = [];
+    const q = new SyncQueue(
+      async () => {
+        throw new ThrottledException('slow down');
+      },
+      new InMemoryLogger(),
+      (err) => {
+        lost.push(err);
+      },
+    );
+    q.enqueue('remote', false);
+    await expect(q.execute()).rejects.toBeInstanceOf(ThrottledException);
+    expect(q.length).toBe(1);
+    expect(lost).toHaveLength(0);
+  });
+
+  it('clears the queue on wrong credentials without wiping', async () => {
+    const lost: Error[] = [];
+    const q = new SyncQueue(
+      async () => {
+        throw new InvalidCredentialsException('bad password');
+      },
+      new InMemoryLogger(),
+      (err) => {
+        lost.push(err);
+      },
+    );
+    q.enqueue('remote', false);
+    q.enqueue('local', false);
+    await expect(q.execute()).rejects.toBeInstanceOf(InvalidCredentialsException);
     expect(q.length).toBe(0);
+    expect(lost).toHaveLength(0);
   });
 
   it('treats incomplete sync info as sync loss', async () => {

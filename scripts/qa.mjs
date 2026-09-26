@@ -16,17 +16,53 @@ const ok = (msg) => console.log(`QA ok: ${msg}`);
 const version = () =>
   JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 
+/** Tracked + untracked (but not ignored) source files: `git ls-files` alone
+ * is blind to new files until `git add`, which would let violations in. */
+function srcFiles(...dirs) {
+  const out = new Set();
+  for (const args of [dirs, [...dirs, '--others', '--exclude-standard']]) {
+    try {
+      const list = execFileSync('git', ['ls-files', ...args], { cwd: root, encoding: 'utf8' })
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      for (const f of list) out.add(f);
+    } catch {
+      // Not a git checkout (e.g. exported tarball): fall back to tracked only.
+    }
+  }
+  return [...out];
+}
+
+// 0. Release versions in sync: package.json == both manifests.
+{
+  const pkg = version();
+  for (const p of ['res/manifest.firefox.json', 'res/manifest.chromium.json']) {
+    const mv = JSON.parse(readFileSync(path.join(root, p), 'utf8')).version;
+    if (mv !== pkg) fail(`${p} version ${mv} != package.json ${pkg} (keep them in sync on release)`);
+  }
+  if (failures === 0) ok('release versions in sync');
+}
+
 /** Collect id="..." from an HTML file. */
 function htmlIds(file) {
   const html = readFileSync(path.join(root, file), 'utf8');
   return new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
 }
 
-/** Collect $('...') / getElementById('...') / querySelector('#...') refs from TS. */
+/** Collect $(...) / getElementById(...) / querySelector(...) refs from TS.
+ * Single, double and plain backtick quotes; interpolated `${...}` templates
+ * are skipped (they cannot be resolved statically). */
 function tsIdRefs(file) {
   const ts = readFileSync(path.join(root, file), 'utf8');
   const refs = new Set();
-  for (const re of [/\$\('([^']+)'\)/g, /getElementById\('([^']+)'\)/g, /querySelector\('#([^']+)'\)/g]) {
+  for (const re of [
+    /\$\(\s*'([^']+)'\s*\)/g,
+    /\$\(\s*"([^"]+)"\s*\)/g,
+    /\$\(\s*`([^'`$]+)`\s*\)/g,
+    /getElementById\(\s*['"`]([^'"`$]+)['"`]\s*\)/g,
+    /querySelector\(\s*['"`]#([^'"`$]+)['"`]\s*\)/g,
+  ]) {
     for (const m of ts.matchAll(re)) refs.add(m[1]);
   }
   return refs;
@@ -50,7 +86,7 @@ for (const [ts, html] of [
 const domFree = ['src/background', 'src/shared', 'src/firefox', 'src/chromium'];
 const domRe = /\b(window|document|navigator|localStorage)\s*\.\s*[A-Za-z]|\b(alert|confirm|prompt)\s*\(/;
 for (const dir of domFree) {
-  const files = execFileSync('git', ['ls-files', dir], { cwd: root, encoding: 'utf8' }).trim().split('\n');
+  const files = srcFiles(dir);
   for (const f of files.filter((x) => x.endsWith('.ts'))) {
     const src = readFileSync(path.join(root, f), 'utf8');
     // window.confirm/prompt ARE allowed in UI handlers? No — UI lives in popup/manager only.
@@ -63,7 +99,7 @@ ok('background/shared/platform DOM-free (if no failure above)');
 // NOTE: `import('...')` in TYPE position (after a colon) is erased at compile
 // time and is fine — only expression imports are banned.
 {
-  const files = execFileSync('git', ['ls-files', 'src'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
+  const files = srcFiles('src');
   const bad = files.filter((f) => {
     if (!f.endsWith('.ts')) return false;
     const src = readFileSync(path.join(root, f), 'utf8').replace(/:\s*import\([^)]*\)/g, ':TYPEIMPORT');
@@ -73,15 +109,16 @@ ok('background/shared/platform DOM-free (if no failure above)');
   else ok('no dynamic import() in src');
 }
 
-// 4. No console.log / debugger leftovers in shipped code.
+// 4. No console.* / debugger leftovers in shipped code.
 {
-  const files = execFileSync('git', ['ls-files', 'src'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
-  const bad = files.filter((f) => f.endsWith('.ts') && /(console\.(log|debug|trace)|debugger;)/.test(readFileSync(path.join(root, f), 'utf8')));
+  const files = srcFiles('src');
+  const bad = files.filter((f) => f.endsWith('.ts') && /(console\.(log|debug|trace|info|warn|error)|debugger;)/.test(readFileSync(path.join(root, f), 'utf8')));
   if (bad.length > 0) fail(`console/debugger leftovers in: ${bad.join(', ')}`);
   else ok('no console/debugger leftovers');
 }
 
-// 5. Every MessageCommand has a handler case in core (and vice versa).
+// 5. Every MessageCommand has a handler case in core, and every handled
+// command still exists in the enum (catches orphaned handlers).
 {
   const messages = readFileSync(path.join(root, 'src/shared/messages.ts'), 'utf8');
   const commands = [...messages.matchAll(/^\s*(\w+) = '[^']+',?$/gm)].map((m) => m[1]);
@@ -89,15 +126,19 @@ ok('background/shared/platform DOM-free (if no failure above)');
   const missing = commands.filter((c) => !core.includes(`MessageCommand.${c}`));
   if (missing.length > 0) fail(`unhandled commands in core: ${missing.join(', ')}`);
   else ok(`all ${commands.length} commands handled in core`);
+  const handled = [...new Set([...core.matchAll(/MessageCommand\.(\w+)/g)].map((m) => m[1]))];
+  const orphaned = handled.filter((c) => !commands.includes(c));
+  if (orphaned.length > 0) fail(`core handles unknown commands: ${orphaned.join(', ')}`);
+  else ok('no orphaned command handlers in core');
 }
 
 // 6. StoreKey: no string-literal storage access outside store.ts.
 {
-  const files = execFileSync('git', ['ls-files', 'src'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
+  const files = srcFiles('src');
   const bad = [];
   for (const f of files.filter((x) => x.endsWith('.ts') && !x.endsWith('src/shared/store.ts'))) {
     const src = readFileSync(path.join(root, f), 'utf8');
-    if (/storage\.local\.(get|set|remove)\(\s*['"`][a-zA-Z]/i.test(src)) bad.push(f);
+    if (/storage\.(local|session|sync|managed)\.(get|set|remove)\(\s*['"`]/i.test(src)) bad.push(f);
   }
   // popup/manager read via StoreKey enum or single-key get with variable — check raw literals only
   if (bad.length > 0) fail(`raw storage keys in: ${bad.join(', ')}`);
@@ -136,8 +177,7 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
 // browser.* usage in src (unlimitedStorage/host_permissions are documented
 // in README instead of code-matched).
 {
-  const srcFiles = execFileSync('git', ['ls-files', 'src'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
-  const src = srcFiles.filter((f) => f.endsWith('.ts')).map((f) => readFileSync(path.join(root, f), 'utf8')).join('\n');
+  const src = srcFiles('src').filter((f) => f.endsWith('.ts')).map((f) => readFileSync(path.join(root, f), 'utf8')).join('\n');
   const usage = {
     alarms: 'browser.alarms',
     bookmarks: 'browser.bookmarks',
@@ -153,6 +193,16 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
     }
   }
   ok('manifest permissions all used (if no failure above)');
+}
+
+// 7e. Chromium host grants stay minimal: https anywhere, http loopback only
+// (mirrors validateServiceUrl — a broad http://*/* would over-claim).
+{
+  const manifest = JSON.parse(readFileSync(path.join(root, 'res/manifest.chromium.json'), 'utf8'));
+  const hosts = manifest.host_permissions ?? [];
+  const badHosts = hosts.filter((h) => h.startsWith('http://') && !/^http:\/\/(localhost|127\.0\.0\.1)\//.test(h));
+  if (badHosts.length > 0) fail(`chromium host_permissions too broad: ${badHosts.join(', ')}`);
+  else ok('chromium host_permissions minimal');
 }
 
 // 7b. Chromium MV3 specifics: no Firefox-only keys, SW entry valid,

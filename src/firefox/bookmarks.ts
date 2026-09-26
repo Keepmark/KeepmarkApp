@@ -3,6 +3,7 @@
 // all three containers, and type:'separator' separators.
 
 import type { BookmarkNode } from '../shared/models.js';
+import { nativeIsSeparator } from '../shared/bookmarks.js';
 import {
   buildMappings,
   clearAll,
@@ -19,13 +20,20 @@ export type { BookmarkApi, ContainerIds };
 export { ContainerNotFoundError };
 export { ensureContainersExist } from '../shared/bookmarks.js';
 
-const opts: NativeOpts = {
-  newTabUrl: getNewTabUrl(),
+const newTabUrl = getNewTabUrl();
+
+/** Canonical Firefox native opts (single source of truth for bookmarks.ts + adapter.ts). */
+export const firefoxNativeOpts: NativeOpts = {
+  newTabUrl,
   mapUrl: getSupportedUrl,
   menuFolderInOther: false,
   createSeparator: (api, parentId) => api.create({ parentId, type: 'separator' }) as Promise<unknown>,
-  isSeparatorNode: (node) => node.type === 'separator',
+  // Native type first, legacy title+newtab shape second: old separators must
+  // not resurface as about:newtab bookmarks and duplicate on every populate.
+  isSeparatorNode: (node) => node.type === 'separator' || nativeIsSeparator(node, newTabUrl),
 };
+
+const opts = firefoxNativeOpts;
 
 export async function getContainerIds(api: BookmarkApi): Promise<Required<ContainerIds>> {
   const [root] = await api.getTree();

@@ -14,6 +14,11 @@ describe('LogSanitizer', () => {
     expect(LogSanitizer.sanitize('blob=QUJDRA== end')).toBe('blob=[redacted] end');
   });
 
+  it('redacts quoted JSON secrets', () => {
+    expect(LogSanitizer.sanitize('{"password":"hunter2","ok":1}')).toBe('{"password":"[redacted]","ok":1}');
+    expect(LogSanitizer.sanitize('x {"derivedKey" : "QUJD"} y')).toBe('x {"derivedKey":"[redacted]"} y');
+  });
+
   it('truncates bearer-like sync ids', () => {
     const id = '432a3972-88db-410e-9f73-3e5dbda9d4af';
     expect(LogSanitizer.sanitize(`GET bookmarks/${id}`)).toBe('GET bookmarks/432a…af');

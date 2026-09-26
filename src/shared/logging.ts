@@ -45,6 +45,12 @@ export const LogSanitizer = {
         /\b(password|passwd|pwd|secret|derivedKey|privateKey|bearer|blob|encryptedBookmarks)\s*[:=]\s*\S+/gi,
         '$1=[redacted]',
       )
+      // Quoted JSON shapes: {"password":"hunter2"} — the char after the key
+      // is a quote, so the gate above never matches. Redact the value.
+      .replace(
+        /"(password|passwd|pwd|secret|derivedKey|privateKey|bearer|blob|encryptedBookmarks)"\s*:\s*"[^"]*"/gi,
+        '"$1":"[redacted]"',
+      )
       .replace(
         /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
         (id) => sanitizeSyncId(id),
@@ -75,7 +81,11 @@ export class InMemoryLogger implements IXbsLogger {
 
 export const nullLogger: IXbsLogger = {
   minLevel: XbsLogLevel.Error,
-  entries: [],
+  // Fresh array per access: entries is readonly, nothing may mutate (or leak
+  // into) the shared singleton.
+  get entries(): LogEntry[] {
+    return [];
+  },
   clear() {},
   log() {},
 };

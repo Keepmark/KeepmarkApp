@@ -27,6 +27,7 @@
     "storage",
     "unlimitedStorage"
   ],
-  "host_permissions": ["https://*/*", "http://*/*"],
-  "minimum_chrome_version": "109"
+  "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "minimum_chrome_version": "109",
+  "incognito": "not_allowed"
 }

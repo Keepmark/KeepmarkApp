@@ -46,4 +46,25 @@ describe('crypto interop (Node vectors -> WebCrypto)', () => {
     expect(blob).not.toBe(plain);
     await expect(decryptData(blob, derivedKey)).resolves.toBe(plain);
   });
+
+  it('tampered or truncated blobs fail as credentials, never as plaintext', async () => {
+    const blob = await encryptData('secret payload', derivedKey);
+    const raw = Uint8Array.from(globalThis.atob(blob), (c) => c.charCodeAt(0));
+    // Bit flip in the ciphertext.
+    const flipped = raw.slice();
+    flipped[20] ^= 0x01;
+    const toB64 = (b: Uint8Array): string =>
+      globalThis.btoa(String.fromCharCode(...b));
+    await expect(decryptData(toB64(flipped), derivedKey)).rejects.toBeInstanceOf(InvalidCredentialsException);
+    // Truncated below the nonce+tag+payload floor.
+    await expect(decryptData(toB64(raw.slice(0, 10)), derivedKey)).rejects.toBeInstanceOf(
+      InvalidCredentialsException,
+    );
+  });
+
+  it('two encryptions of the same plaintext differ (fresh IV)', async () => {
+    const a = await encryptData('same payload', derivedKey);
+    const b = await encryptData('same payload', derivedKey);
+    expect(a).not.toBe(b);
+  });
 });

@@ -8,6 +8,7 @@ import { GcmNonceLength, KeyDerivationIterations } from './constants.js';
 import {
   IncompleteSyncInfoException,
   InvalidCredentialsException,
+  UnexpectedResponseException,
   UnsupportedSyncVersionException,
 } from './errors.js';
 
@@ -80,7 +81,9 @@ export async function encryptData(plain: string, derivedKeyB64: string): Promise
     return bytesToBase64(combined);
   } catch (err) {
     if (err instanceof IncompleteSyncInfoException) throw err;
-    throw new InvalidCredentialsException('Encryption failed.', { cause: err });
+    // Local encryption failure (no WebCrypto, OOM, …) is not a credential
+    // problem: report it distinctly so the UI never says "wrong password".
+    throw new UnexpectedResponseException('Encryption failed.', { cause: err });
   }
 }
 

@@ -3,10 +3,12 @@
 // serializes thrown errors as {name, message}, popup rebuilds them by name.
 
 import {
+  DailyNewSyncLimitException,
   DataOutOfSyncException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,
+  NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,
   SyncTooLargeException,
@@ -37,6 +39,8 @@ export enum MessageCommand {
   ChangePassword = 'change-password',
   GetRemovedSync = 'get-removed-sync',
   ClearRemovedSync = 'clear-removed-sync',
+  GetToolbarSync = 'get-toolbar-sync',
+  SetToolbarSync = 'set-toolbar-sync',
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
@@ -146,6 +150,8 @@ export interface DuplicateEntry {
   id: number;
   title?: string;
   path: string;
+  /** Original (unnormalized) URL of this copy for display. */
+  url?: string;
 }
 
 export interface DuplicateGroup {
@@ -177,6 +183,8 @@ export type MessagePayload =
   | { command: MessageCommand.GetRemovedSync }
   | { command: MessageCommand.ClearRemovedSync }
   | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
+  | { command: MessageCommand.GetToolbarSync }
+  | { command: MessageCommand.SetToolbarSync; enabled: boolean }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
 
 export type MessageResponse =
@@ -185,9 +193,11 @@ export type MessageResponse =
 
 const registry: Record<string, new (message: string) => Error> = {
   DataOutOfSyncException,
+  DailyNewSyncLimitException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,
+  NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,
   SyncTooLargeException,

@@ -175,7 +175,10 @@ export function validateBookmarkIds(bookmarks: BookmarkNode[]): boolean {
   if (!bookmarks?.length) return true;
   const flat: BookmarkNode[] = [];
   eachBookmark((b) => flat.push(b), bookmarks);
-  if (flat.some((b) => b.id === undefined || typeof b.id !== 'number')) return false;
+  // Integer, finite, positive: floats/NaN poison getNewBookmarkId allocation.
+  if (flat.some((b) => b.id === undefined || typeof b.id !== 'number' || !Number.isInteger(b.id) || b.id <= 0)) {
+    return false;
+  }
   return new Set(flat.map((b) => b.id)).size === flat.length;
 }
 

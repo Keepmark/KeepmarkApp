@@ -12,7 +12,9 @@ import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
+  ServiceOfflineException,
   SyncNotFoundException,
+  ThrottledException,
   UnexpectedResponseException,
   UnsupportedSyncVersionException,
   UnsupportedVersionException,
@@ -20,7 +22,7 @@ import {
 import type { IXbsLogger } from '../shared/logging.js';
 import { sanitizeSyncId, XbsLogLevel } from '../shared/logging.js';
 import type { BookmarkNode } from '../shared/models.js';
-import { ensureContainersExist } from '../shared/bookmarks.js';
+import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer } from '../shared/bookmarks.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
 import { getDuplicateGroups } from '../shared/duplicates.js';
@@ -130,8 +132,13 @@ interface Creds {
 export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
+  /** Native change arrived while suspended: re-schedule on release. */
+  private dirtyDuringSuspend = false;
   private connecting = false;
   private started = false;
+  /** In-flight drain shared by concurrent callers (no false "did not drain"). */
+  private drainFlight?: Promise<Error | undefined>;
+  private disabling = false;
   /**
    * v1.2 capability per service URL (null = not probed yet). Probed via the
    * extended /info contract; any failure means legacy. Invalidated on 412 so
@@ -219,8 +226,15 @@ export class BackgroundCore {
         return { cleared: true };
       case MessageCommand.ChangePassword:
         return this.changePassword(msg.currentPassword, msg.newPassword);
+      case MessageCommand.GetToolbarSync:
+        return { enabled: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true };
+      case MessageCommand.SetToolbarSync:
+        await this.store.set(StoreKey.SyncBookmarksToolbar, msg.enabled);
+        return { enabled: msg.enabled };
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
+      default:
+        throw new UnexpectedResponseException(`Unknown command: ${(msg as { command: string }).command}`);
     }
   }
 
@@ -250,18 +264,30 @@ export class BackgroundCore {
     return { queued: true };
   }
 
-  /** Drain the queue; returns the last error (if the queue is empty). */
+  /** Drain the queue; concurrent callers share one flight. Returns the last error. */
   async drain(): Promise<Error | undefined> {
+    this.drainFlight ??= this.runDrain().finally(() => {
+      this.drainFlight = undefined;
+    });
+    return this.drainFlight;
+  }
+
+  private async runDrain(): Promise<Error | undefined> {
     let last: Error | undefined;
     for (let i = 0; i < 10 && (this.queue.length > 0 || this.queue.syncing); i++) {
       try {
         await this.queue.execute();
       } catch (err) {
         last = err as Error;
+        // Offline/throttled requeue the job at the front: retrying immediately
+        // would hammer the service in a tight loop — stop and let the next
+        // event/alarm retry instead.
+        if (err instanceof ServiceOfflineException || err instanceof ThrottledException) break;
       }
       if (this.queue.length === 0 && !this.queue.syncing) break;
     }
-    return this.queue.length === 0 ? last : new Error('Sync queue did not drain.');
+    if (this.queue.length === 0) return last;
+    return new Error('Sync queue did not drain.', { cause: last });
   }
 
   /**
@@ -410,7 +436,12 @@ export class BackgroundCore {
   /** Reconcile native -> synced and push when anything changed. */
   async pushAfterNativeChange(): Promise<{ pushed: boolean }> {
     const { info, syncToolbar } = await this.requireCreds();
-    if (this.suspended > 0) return { pushed: false };
+    if (this.suspended > 0) {
+      // Lost otherwise: the debounce alarm is one-shot and already consumed.
+      // Remember it and re-schedule when the suspend window closes.
+      this.dirtyDuringSuspend = true;
+      return { pushed: false };
+    }
     const tree = await this.cachedTree(info);
     let mappings = await this.idMapper.all();
     let changed = false;
@@ -839,7 +870,12 @@ export class BackgroundCore {
 
   private async importBackup(json: string, password: string): Promise<{ count: number }> {
     const { info, syncToolbar } = await this.requireCreds();
-    const tree = await importBackup(json, password);
+    const imported = await importBackup(json, password);
+    // Backups predate validation: duplicate/non-integer ids would ride the
+    // positional mappings straight onto the server. Repair before populating.
+    const tree = ensureContainersExist(
+      validateBookmarkIds(imported) ? imported : repairBookmarkIds(imported),
+    );
     const count = countNodes(tree);
     const natives = await this.adapter.readAll(syncToolbar);
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
@@ -1337,6 +1373,19 @@ export class BackgroundCore {
    * run (delete has no undo by design).
    */
   async disableSync(err?: Error): Promise<void> {
+    // Reentrancy guard: onSyncLost can fire mid-disable (a debounced alarm
+    // slipping in after creds are wiped). Concurrent disables interleave
+    // store ops; the first one wins.
+    if (this.disabling) return;
+    this.disabling = true;
+    try {
+      await this.doDisableSync(err);
+    } finally {
+      this.disabling = false;
+    }
+  }
+
+  private async doDisableSync(err?: Error): Promise<void> {
     // On server-side deletion the cached copy is the ONLY copy left: stash a
     // plaintext snapshot (tree + lastUpdated + service URL, never the
     // password) before wiping, mirroring upstream setSyncRemoved. The manager
@@ -1369,6 +1418,9 @@ export class BackgroundCore {
     await this.store.remove(StoreKey.SyncRevision);
     await this.store.remove(StoreKey.SyncHash);
     await this.store.remove(StoreKey.UndoSlot);
+    // Manual unlink retires any server-deletion snapshot: the manager must
+    // not offer Download/Dismiss of a stale RemovedSync afterwards.
+    if (!err) await this.store.remove(StoreKey.RemovedSync);
     await this.store.set(StoreKey.SyncEnabled, false);
     await this.store.set(StoreKey.SyncInfo, {});
     await this.setBadge(false);
@@ -1382,7 +1434,6 @@ export class BackgroundCore {
   /** First-run / startup: verbosity, one-time install snapshot, resume polling. */
   async startup(): Promise<void> {
     if (this.started) return;
-    this.started = true;
     await this.applyVerbosity();
     try {
       // Write-once: every MV3 wake would otherwise contaminate the install
@@ -1403,6 +1454,9 @@ export class BackgroundCore {
       await this.checkForUpdates().catch((err) => this.onBackgroundError(err));
     }
     await this.setBadge(false);
+    // Mark started only after success: a failed boot retries next time
+    // instead of wedging the worker with started=true and no listeners' work.
+    this.started = true;
   }
 
   // ---------------------------------------------------------------- helpers
@@ -1431,6 +1485,10 @@ export class BackgroundCore {
       return await fn();
     } finally {
       this.suspended -= 1;
+      if (this.suspended === 0 && this.dirtyDuringSuspend) {
+        this.dirtyDuringSuspend = false;
+        this.onNativeEvent();
+      }
     }
   }
 

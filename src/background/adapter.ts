@@ -20,7 +20,7 @@ export interface NativeAdapter extends NativeOps {
   readonly newTabUrl: string;
   /** Platform separator predicate (must match the read path). */
   readonly isSeparatorNode: (node: NativeNode) => boolean;
-  /** Containers reconciled on native changes (chromium skips Menu root). */
+  /** Containers reconciled on native changes (chromium Menu = folder in Other). */
   readonly syncContainers: BookmarkContainer[];
   /** Native children of one synced container (chromium Menu = folder in Other). */
   readContainer(container: BookmarkContainer): Promise<NativeNode[]>;

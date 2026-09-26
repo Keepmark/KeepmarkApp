@@ -8,7 +8,9 @@ import {
   type BookmarkApi,
 } from '../src/chromium/bookmarks';
 import { getNewTabUrl, urlIsNativeConfigPage, urlIsSupported } from '../src/chromium/platform';
+import { makeChromiumAdapter } from '../src/chromium/adapter';
 import { chromiumIsSeparator } from '../src/shared/native';
+import type { BookmarkIdMapping } from '../src/shared/id-mapper';
 import { BookmarkContainer, type NativeNode } from '../src/shared/bookmarks';
 
 /** In-memory chrome.bookmarks mock with Chromium root ids. */
@@ -120,10 +122,26 @@ describe('chromium native service', () => {
     expect(chromiumIsSeparator({ id: 's', title: '---' }, newTab)).toBe(true);
     expect(chromiumIsSeparator({ id: 's', title: '───' }, newTab)).toBe(true);
     expect(chromiumIsSeparator({ id: 's', title: 'x', url: 'https://x.test' }, newTab)).toBe(false);
+    // A dashes title WITH a real url is a bookmark: the url must survive.
+    expect(chromiumIsSeparator({ id: 's', title: '---', url: 'https://x.test' }, newTab)).toBe(false);
     // Folders titled with dashes are not separators.
     expect(
       chromiumIsSeparator({ id: 's', title: '---', children: [{ id: 'c', title: 'x' }] }, newTab),
     ).toBe(false);
+  });
+
+  it('reconciles Menu and creates its folder once under concurrency', async () => {
+    const api = makeChromiumMockApi();
+    const adapter = makeChromiumAdapter(api);
+    expect(adapter.syncContainers).toContain(BookmarkContainer.Menu);
+    const mappings: BookmarkIdMapping[] = [];
+    await Promise.all([
+      adapter.addNative({ container: BookmarkContainer.Menu, title: 'M1', url: 'https://m1.test' }, mappings),
+      adapter.addNative({ container: BookmarkContainer.Menu, title: 'M2', url: 'https://m2.test' }, mappings),
+    ]);
+    const other = await api.getChildren('2');
+    expect(other.filter((c) => c.title === BookmarkContainer.Menu && !c.url)).toHaveLength(1);
+    expect(await adapter.readContainer(BookmarkContainer.Menu)).toHaveLength(2);
   });
 
   it('platform url rules', () => {

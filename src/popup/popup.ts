@@ -29,7 +29,13 @@ function showError(where: 'connect' | 'main', message: string): void {
 }
 
 function clearErrors(): void {
-  for (const id of ['connect-error', 'main-error']) $(id).hidden = true;
+  for (const id of ['connect-error', 'main-error']) {
+    const el = $(id);
+    el.hidden = true;
+    // Empty the text: a hidden-but-stale alert is re-read by screen readers
+    // when unhidden with a new message.
+    el.textContent = '';
+  }
 }
 
 function showView(name: 'connect' | 'main'): void {
@@ -44,21 +50,30 @@ let refreshSeq = 0;
 
 async function refreshAll(): Promise<void> {
   const my = ++refreshSeq;
+  let statusErr: string | undefined;
   try {
     status = await send<StatusResponse>({ command: MessageCommand.GetStatus });
-  } catch {
+  } catch (err) {
     status = undefined;
+    statusErr = (err as Error)?.message ?? String(err);
   }
   if (my !== refreshSeq) return;
   renderStatusCard('p', { status, ping: undefined });
+  let pingErr: string | undefined;
   try {
     ping = await send<PingResponse>({ command: MessageCommand.Ping });
-  } catch {
+  } catch (err) {
     ping = undefined;
+    pingErr = (err as Error)?.message ?? String(err);
   }
   if (my !== refreshSeq) return;
   const view: StatusView = { status, ping };
   renderStatusCard('p', view);
+  // A GetStatus throw always means the background is unreachable (unlinked
+  // links resolve fine), so report it instead of showing a bare "Not synced".
+  if (statusErr) showError('main', `Background error: ${statusErr}`);
+  else if (pingErr && status?.syncEnabled) showError('main', `Service probe failed: ${pingErr}`);
+  else ($('main-error') as HTMLElement).hidden = true;
   const state = $('sync-state');
   if (!status?.syncEnabled) {
     state.textContent = 'Not synced';

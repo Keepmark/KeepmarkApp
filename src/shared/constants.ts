@@ -49,9 +49,8 @@ export const DefaultHttpTimeoutMs = 12000;
 /**
  * Numeric dotted-version comparison ("1.1.13" > "1.1.9"; never ordinal).
  * Tolerates a leading 'v' and non-digit suffixes per part.
- * Returns -1 | 0 | 1.
  */
-export function compareVersions(a: string, b: string): number {
+export function compareVersions(a: string, b: string): -1 | 0 | 1 {
   const parts = (v: string): number[] =>
     v
       .replace(/^[vV]/, '')
@@ -66,7 +65,7 @@ export function compareVersions(a: string, b: string): number {
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return Math.sign(d);
+    if (d !== 0) return d < 0 ? -1 : 1;
   }
   return 0;
 }

@@ -44,30 +44,44 @@ export function reconcileContainer(
   isSeparator: (node: NativeNode) => boolean = (n) => nativeIsSeparator(n, newTabUrl),
 ): ReconcileResult {
   const byNative = new Map(mappings.map((m) => [m.nativeId, m.syncedId]));
+  // Index once: the old code rescanned the whole tree per mapping (O(M·N))
+  // for both the container filter and every convert() lookup.
+  const syncedById = new Map<number, BookmarkNode>();
+  eachBookmark((b) => {
+    if (b.id !== undefined) syncedById.set(b.id, b);
+  }, bookmarks);
+  const containerIds = new Set<number>();
+  const containerRoot = bookmarks.find((b) => b.title === container);
+  if (containerRoot?.children) {
+    eachBookmark((b) => {
+      if (b.id !== undefined) containerIds.add(b.id);
+    }, containerRoot.children);
+  }
   const taken: number[] = [];
   eachBookmark((b) => {
     if (b.id !== undefined) taken.push(b.id);
   }, bookmarks);
+  let nextFresh = taken.reduce((x, y) => (x > y ? x : y), 0);
   const freshId = (): number => {
-    const id = taken.reduce((x, y) => (x > y ? x : y), 0) + 1;
-    taken.push(id);
-    return id;
+    nextFresh += 1;
+    taken.push(nextFresh);
+    return nextFresh;
   };
 
   let changed = false;
   const liveSynced = new Set<number>();
   const outMappings: BookmarkIdMapping[] = mappings.filter((m) => {
     // Keep mappings of other containers; container mappings are rebuilt below.
-    const node = findSynced(m.syncedId, bookmarks);
-    if (!node) return false;
-    return !isInContainer(node, container, bookmarks);
+    // (Ids are unique, so id-membership is equivalent to the old identity scan.)
+    if (!syncedById.has(m.syncedId)) return false;
+    return !containerIds.has(m.syncedId);
   });
 
   const convert = (native: NativeNode): BookmarkNode => {
     const knownId = byNative.get(native.id);
     const url = isSeparator(native) ? SeparatorUrl : native.url?.trim();
     if (knownId !== undefined) {
-      const current = findSynced(knownId, bookmarks);
+      const current = syncedById.get(knownId);
       // Normalize by NATIVE type: a bookmark never carries children, a folder
       // never carries a url. A folder<->bookmark flip is always a change.
       const wasFolder = current !== undefined && Array.isArray(current.children);
@@ -91,9 +105,18 @@ export function reconcileContainer(
       liveSynced.add(knownId);
       if (isFolder) {
         // Folder: children follow the native side exactly (empty stays empty).
-        const before = current?.children?.length ?? -1;
+        // Compare id sequences, not just lengths: a pure reorder/move inside
+        // the folder must also flag a change, or the native order is lost.
+        const beforeIds = current?.children?.map((c) => c.id) ?? null;
         node.children = (native.children ?? []).map(convert);
-        if (before !== node.children.length) changed = true;
+        const afterIds = node.children.map((c) => c.id);
+        if (
+          beforeIds === null ||
+          beforeIds.length !== afterIds.length ||
+          beforeIds.some((id, i) => id !== afterIds[i])
+        ) {
+          changed = true;
+        }
       } else if (native.children?.length) {
         node.children = native.children.map(convert);
       }
@@ -138,35 +161,17 @@ export function reconcileContainer(
     }
   }
 
-  const next = bookmarks.map((b) => (b.title === container ? { ...b, children } : b));
+  // Never drop the reconciled container: if the tree lacks this root (e.g.
+  // Chromium with no Menu yet) but natives exist, append it — otherwise the
+  // native content would be silently discarded by the map below.
+  const hasRoot = bookmarks.some((b) => b.title === container);
+  const next = hasRoot
+    ? bookmarks.map((b) => (b.title === container ? { ...b, children } : b))
+    : children.length > 0
+      ? [...bookmarks, { title: container, children } as BookmarkNode]
+      : bookmarks.map((b) => (b.title === container ? { ...b, children } : b));
   outMappings.sort((x, y) => x.syncedId - y.syncedId);
   return { bookmarks: next, mappings: outMappings, changed };
-}
-
-function findSynced(id: number, bookmarks: BookmarkNode[]): BookmarkNode | undefined {
-  let found: BookmarkNode | undefined;
-  eachBookmark(
-    (b) => {
-      if (b.id === id) found = b;
-    },
-    bookmarks,
-    () => found !== undefined,
-  );
-  return found;
-}
-
-function isInContainer(node: BookmarkNode, container: BookmarkContainer, bookmarks: BookmarkNode[]): boolean {
-  const root = bookmarks.find((b) => b.title === container);
-  if (!root || !root.children) return false;
-  let inside = false;
-  eachBookmark(
-    (b) => {
-      if (b === node) inside = true;
-    },
-    root.children,
-    () => inside,
-  );
-  return inside;
 }
 
 export { getNewBookmarkId };

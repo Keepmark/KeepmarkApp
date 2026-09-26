@@ -14,11 +14,22 @@ export function createMapping(syncedId: number, nativeId: string): BookmarkIdMap
 
 export class BookmarkIdMapper {
   constructor(private store: Store) {}
+  /** Serializes read-modify-write cycles: concurrent add/set/remove calls
+   * otherwise interleave on the same `existing` snapshot and lose batches. */
+  private tail: Promise<unknown> = Promise.resolve();
+
+  private serialized<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(fn, fn);
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
 
   async add(mappings: BookmarkIdMapping | BookmarkIdMapping[]): Promise<void> {
     const arr = Array.isArray(mappings) ? mappings : [mappings];
-    const existing = (await this.store.get<BookmarkIdMapping[]>(StoreKey.BookmarkIdMappings)) ?? [];
-    await this.set([...existing, ...arr]);
+    return this.serialized(async () => {
+      const existing = (await this.store.get<BookmarkIdMapping[]>(StoreKey.BookmarkIdMappings)) ?? [];
+      await this.set([...existing, ...arr]);
+    });
   }
 
   async clear(): Promise<void> {
@@ -37,26 +48,26 @@ export class BookmarkIdMapper {
   }
 
   async remove(syncedIds?: number | number[], nativeIds?: string | string[]): Promise<void> {
-    const syncedArr =
-      syncedIds == null ? null : Array.isArray(syncedIds) ? syncedIds : [syncedIds];
-    const nativeArr =
-      nativeIds == null ? null : Array.isArray(nativeIds) ? nativeIds : [nativeIds];
-    let mappings = await this.all();
-    if (syncedArr != null) {
-      for (const id of syncedArr) {
-        const index = mappings.findIndex((x) => x.syncedId === id);
-        if (index < 0) throw new Error(`Bookmark ID mapping to remove could not be determined (${id})`);
-        mappings = mappings.filter((_, i) => i !== index);
+    return this.serialized(async () => {
+      const syncedArr =
+        syncedIds == null ? null : Array.isArray(syncedIds) ? syncedIds : [syncedIds];
+      const nativeArr =
+        nativeIds == null ? null : Array.isArray(nativeIds) ? nativeIds : [nativeIds];
+      let mappings = await this.all();
+      if (syncedArr != null) {
+        for (const id of syncedArr) {
+          // Idempotent: already-removed ids are skipped so retries after a
+          // half-applied batch cannot fail the whole sync.
+          mappings = mappings.filter((x) => x.syncedId !== id);
+        }
       }
-    }
-    if (nativeArr != null) {
-      for (const id of nativeArr) {
-        const index = mappings.findIndex((x) => x.nativeId === id);
-        if (index < 0) throw new Error(`Bookmark ID mapping to remove could not be determined (${id})`);
-        mappings = mappings.filter((_, i) => i !== index);
+      if (nativeArr != null) {
+        for (const id of nativeArr) {
+          mappings = mappings.filter((x) => x.nativeId !== id);
+        }
       }
-    }
-    await this.set(mappings);
+      await this.set(mappings);
+    });
   }
 
   async set(mappings: BookmarkIdMapping[]): Promise<void> {

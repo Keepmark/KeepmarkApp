@@ -67,7 +67,8 @@ export class Store {
 
   async get<T>(key: StoreKey): Promise<T | undefined> {
     const value = await this.backend.get<T>(key);
-    if (value !== undefined) return value;
+    // storage.local may resolve null for removed keys: fall back to defaults.
+    if (value !== undefined && value !== null) return value;
     return defaults.get(key) as T | undefined;
   }
 

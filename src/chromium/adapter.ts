@@ -5,36 +5,22 @@ import {
   BookmarkContainer,
   type NativeNode,
 } from '../shared/bookmarks.js';
-import { HorizontalSeparatorTitle, VerticalSeparatorTitle } from '../shared/bookmarks.js';
 import type { BookmarkIdMapping } from '../shared/id-mapper.js';
 import {
   buildMappings,
-  chromiumIsSeparator,
   clearAll,
+  ContainerNotFoundError,
   populate,
   readAll,
   type BookmarkApi,
   type ContainerIds,
-  type NativeOpts,
 } from '../shared/native.js';
-import { getContainerIds } from './bookmarks.js';
+import { chromiumNativeOpts, getContainerIds } from './bookmarks.js';
 import { getNewTabUrl, getSupportedUrl } from '../chromium/platform.js';
 import type { AddNativeInput, NativeAdapter } from '../background/adapter.js';
 
 const newTabUrl = getNewTabUrl();
-
-const opts: NativeOpts = {
-  newTabUrl,
-  mapUrl: (url) => getSupportedUrl(url, newTabUrl),
-  menuFolderInOther: true,
-  createSeparator: (api, parentId, parentIsToolbar) =>
-    api.create({
-      parentId,
-      title: parentIsToolbar ? VerticalSeparatorTitle : HorizontalSeparatorTitle,
-      url: newTabUrl,
-    }) as Promise<unknown>,
-  isSeparatorNode: (node) => chromiumIsSeparator(node, newTabUrl),
-};
+const opts = chromiumNativeOpts;
 
 async function menuFolderId(api: BookmarkApi, createIfMissing: boolean): Promise<string | undefined> {
   const c = await getContainerIds(api);
@@ -44,9 +30,22 @@ async function menuFolderId(api: BookmarkApi, createIfMissing: boolean): Promise
   const folder = children.find((n) => n.title === BookmarkContainer.Menu && !n.url);
   if (folder) return folder.id;
   if (!createIfMissing) return undefined;
-  const created = await api.create({ parentId: c.other, title: BookmarkContainer.Menu });
-  return created.id;
+  // Create-race guard: two concurrent addNative(Menu) calls share one create
+  // instead of producing twin "[xbs] Menu" folders (only one stays visible).
+  menuFolderCreating ??= api.create({ parentId: c.other, title: BookmarkContainer.Menu }).then(
+    (created) => {
+      menuFolderCreating = undefined;
+      return created.id;
+    },
+    (err) => {
+      menuFolderCreating = undefined;
+      throw err;
+    },
+  );
+  return menuFolderCreating;
 }
+
+let menuFolderCreating: Promise<string> | undefined;
 
 export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
   const ids = (): Promise<ContainerIds> => getContainerIds(api);
@@ -55,7 +54,9 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
     platformName: 'chromium',
     newTabUrl,
     isSeparatorNode: opts.isSeparatorNode,
-    syncContainers: [BookmarkContainer.Other, BookmarkContainer.Toolbar],
+    // Menu is a folder inside Other but reconciles as its own container:
+    // readContainer(Other) hides it, readContainer(Menu) reads it.
+    syncContainers: [BookmarkContainer.Menu, BookmarkContainer.Other, BookmarkContainer.Toolbar],
 
     readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),
 
@@ -73,10 +74,14 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
         const folderId = await menuFolderId(api, false);
         if (!folderId) return [];
         const [tree] = await api.getSubTree(folderId);
+        // Folder deleted between lookup and read: treat as empty, the next
+        // reconcile recreates it via addNative if content exists.
+        if (!tree) return [];
         return tree.children ?? [];
       }
       const c = await ids();
       const [tree] = await api.getSubTree(container === BookmarkContainer.Other ? c.other : c.toolbar);
+      if (!tree) throw new ContainerNotFoundError('Native container vanished mid-read.');
       const children = tree.children ?? [];
       // Hide the Menu folder from Other (it reconciles under Menu instead).
       // Match folders only: a user bookmark legitimately titled "[xbs] Menu"

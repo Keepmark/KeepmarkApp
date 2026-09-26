@@ -2,7 +2,7 @@
 // with sync blobs written by the original JS client and Keepmark.
 // Port of Keepmark.Core/Models/Models.cs.
 
-import { SeparatorUrl } from './constants.js';
+import { DescriptionMaxLength, SeparatorUrl } from './constants.js';
 
 export interface BookmarkNode {
   id?: number;
@@ -14,7 +14,9 @@ export interface BookmarkNode {
 }
 
 export function isFolder(node: BookmarkNode): boolean {
-  return node.children !== undefined && node.children !== null;
+  // Array check matches getBookmarkType in bookmarks.ts: a corrupt
+  // non-array `children` (other clients, tampered backups) is a bookmark.
+  return Array.isArray(node.children);
 }
 
 export function isSeparator(node: BookmarkNode, separatorUrl = SeparatorUrl): boolean {
@@ -52,8 +54,8 @@ export function supportsV12(info: ServiceInfo): boolean {
   return info.capabilities?.revision === true;
 }
 
-/** Normalize a tree like Keepmark SyncEngine: empty descriptions/tags -> undefined, trim 300ch. */
-export function normalizeBookmarks(nodes: BookmarkNode[], maxDescription = 300): BookmarkNode[] {
+/** Normalize a tree like Keepmark SyncEngine: empty descriptions/tags -> undefined, trim to DescriptionMaxLength. */
+export function normalizeBookmarks(nodes: BookmarkNode[], maxDescription = DescriptionMaxLength): BookmarkNode[] {
   return nodes.map((n) => {
     const out: BookmarkNode = { ...n };
     if (out.description !== undefined) {

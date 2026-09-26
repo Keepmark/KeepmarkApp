@@ -14,10 +14,12 @@
 
   <section id="view-connect">
     <h2>Connect</h2>
+    <div role="radiogroup" aria-label="Sync mode">
     <label class="check"><input type="radio" name="conn-mode" value="new" checked />
       <span><b>New sync</b> — create a sync on the service and upload this browser's bookmarks.</span></label>
     <label class="check"><input type="radio" name="conn-mode" value="existing" />
       <span><b>Use existing</b> — link this browser to a sync ID; remote bookmarks will replace the local ones.</span></label>
+    </div>
     <label>Service URL
       <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
     </label>
@@ -25,10 +27,12 @@
       <label>Sync ID
         <input id="sync-id" type="text" placeholder="sync id from your other device" />
       </label>
+      <div role="radiogroup" aria-label="Link direction">
       <label class="check"><input type="radio" name="conn-direction" value="pull" checked />
         <span>⬇ <b>Download</b> — replace local bookmarks with the server copy (safe, recommended).</span></label>
       <label class="check"><input type="radio" name="conn-direction" value="push" />
         <span>⬆ <b>Upload</b> — overwrite the server copy with my local bookmarks (deletes server data!).</span></label>
+      </div>
       <div id="conn-push-warn" hidden>
         <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>
         <label class="check"><input id="conn-push-confirm" type="checkbox" />
@@ -62,12 +66,12 @@
         <dt>Service version</dt>
         <dd id="p-swversion">…</dd>
         <dt>Sync ID</dt>
-        <dd><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini">Copy</button></dd>
+        <dd><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
         <dt>Last sync</dt>
         <dd id="p-last">…</dd>
         <dt>Space used</dt>
         <dd>
-          <div class="meter"><div id="p-space-fill"></div></div>
+          <div class="meter" role="progressbar" aria-label="Service space used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="p-space-fill"></div></div>
           <span id="p-space">…</span>
         </dd>
       </dl>

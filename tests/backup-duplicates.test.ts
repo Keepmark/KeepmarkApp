@@ -115,10 +115,51 @@ describe('duplicates', () => {
     expect(planDuplicateDeletion(groups, new Set([2, 3]))).toEqual([2]); // 3 locked
   });
 
+  it('ignores separators, keeps path case, and sees top-level nodes', () => {
+    expect(normalizeUrl('https://x.test/Page')).toBe('https://x.test/Page');
+    const sepTree: BookmarkNode[] = [
+      {
+        title: BookmarkContainer.Other,
+        children: [
+          { id: 1, title: 'S1', url: 'xbs:separator' },
+          { id: 2, title: 'S2', url: 'xbs:separator' },
+          { id: 3, title: 'A', url: 'https://a.test/Page' },
+          { id: 4, title: 'A lower', url: 'https://a.test/page' },
+        ],
+      },
+    ];
+    // Separators excluded; case-differing paths are distinct syncs.
+    expect(getDuplicateGroups(sepTree)).toHaveLength(0);
+    const topLevel: BookmarkNode[] = [
+      { id: 5, title: 'T', url: 'https://t.test/' },
+      { id: 6, title: 'T dup', url: 'https://t.test/' },
+    ];
+    expect(getDuplicateGroups(topLevel).map((g) => g.entries.map((e) => e.id))).toEqual([[5, 6]]);
+    // Deletion plan uses max id even for unsorted input.
+    expect(planDuplicateDeletion([{ url: 'u', entries: [{ id: 9, path: '' }, { id: 7, path: '' }] }])).toEqual([7]);
+    expect(planDuplicateDeletion([{ url: 'u', entries: [] }])).toEqual([]);
+  });
+
   it('deleteByIds removes a new tree', () => {
     const out = deleteByIds(tree, new Set([1, 2]));
     expect(out[0].children!.map((b) => b.id)).toEqual([3, 4]);
     expect(tree[0].children).toHaveLength(4); // input untouched
+  });
+
+  it('keeps legit params and rejects over-deep trees', () => {
+    expect(normalizeUrl('https://x.test/?mcfitting=1')).toBe('https://x.test/?mcfitting=1');
+    expect(normalizeUrl('https://x.test/?mc_cid=1&a=2')).toBe('https://x.test/?a=2');
+    // Build a 1005-deep chain (over the 1000 nesting limit).
+    const chain: BookmarkNode[] = [];
+    let cur: BookmarkNode = { id: 1, title: 'd1' };
+    chain.push(cur);
+    for (let i = 2; i <= 1005; i++) {
+      const next: BookmarkNode = { id: i, title: `d${i}` };
+      cur.children = [next];
+      cur = next;
+    }
+    expect(() => validateTree(chain)).toThrow(/nesting/);
+    expect(() => validateTree([{ ...chain[0], children: [] }])).not.toThrow();
   });
 });
 

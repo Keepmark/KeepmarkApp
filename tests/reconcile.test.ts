@@ -112,6 +112,35 @@ describe('reconcileContainer', () => {
     expect(res.bookmarks[0].children![1].children).toEqual([]);
   });
 
+  it('nested reorder inside a folder marks changed', () => {
+    const nn: NativeNode[] = [
+      { id: 'n1', title: 'A', url: 'https://a.test' },
+      {
+        id: 'n2',
+        title: 'Folder',
+        children: [
+          { id: 'n4', title: 'C', url: 'https://c.test' },
+          { id: 'n3', title: 'B', url: 'https://b.test' },
+        ],
+      },
+    ];
+    const tree = syncedTree();
+    tree[0].children![1].children!.push({ id: 4, title: 'C', url: 'https://c.test' });
+    const maps: BookmarkIdMapping[] = [...mappings(), { nativeId: 'n4', syncedId: 4 }];
+    const res = reconcileContainer(nn, BookmarkContainer.Other, tree, maps, NEW_TAB);
+    expect(res.changed).toBe(true);
+    expect(res.bookmarks[0].children![1].children!.map((b) => b.id)).toEqual([4, 3]);
+  });
+
+  it('appends a missing container instead of dropping native content', () => {
+    const nn: NativeNode[] = [{ id: 'nm', title: 'M', url: 'https://m.test' }];
+    const res = reconcileContainer(nn, BookmarkContainer.Menu, [], [], NEW_TAB);
+    expect(res.changed).toBe(true);
+    const menu = res.bookmarks.find((b) => b.title === BookmarkContainer.Menu)!;
+    expect(menu.children).toHaveLength(1);
+    expect(menu.children![0].url).toBe('https://m.test');
+  });
+
   it('keeps other containers and their mappings untouched', () => {
     const withMenu: BookmarkNode[] = [
       ...syncedTree(),

@@ -10,6 +10,7 @@ import {
   copyText,
   describeUndo,
   validatePasswordChange,
+  validateServiceUrl,
   validateSwitch,
   input,
   renderStatusCard,
@@ -25,7 +26,7 @@ import {
   type SwitchPreviewResult,
   type UndoState,
 } from '../shared/messages.js';
-import { StoreKey } from '../shared/store.js';
+import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
 
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
@@ -33,7 +34,7 @@ let preview: SwitchPreviewResult | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
 /** Inputs the current preview was made for — submit requires an exact match. */
-let previewFor: { newServiceUrl: string; mode: string; syncId?: string } | undefined;
+let previewFor: { newServiceUrl: string; mode: string; syncId?: string; direction: 'push' | 'pull' } | undefined;
 
 function sectionError(id: string, message: string): void {
   const el = $(id);
@@ -43,7 +44,9 @@ function sectionError(id: string, message: string): void {
 
 function hideErrors(): void {
   for (const id of ['status-error', 'backup-error', 'dup-error', 'move-error', 'logs-error', 'settings-error', 'pw-error']) {
-    $(id).hidden = true;
+    const el = $(id);
+    el.hidden = true;
+    el.textContent = '';
   }
   // Stale success/result boxes must not survive next to a new error.
   for (const id of ['status-result', 'backup-result', 'move-result', 'pw-result', 'settings-result']) {
@@ -51,12 +54,24 @@ function hideErrors(): void {
   }
 }
 
-function showSection(name: string): void {
+function showSection(name: string, moveFocus = false): void {
   document.querySelectorAll('#sidebar button').forEach((b) => {
-    b.classList.toggle('active', (b as HTMLElement).dataset.section === name);
+    const active = (b as HTMLElement).dataset.section === name;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
   });
   for (const sec of ['status', 'backup', 'duplicates', 'move', 'logs', 'settings', 'about']) {
     ($(`sec-${sec}`) as HTMLElement).hidden = sec !== name;
+  }
+  if (moveFocus) {
+    // Keyboard/screen-reader users stay on the sidebar while content swaps
+    // elsewhere: move focus to the new heading (tabindex -1, no tab stop).
+    const heading = document.querySelector(`#sec-${name} h2`);
+    if (heading instanceof HTMLElement) {
+      heading.tabIndex = -1;
+      heading.focus();
+    }
   }
   if (name === 'status') void refreshStatus();
   if (name === 'duplicates') void scanDuplicates();
@@ -135,11 +150,16 @@ function initUndoBanner(): void {
 
 function initSidebar(): void {
   document.querySelectorAll('#sidebar button').forEach((b) => {
-    b.addEventListener('click', () => showSection((b as HTMLElement).dataset.section!));
+    b.addEventListener('click', () => showSection((b as HTMLElement).dataset.section!, true));
   });
   const initial = new URLSearchParams(location.search).get('section');
   if (initial && document.getElementById(`sec-${initial}`)) {
     showSection(initial);
+  } else {
+    // Default landing is Status (already visible in markup): only expose it
+    // to assistive tech without re-running the section loaders (init runs
+    // refreshStatus already).
+    document.querySelector('#sidebar button[data-section="status"]')?.setAttribute('aria-current', 'page');
   }
 }
 
@@ -242,8 +262,8 @@ function initBackupSection(): void {
     withBusy('m-btn-export', 'Exporting…', async () => {
       hideErrors();
       const password = input('m-backup-password').value;
-      if (!password) {
-        sectionError('backup-error', 'Enter a backup password first (min 8 chars).');
+      if (password.length < MinBackupPasswordLength) {
+        sectionError('backup-error', `Enter a backup password first (min ${MinBackupPasswordLength} chars).`);
         return;
       }
       try {
@@ -266,8 +286,21 @@ function initBackupSection(): void {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const password = input('m-backup-password').value;
-    if (!password) {
-      sectionError('backup-error', 'Enter the backup password first, then choose the file again.');
+    if (password.length < MinBackupPasswordLength) {
+      sectionError('backup-error', `Enter the backup password first (min ${MinBackupPasswordLength} chars), then choose the file again.`);
+      (e.target as HTMLInputElement).value = '';
+      return;
+    }
+    if (file.size > MaxBackupBytes) {
+      sectionError('backup-error', 'Backup file too large (over 50 MB).');
+      (e.target as HTMLInputElement).value = '';
+      return;
+    }
+    if (
+      !window.confirm(
+        'Import replaces your local bookmarks and pushes the backup to the service. Continue? (Undo is in Status.)',
+      )
+    ) {
       (e.target as HTMLInputElement).value = '';
       return;
     }
@@ -279,6 +312,8 @@ function initBackupSection(): void {
         (input('m-import-file') as HTMLInputElement).value = '';
         showResult('backup-result', `Imported ${res.count} nodes and pushed to the service.`);
       } catch (err) {
+        // Never leave a failed password in the DOM.
+        input('m-backup-password').value = '';
         sectionError('backup-error', (err as Error).message);
       }
     });
@@ -306,11 +341,17 @@ async function scanDuplicates(): Promise<void> {
     return;
   }
   $('nav-dup-count').textContent = `(${groups.length})`;
-  groups.forEach((group, gi) => {
+  groups.forEach((group) => {
     const div = document.createElement('div');
     div.className = 'dup-group';
     const head = document.createElement('div');
-    head.textContent = `${group.url} — keep newest, delete ${group.entries.length - 1}`;
+    // Show an original URL when normalization merged variants (tracking
+    // params, case): the grouped key alone confuses ("which one is it?").
+    const sample = group.entries[0]?.url;
+    head.textContent =
+      sample && sample !== group.url
+        ? `${sample} (+ variants, grouped as ${group.url}) — keep newest, delete ${group.entries.length - 1}`
+        : `${group.url} — keep newest, delete ${group.entries.length - 1}`;
     const ul = document.createElement('ul');
     group.entries.forEach((entry, i) => {
       const li = document.createElement('li');
@@ -319,10 +360,11 @@ async function scanDuplicates(): Promise<void> {
       if (!locked) {
         const btn = document.createElement('button');
         btn.textContent = 'Delete';
-        btn.id = `dup-del-${gi}-${entry.id}`;
+        btn.id = `dup-del-${entry.id}`;
         btn.setAttribute('aria-label', `Delete duplicate ${entry.title ?? group.url} in ${entry.path}`);
         btn.addEventListener('click', () => {
           hideErrors();
+          if (!window.confirm(`Delete "${entry.title ?? entry.url ?? group.url}" in ${entry.path}?`)) return;
           btn.disabled = true;
           btn.textContent = 'Deleting…';
           send({ command: MessageCommand.RemoveBookmark, id: entry.id })
@@ -398,6 +440,11 @@ async function previewTarget(): Promise<void> {
     sectionError('move-error', 'Sync ID is required for an existing sync.');
     return;
   }
+  const urlErr = validateServiceUrl(newServiceUrl);
+  if (urlErr) {
+    sectionError('move-error', urlErr);
+    return;
+  }
   await withBusy('m-btn-preview', 'Checking…', async () => {
     try {
       preview = await send<SwitchPreviewResult>({
@@ -407,7 +454,7 @@ async function previewTarget(): Promise<void> {
         syncId,
       });
       // Pin what the preview was made for; submitMove() refuses stale previews.
-      previewFor = { newServiceUrl, mode, syncId };
+      previewFor = { newServiceUrl, mode, syncId, direction: switchDirection() };
     } catch (err) {
       sectionError('move-error', (err as Error).message);
       return;
@@ -453,7 +500,8 @@ async function submitMove(): Promise<void> {
     !previewFor ||
     previewFor.newServiceUrl !== newServiceUrl ||
     previewFor.mode !== mode ||
-    previewFor.syncId !== syncId
+    previewFor.syncId !== syncId ||
+    previewFor.direction !== direction
   ) {
     sectionError('move-error', 'Inputs changed since the check — press “Check target” again.');
     return;
@@ -557,16 +605,19 @@ async function renderSettings(): Promise<void> {
     dd.textContent = v;
     info.append(dt, dd);
   }
-  const toolbar = await browser.storage.local.get(StoreKey.SyncBookmarksToolbar);
-  (input('m-opt-toolbar') as HTMLInputElement).checked =
-    (toolbar[StoreKey.SyncBookmarksToolbar] as boolean | undefined) ?? true;
+  const toolbar = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => ({
+    enabled: true,
+  }));
+  (input('m-opt-toolbar') as HTMLInputElement).checked = toolbar.enabled;
   const level = st?.logLevel ?? 2;
   ($('m-opt-verbosity') as HTMLSelectElement).value = String(level);
 }
 
 function initSettingsSection(): void {
   (input('m-opt-toolbar') as HTMLInputElement).addEventListener('change', (e) => {
-    void browser.storage.local.set({ [StoreKey.SyncBookmarksToolbar]: (e.target as HTMLInputElement).checked });
+    void send({ command: MessageCommand.SetToolbarSync, enabled: (e.target as HTMLInputElement).checked }).catch(
+      (err: Error) => sectionError('settings-error', err.message),
+    );
   });
   ($('m-opt-verbosity') as HTMLSelectElement).addEventListener('change', async (e) => {
     hideErrors();

@@ -328,6 +328,17 @@ describe('background core', () => {
     expect(state.puts.length).toBe(1);
   });
 
+  it('native change during suspend is not lost (re-scheduled on release)', async () => {
+    const state = baseState();
+    const { core, ports } = await linkedCore(state);
+    const suspend = (core as unknown as { withSuspended<T>(fn: () => Promise<T>): Promise<T> }).withSuspended.bind(core);
+    const res = await suspend(() => core.pushAfterNativeChange());
+    expect(res).toEqual({ pushed: false });
+    // Flush happened on release: a debounce alarm was scheduled for the retry.
+    await sleep(0);
+    expect(ports.onceFired).toContain(NativeDebounceAlarmName);
+  });
+
   it('native event reconciles and pushes', async () => {
     const state = baseState();
     const { core, mockApi, derived, ports } = await linkedCore(state);
@@ -394,6 +405,20 @@ describe('background core', () => {
     expect(state.puts.length).toBeGreaterThan(putsBefore);
     const latest = JSON.parse(await decrypt_blob(state.puts[state.puts.length - 1].blob, derived));
     expect(JSON.stringify(latest)).not.toContain('https://a.test');
+  });
+
+  it('toolbar-sync preference round-trips through messages', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    await expect(
+      core.handleMessage({ command: MessageCommand.GetToolbarSync }),
+    ).resolves.toEqual({ enabled: true });
+    await expect(
+      core.handleMessage({ command: MessageCommand.SetToolbarSync, enabled: false }),
+    ).resolves.toEqual({ enabled: false });
+    await expect(core.handleMessage({ command: MessageCommand.GetToolbarSync })).resolves.toEqual({
+      enabled: false,
+    });
   });
 
   it('duplicates, export/import round-trip', async () => {

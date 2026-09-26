@@ -61,6 +61,18 @@ export interface NativeOps {
   rebuildMappings(bookmarks: BookmarkNode[], syncToolbar: boolean): Promise<BookmarkIdMapping[]>;
 }
 
+/**
+ * Find the synced-Menu folder among Other's children. A user folder with the
+ * same title is ambiguous by construction (same title, no url): prefer the
+ * one that actually holds synced content, else the first match. Callers must
+ * never assume uniqueness — duplicate "[xbs] Menu" folders are unsupported
+ * and the loser stays invisible to the sync.
+ */
+export function findMenuFolder(children: NativeNode[] | undefined): NativeNode | undefined {
+  const matches = (children ?? []).filter((c) => c.title === BookmarkContainer.Menu && !c.url);
+  return matches.find((c) => (c.children?.length ?? 0) > 0) ?? matches[0];
+}
+
 export function makeNativeOps(api: BookmarkApi, ids: ContainerIds, opts: NativeOpts): NativeOps {
   return {
     readAll: (syncToolbar) => readAll(api, ids, opts, syncToolbar),
@@ -71,10 +83,13 @@ export function makeNativeOps(api: BookmarkApi, ids: ContainerIds, opts: NativeO
     rebuildMappings: (bookmarks, syncToolbar) => buildMappings(api, ids, bookmarks, opts, syncToolbar),
   };
 }
-/** Chromium separator rule: dashes-only title without children, or legacy titles + newtab url. */
+/** Chromium separator rule: dashes-only title without children or url, or legacy titles + newtab url.
+ * NOTE: a dashes-titled bookmark WITH a real url is never a separator (the
+ * url would be destroyed); an empty dashes-titled folder is structurally
+ * identical to a separator bookmark on Chromium and still matches. */
 export function chromiumIsSeparator(node: NativeNode, newTabUrl: string): boolean {
   if (!node || node.title === undefined) return false;
-  if (/^[-─]+$/.test(node.title) && !node.children?.length) return true;
+  if (/^[-─]+$/.test(node.title) && !node.children?.length && !node.url) return true;
   return (
     (node.title.includes(HorizontalSeparatorTitle) || node.title === VerticalSeparatorTitle) &&
     node.url === newTabUrl
@@ -102,16 +117,18 @@ export async function readAll(
   };
 
   const [otherTree] = await api.getSubTree(ids.other);
+  if (!otherTree) throw new ContainerNotFoundError('Other container not found in native tree.');
   let otherChildren = otherTree.children ?? [];
   collect(otherTree.children);
   let menu: BookmarkNode[] = [];
   if (!opts.menuFolderInOther && ids.menu) {
     const [menuTree] = await api.getSubTree(ids.menu);
+    if (!menuTree) throw new ContainerNotFoundError('Menu container not found in native tree.');
     menu = toSynced(menuTree.children ?? [], opts);
     collect(menuTree.children);
   } else if (opts.menuFolderInOther) {
     // The synced Menu container is a folder inside Other (chromium model).
-    const menuFolder = otherChildren.find((c) => c.title === BookmarkContainer.Menu && !c.url);
+    const menuFolder = findMenuFolder(otherChildren);
     if (menuFolder?.children) {
       menu = toSynced(menuFolder.children, opts);
     }
@@ -122,6 +139,7 @@ export async function readAll(
   let toolbar: BookmarkNode[] = [];
   if (syncToolbar) {
     const [toolbarTree] = await api.getSubTree(ids.toolbar);
+    if (!toolbarTree) throw new ContainerNotFoundError('Toolbar container not found in native tree.');
     toolbar = toSynced(toolbarTree.children ?? [], opts);
     collect(toolbarTree.children);
   }
@@ -138,15 +156,49 @@ export async function readAll(
   }
 
   const sorted = [...flat].sort((x, y) => (x.dateAdded ?? 0) - (y.dateAdded ?? 0));
+  // Index id-less synced nodes ONCE (traversal order preserved in the queues):
+  // the loop below used to rescan the whole tree per native (O(N·M)) with
+  // getNewBookmarkId rescanning again per hit. Queues + a running id keep the
+  // exact first-match semantics at O(N+M).
+  const untaken = new Set<BookmarkNode>();
+  eachBookmark((b: BookmarkNode) => {
+    if (b.id === undefined) untaken.add(b);
+  }, bookmarks);
+  const byUrl = new Map<string, BookmarkNode[]>();
+  const byTitle = new Map<string, BookmarkNode[]>();
+  for (const b of untaken) {
+    if (b.url !== undefined) {
+      const list = byUrl.get(b.url) ?? [];
+      list.push(b);
+      byUrl.set(b.url, list);
+    }
+    // Exact title equality (undefined matches only undefined, like `===`).
+    const t = b.title === undefined ? '\u0000' : b.title;
+    const tlist = byTitle.get(t) ?? [];
+    tlist.push(b);
+    byTitle.set(t, tlist);
+  }
+  let nextId = getNewBookmarkId(bookmarks);
+  const take = (pool: BookmarkNode[] | undefined): BookmarkNode | undefined => {
+    while (pool?.length) {
+      const cand = pool.shift()!;
+      if (untaken.has(cand)) {
+        untaken.delete(cand);
+        return cand;
+      }
+    }
+    return undefined;
+  };
   for (const native of sorted) {
-    eachBookmark((b: BookmarkNode) => {
-      if (b.id !== undefined) return;
-      const match = !native.url ? b.title === native.title : b.url === native.url;
-      if (match) b.id = getNewBookmarkId(bookmarks);
-    }, bookmarks);
+    // Same predicate as before: url-less natives match by title (any node),
+    // natives with a url match by url.
+    const target = !native.url
+      ? take(byTitle.get(native.title === undefined ? '\u0000' : native.title))
+      : take(byUrl.get(native.url));
+    if (target) target.id = nextId++;
   }
   eachBookmark((b: BookmarkNode) => {
-    if (b.id === undefined) b.id = getNewBookmarkId(bookmarks);
+    if (b.id === undefined) b.id = nextId++;
   }, bookmarks);
 
   return bookmarks;
@@ -246,10 +298,11 @@ export async function buildMappings(
     if (!target?.children?.length) return;
     if (container === BookmarkContainer.Toolbar && !syncToolbar) return;
     const [tree] = await api.getSubTree(id);
+    if (!tree) throw new ContainerNotFoundError('Native container not found while rebuilding mappings.');
     let natives = tree.children ?? [];
     if (container === BookmarkContainer.Other) {
       // Skip the chromium Menu folder: it maps under the Menu container instead.
-      const menuFolder = natives.find((c) => c.title === BookmarkContainer.Menu && !c.url);
+      const menuFolder = findMenuFolder(natives);
       const menuTarget = getContainer(BookmarkContainer.Menu, bookmarks);
       if (menuFolder?.children && menuTarget?.children?.length) {
         out.push(...mapIds(menuFolder.children, menuTarget.children));

@@ -18,6 +18,9 @@ export const BackupFormat = 1;
 export const MinBackupPasswordLength = 8;
 export const MaxBackupBytes = 50 * 1024 * 1024;
 export const MaxBackupNodes = 200_000;
+/** Max nesting depth: a hostile 100k-deep tree passes shape checks but blows
+ * the stack in recursive passes (countNodes/eachBookmark/JSON). */
+export const MaxBackupDepth = 1000;
 
 export interface BackupEnvelope {
   app: string;
@@ -42,18 +45,19 @@ export function countNodes(nodes: BookmarkNode[]): number {
   return n;
 }
 
-/** BFS validation: shape-checked nodes, rejects nulls and oversized trees. */
+/** BFS validation: shape-checked nodes, rejects nulls, over-deep and oversized trees. */
 export function validateTree(nodes: BookmarkNode[]): void {
   if (!Array.isArray(nodes)) throw new Error('Backup does not contain a bookmark tree.');
   // Index queue, not shift(): shift() is O(n²) on 200k nodes.
-  const queue: BookmarkNode[] = [...nodes];
+  const queue: { node: BookmarkNode; depth: number }[] = nodes.map((node) => ({ node, depth: 1 }));
   let head = 0;
   let seen = 0;
   while (head < queue.length) {
-    const node = queue[head++];
+    const { node, depth } = queue[head++];
     if (!node || typeof node !== 'object' || Array.isArray(node)) {
       throw new Error('Backup contains an invalid node.');
     }
+    if (depth > MaxBackupDepth) throw new Error('Backup exceeds the nesting limit.');
     if (node.id !== undefined && typeof node.id !== 'number') {
       throw new Error('Backup contains a node with an invalid id.');
     }
@@ -73,7 +77,7 @@ export function validateTree(nodes: BookmarkNode[]): void {
     if (seen > MaxBackupNodes) throw new Error('Backup exceeds the node limit.');
     if (node.children !== undefined) {
       if (!Array.isArray(node.children)) throw new Error('Backup contains an invalid node.');
-      queue.push(...node.children);
+      for (const child of node.children) queue.push({ node: child, depth: depth + 1 });
     }
   }
 }

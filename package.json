@@ -11,7 +11,7 @@
     "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.chromium.json",
     "build": "npm run build:firefox && npm run build:chromium",
     "build:firefox": "tsc --noEmit && tsc --noEmit -p tsconfig.chromium.json && vite build --config vite.firefox.ts",
-    "build:chromium": "rm -rf build/chromium && vite build --config vite.chromium.ts && vite build --config vite.chromium-sw.ts",
+    "build:chromium": "tsc --noEmit && tsc --noEmit -p tsconfig.chromium.json && rm -rf build/chromium && vite build --config vite.chromium.ts && vite build --config vite.chromium-sw.ts",
     "package": "node scripts/package.mjs",
     "qa": "node scripts/qa.mjs"
   },
