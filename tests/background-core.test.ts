@@ -687,6 +687,7 @@ describe('background core', () => {
       },
     })) as { id: string };
     expect(res.id).toBe(SYNC_ID);
+    expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
     // Mode new uploads the local tree as-is to a fresh sync: nothing is
     // destroyed, so no safety file (the undo slot covers the link swap).
     expect(ports.downloads).toHaveLength(0);
@@ -698,7 +699,7 @@ describe('background core', () => {
 
   it('switch to existing sync with push uploads the local tree', async () => {
     const state = baseState();
-    const { core, store, derived } = await linkedCore(state);
+    const { core, store, ports, derived } = await linkedCore(state);
     // Existing remote encrypted under the target password (proves ownership).
     const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
     const stale: BookmarkNode[] = [
@@ -721,6 +722,7 @@ describe('background core', () => {
       },
     })) as { id: string };
     expect(res.id).toBe('target-id');
+    expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
     expect(state.puts).toHaveLength(1); // local tree uploaded onto the existing remote
     const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info).toMatchObject({ id: 'target-id', serviceUrl: 'https://new.test/' });

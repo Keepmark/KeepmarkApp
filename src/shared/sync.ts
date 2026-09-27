@@ -425,3 +425,27 @@ export async function switchService(
   const { id } = await createAndUpload(newApi, store, bookmarks, newPassword, newServiceUrl, v12);
   return { id };
 }
+
+/** Contextual move-wizard success: restates WHAT ran (mode + direction +
+ * target), since the wizard has four different outcomes. Pure and SW-safe:
+ * shared by the manager result box and the background completion notice. */
+export function describeMoveResult(input: {
+  mode: 'new' | 'existing';
+  direction: 'push' | 'pull' | 'merge';
+  newServiceUrl: string;
+  syncId?: string;
+  /** Local bookmark count for the outcomes that upload (new/push); omitted → 'your'. */
+  bookmarkCount?: number;
+}): string {
+  const n = input.bookmarkCount ?? 'your';
+  if (input.mode === 'new') {
+    return `Move complete — created a new sync on ${input.newServiceUrl} and uploaded ${n} bookmarks.`;
+  }
+  if (input.direction === 'push') {
+    return `Move complete — overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with ${n} local bookmarks.`;
+  }
+  if (input.direction === 'merge') {
+    return `Move complete — merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
+  }
+  return `Move complete — replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
+}

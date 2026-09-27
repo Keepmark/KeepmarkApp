@@ -166,29 +166,10 @@ export function contractGate(input: {
   };
 }
 
-/** Contextual wizard success: restates WHAT ran (mode + direction +
- * target), since the move wizard has four different outcomes. Pure for
- * testability; the caller appends the new sync ID + copy button. */
-export function describeMoveResult(input: {
-  mode: 'new' | 'existing';
-  direction: 'push' | 'pull' | 'merge';
-  newServiceUrl: string;
-  syncId?: string;
-  /** Local bookmark count for the outcomes that upload (new/push); omitted → 'your'. */
-  bookmarkCount?: number;
-}): string {
-  const n = input.bookmarkCount ?? 'your';
-  if (input.mode === 'new') {
-    return `Move complete — created a new sync on ${input.newServiceUrl} and uploaded ${n} bookmarks.`;
-  }
-  if (input.direction === 'push') {
-    return `Move complete — overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with ${n} local bookmarks.`;
-  }
-  if (input.direction === 'merge') {
-    return `Move complete — merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
-  }
-  return `Move complete — replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
-}
+/** Contextual wizard success (pure helper lives in shared/sync.ts so the
+ * background completion notice uses the same words; re-exported here for
+ * the popup/manager surfaces). */
+export { describeMoveResult } from '../shared/sync.js';
 
 /** Human-readable undo slot description for banners. */
 export function describeUndo(kind: string, count: number | undefined, when: number): string {

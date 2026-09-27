@@ -55,6 +55,7 @@ import {
   checkService,
   createNewSync,
   deleteRemoteSync,
+  describeMoveResult,
   getStoredHash,
   getStoredRevision,
   persistMeta,
@@ -1230,6 +1231,25 @@ export class BackgroundCore {
   }
 
   /**
+   * Explicit move confirmation (same words as the manager result box, minus
+   * the sync ID — notification centers persist, and the ID is a bearer).
+   */
+  private notifyMoveDone(target: SwitchTarget, finalId: string, bookmarkCount?: number): Promise<void> {
+    return this.ports.chrome
+      .notify(
+        'Move completed',
+        describeMoveResult({
+          mode: target.mode,
+          direction: target.direction,
+          newServiceUrl: target.newServiceUrl,
+          syncId: finalId,
+          bookmarkCount,
+        }),
+      )
+      .catch(() => undefined);
+  }
+
+  /**
    * Move-service wizard. NOTHING syncs until the popup submits an explicit
    * SwitchTarget (mode + direction + passwords). The existing branch verifies
    * the password by decrypting BEFORE mutating anything, and each direction
@@ -1265,6 +1285,7 @@ export class BackgroundCore {
         ...prev,
       });
       await this.afterLink(svc.version);
+      await this.notifyMoveDone(target, id, countNodes(tree));
       return { id };
     }
 
@@ -1459,6 +1480,7 @@ export class BackgroundCore {
       await this.store.set(StoreKey.SyncEnabled, true);
     }
     await this.afterLink(svc.version);
+    await this.notifyMoveDone(target, syncId, target.direction === 'push' ? countNodes(tree) : undefined);
     return { id: syncId };
   }
 
