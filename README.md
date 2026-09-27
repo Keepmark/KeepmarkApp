@@ -2,7 +2,8 @@
 
 xBrowserSync-compatible bookmark sync. New codebase, inspired by `../app`
 (browser-extension logic) with the robustness rules of `../Keepmark`
-(whole-blob sync, no silent merge, crypto interop).
+(whole-blob sync, merge only as an explicit previewed direction — never
+silent, crypto interop).
 
 ## Stack
 
@@ -24,12 +25,13 @@ Popup is vanilla TS (no framework, for MV3 longevity).
 
 ```sh
 npm install
-npm test              # vitest: crypto/api/bookmarks/sync/queue/reconcile/backup/core
+npm test              # vitest: crypto/api/bookmarks/sync/queue/reconcile/merge/backup/safety/duplicates/messages/logging/ui/core
 npm run lint          # tsc --noEmit
 npm run build         # both platforms -> build/firefox, build/chromium
 npm run build:firefox
 npm run build:chromium
-npm run package       # zips -> dist/ (system zip or python3 fallback)
+npm run package       # zips -> dist/ (needs system `zip` or python3, else fails)
+npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser)
 ```
 
 ## Layout
@@ -38,8 +40,9 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
   `bookmarks` (tree helpers), `native` (generic read/clear/populate/mappings),
   `crypto`, `api`, `logging`, `store` (`StoreKey` + backends), `id-mapper`,
   `sync` (first-sync flows), `sync-queue` (gated FIFO + failure policy),
-  `reconcile` (native→synced whole-tree pass), `messages` (popup↔background
-  protocol + error wire format), `backup`, `duplicates`.
+  `reconcile` (native→synced whole-tree pass), `merge` (pure two-way union +
+  preview stats), `messages` (popup↔background protocol + error wire format),
+  `backup`, `safety` (indexed snapshots), `duplicates`.
 - `src/firefox/` — `platform` (about: rules, fixed roots), `bookmarks`
   (3 containers, `type:'separator'`), `adapter` (NativeAdapter).
 - `src/chromium/` — `platform` (chrome:/edge: rules, roots 2/1),
@@ -47,8 +50,14 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
 - `src/background/` — `core.ts` (queue owner: jobs, alarms, listeners,
   all message handlers), `adapter.ts` (NativeAdapter interface),
   `background.ts` (browser wiring; `@platform/adapter` alias per build).
-- `src/popup/` — connect / search+list / add / settings (status, toolbar
-  toggle, backup export-import, duplicates, move-service, unlink).
+- `src/popup/` — small popup: connect (new / existing pull-push-merge),
+  status card + sync now + undo banner + open manager. Display only;
+  mutations via messages.
+- `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
+  (export, two-step import with preview, safety list/restore/delete),
+  Duplicates (scan, single + bulk delete), Move (wizard with target +
+  merge preview), Logs, Settings (toolbar toggle via background, password
+  change), About.
 - `src/popup.html`, `src/background.html` — vite entries (land at output root).
 - `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
 - `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.

@@ -594,6 +594,11 @@ function updateMoveForm(): void {
   const mode = switchMode();
   ($('m-switch-id-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
+  // Password labels follow the mode: in existing mode it is the target
+  // sync's CURRENT password, not a new one. The confirmation stays in both
+  // modes — a typo in existing mode locks you out with no recovery.
+  $('m-switch-password-label').textContent = mode === 'new' ? 'New password' : 'Target sync password';
+  $('m-switch-confirm-label').textContent = mode === 'new' ? 'Confirm password' : 'Confirm target password';
   // Confirm row always visible: a typo in existing mode locks you out.
   preview = undefined;
   previewFor = undefined;
