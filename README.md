@@ -64,6 +64,25 @@ npm run package       # zips -> dist/ (system zip or python3 fallback)
 - Sync loss (401): queue cleared, credentials wiped, notification.
 - "Sync now" = pull-if-newer then push.
 
+## Merge mode (third link direction)
+
+When the local tree and the server copy diverged (offline edits here,
+uploads from another PC there), `merge` unions both sides instead of
+overwriting one: remote nodes/ids/metadata kept, local-only bookmarks
+adopted with fresh ids into path-matched (or newly created) folders,
+separators kept from both sides. Same URL both sides → server title wins
+(counted). Deletes are never merged (no tombstones): items deleted on one
+side while offline reappear — the preview says so.
+
+- `src/shared/merge.ts` is pure (no I/O, inputs never mutated): the same
+  `mergeTrees` serves the `PreviewMerge` dry-run and the confirmed flows.
+- Preview shows local-only / remote-only / title-conflicts /
+  folders-created / separators-adopted before anything mutates; both flows
+  confirm per-counts (popup dialog, move wizard check + confirm).
+- Fail-closed safety snapshots of BOTH sides (`merge-local`,
+  `merge-remote`), undo kinds `connect-merge` / `switch-merge`, PUT on the
+  remote base (revision CAS or timestamp; 409 honest).
+
 ## Safety backups
 
 Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,

@@ -32,6 +32,8 @@
         <span>⬇ <b>Download</b> — replace local bookmarks with the server copy (safe, recommended).</span></label>
       <label class="check"><input type="radio" name="conn-direction" value="push" />
         <span>⬆ <b>Upload</b> — overwrite the server copy with my local bookmarks (deletes server data!).</span></label>
+      <label class="check"><input type="radio" name="conn-direction" value="merge" />
+        <span>⇄ <b>Merge</b> — keep everything from both sides (never deletes; shows a preview first).</span></label>
       </div>
       <div id="conn-push-warn" hidden>
         <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>

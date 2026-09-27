@@ -20,6 +20,7 @@ import {
   XbsException,
 } from './errors.js';
 import type { BookmarkNode, ServiceStatus } from './models.js';
+import type { MergeStats } from './merge.js';
 import type { SafetyEntry } from './safety.js';
 
 export enum MessageCommand {
@@ -33,6 +34,7 @@ export enum MessageCommand {
   GetLogs = 'get-logs',
   Ping = 'ping',
   SwitchPreview = 'switch-preview',
+  PreviewMerge = 'preview-merge',
   SetVerbosity = 'set-verbosity',
   GetUndoState = 'get-undo-state',
   UndoLastLink = 'undo-last-link',
@@ -97,12 +99,12 @@ export interface RemovedSyncSnapshot {
 /** Move-service target. Nothing syncs until the popup submits this choice. */
 export interface SwitchTarget {
   newServiceUrl: string;
-  /** 'new' = create sync + upload local; 'existing' = link + push or pull. */
+  /** 'new' = create sync + upload local; 'existing' = link + push, pull or merge. */
   mode: 'new' | 'existing';
   syncId?: string;
   newPassword: string;
-  /** existing mode only: overwrite remote with local, or local with remote. */
-  direction: 'push' | 'pull';
+  /** existing mode only: overwrite remote with local, local with remote, or union both. */
+  direction: 'push' | 'pull' | 'merge';
 }
 
 /** Read-only preflight for the move wizard. Never mutates anything. */
@@ -138,9 +140,11 @@ export type UndoKind =
   | 'connect-new'
   | 'connect-pull'
   | 'connect-push'
+  | 'connect-merge'
   | 'switch-new'
   | 'switch-pull'
   | 'switch-push'
+  | 'switch-merge'
   | 'change-password'
   | 'restore'
   | 'import'
@@ -170,7 +174,7 @@ export type MessagePayload =
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | { command: MessageCommand.ConnectNew; serviceUrl: string; password: string }
-  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string; direction: 'pull' | 'push' }
+  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string; direction: 'pull' | 'push' | 'merge' }
   | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
@@ -183,6 +187,7 @@ export type MessagePayload =
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.DeleteRemoteSync }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
+  | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
@@ -198,6 +203,9 @@ export type MessagePayload =
   | { command: MessageCommand.DeleteSafety; fileName: string }
   | { command: MessageCommand.RemoveDuplicates; ids: number[] }
   | { command: MessageCommand.DownloadFile; filename: string; text: string };
+
+/** Merge dry-run result: preview counts only, no trees (message size limits). */
+export type MergePreview = MergeStats;
 
 /** Safety list rows cross the wire as-is (manifest rows, no secrets). */
 export type { SafetyEntry };

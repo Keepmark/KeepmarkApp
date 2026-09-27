@@ -237,7 +237,7 @@ describe('formatBytes', () => {
 
 describe('describeUndo', () => {
   it('covers every kind with count and date', () => {
-    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'switch-new', 'switch-pull', 'switch-push', 'change-password', 'restore', 'import']) {
+    for (const kind of ['connect-new', 'connect-pull', 'connect-push', 'connect-merge', 'switch-new', 'switch-pull', 'switch-push', 'switch-merge', 'change-password', 'restore', 'import']) {
       const text = describeUndo(kind, 42, 0);
       expect(text).toContain('42 bookmarks');
       expect(text).toContain('Undo restores');
@@ -284,6 +284,12 @@ describe('validateConnect (foolproof rules)', () => {
       'Tick the confirmation to overwrite the server copy.',
     );
     expect(validateConnect({ ...base, direction: 'push', pushConfirmed: true })).toBeNull();
+  });
+  it('merge needs no push confirmation (it never overwrites)', () => {
+    expect(validateConnect({ ...base, direction: 'merge' })).toBeNull();
+    expect(validateConnect({ ...base, direction: 'merge', syncId: '' })).toBe(
+      'Sync ID is required for an existing sync.',
+    );
   });
 });
 

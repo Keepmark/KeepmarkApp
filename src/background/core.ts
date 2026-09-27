@@ -26,6 +26,7 @@ import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '.
 import { BookmarkContainer } from '../shared/bookmarks.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
 import { deleteByIds, getDuplicateGroups } from '../shared/duplicates.js';
+import { mergeTrees, type MergeStats } from '../shared/merge.js';
 import {
   deleteSafety,
   listSafety,
@@ -219,6 +220,8 @@ export class BackgroundCore {
         return this.deleteRemoteSync();
       case MessageCommand.SwitchPreview:
         return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
+      case MessageCommand.PreviewMerge:
+        return this.previewMerge(msg.serviceUrl, msg.syncId, msg.password);
       case MessageCommand.SetVerbosity:
         return this.setVerbosity(msg.level);
       case MessageCommand.GetUndoState:
@@ -596,7 +599,7 @@ export class BackgroundCore {
     serviceUrl: string,
     syncId: string,
     password: string,
-    direction: 'pull' | 'push' = 'pull',
+    direction: 'pull' | 'push' | 'merge' = 'pull',
   ): Promise<{ id: string }> {
     if (this.connecting) throw new UnexpectedResponseException('Connect already in progress.');
     this.connecting = true;
@@ -609,6 +612,8 @@ export class BackgroundCore {
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       if (direction === 'push') {
         await this.connectPushExisting(api, serviceUrl, syncId, password, syncToolbar, v12);
+      } else if (direction === 'merge') {
+        await this.connectMergeExisting(api, serviceUrl, syncId, password, syncToolbar, v12);
       } else {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
@@ -772,6 +777,156 @@ export class BackgroundCore {
       const mappings = await this.adapter.rebuildMappings(localTree, syncToolbar);
       await this.idMapper.set(mappings);
     });
+    await this.store.set(StoreKey.SyncInfo, {
+      id: syncId,
+      password: derived,
+      version: remoteVersion,
+      serviceUrl,
+      supportsV12: effectiveV12,
+    });
+    await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
+    await this.store.set(StoreKey.Bookmarks, encrypted);
+    await persistMeta(this.store, updated.meta);
+    await this.store.set(StoreKey.SyncEnabled, true);
+  }
+
+  /**
+   * Merge dry-run: version gate → GET → decrypt → read natives → union,
+   * returning preview counts only. Nothing mutates: no storage writes, no
+   * queue, no native changes. Wrong password surfaces as
+   * InvalidCredentials before anything else runs.
+   */
+  private async previewMerge(serviceUrl: string, syncId: string, password: string): Promise<MergeStats> {
+    const api = this.makeApi(serviceUrl);
+    await checkService(api, this.log);
+    const versionRes = await api.getVersion(syncId);
+    const remoteVersion = versionRes.version ?? undefined;
+    if (!remoteVersion) {
+      throw new UnsupportedSyncVersionException(
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+      );
+    }
+    if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(
+        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+      );
+    }
+    const derived = await deriveKey(password, syncId, remoteVersion);
+    const res = await api.getBookmarks(syncId);
+    const plain = await decryptData(res.bookmarks ?? '', derived);
+    let remoteTree: BookmarkNode[];
+    try {
+      remoteTree = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
+    } catch (err) {
+      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+    }
+    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+    const natives = await this.adapter.readAll(syncToolbar);
+    return mergeTrees(natives, remoteTree).stats;
+  }
+
+  /**
+   * First-link union onto an existing sync: version gates → password verified
+   * by decrypting the remote → dry-run merge → fail-closed safety snapshots
+   * of BOTH sides → populate natives with the union → PUT the union on the
+   * remote base (revision CAS on v1.2, timestamp otherwise). A 409 surfaces
+   * honestly with both snapshots intact.
+   */
+  private async connectMergeExisting(
+    api: XSyncApiClient,
+    serviceUrl: string,
+    syncId: string,
+    password: string,
+    syncToolbar: boolean,
+    v12: boolean,
+  ): Promise<void> {
+    const versionRes = await api.getVersion(syncId);
+    const remoteVersion = versionRes.version ?? undefined;
+    if (!remoteVersion) {
+      throw new UnsupportedSyncVersionException(
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+      );
+    }
+    if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(
+        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+      );
+    }
+    const derived = await deriveKey(password, syncId, remoteVersion);
+    let res: import('../shared/api.js').GetBookmarksResponse;
+    let effectiveV12 = v12;
+    if (v12) {
+      try {
+        res = await api.getBookmarksV12(syncId);
+      } catch (err) {
+        if (!(err instanceof UnsupportedVersionException)) throw err;
+        effectiveV12 = false;
+        this.v12cache.set(serviceUrl, false);
+        res = await api.getBookmarks(syncId);
+      }
+    } else {
+      res = await api.getBookmarks(syncId);
+    }
+    const remotePlain = await decryptData(res.bookmarks ?? '', derived);
+    let remoteTree: BookmarkNode[];
+    try {
+      remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
+    } catch (err) {
+      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+    }
+    const natives = await this.adapter.readAll(syncToolbar);
+    const { tree: merged } = mergeTrees(natives, remoteTree);
+    if (!validateBookmarkIds(merged)) {
+      // Defensive only: merge assigns fresh ids above the remote max, so a
+      // failure here means a bug — repair loudly instead of pushing dupes.
+      this.log.log(XbsLogLevel.Warning, 'sync', 'Merged tree failed id validation, repairing');
+      repairBookmarkIds(merged);
+    }
+    const union = ensureContainersExist(merged);
+    await writeSafety(this.store, {
+      operation: 'merge-local',
+      side: 'local',
+      tree: natives,
+      syncId,
+      derivedKey: derived,
+    });
+    await writeSafety(this.store, {
+      operation: 'merge-remote',
+      side: 'remote',
+      tree: remoteTree,
+      syncId,
+      derivedKey: derived,
+    });
+    await this.saveUndo({
+      kind: 'connect-merge',
+      opDerivedKey: derived,
+      opSyncId: syncId,
+      opServiceUrl: serviceUrl,
+      ...(await this.capturePrev()),
+      localEnc: await encryptData(JSON.stringify(natives), derived),
+      localCount: countNodes(natives),
+      remotePreBlob: res.bookmarks ?? '',
+    });
+    await this.withSuspended(async () => {
+      const mappings = await overwriteAll(this.adapter, union, syncToolbar);
+      await this.idMapper.set(mappings);
+    });
+    const encrypted = await encryptData(JSON.stringify(union), derived);
+    const storedRevision = effectiveV12 ? await getStoredRevision(this.store) : undefined;
+    let updated: import('../shared/api.js').UpdateBookmarksResponse;
+    const baseRevision = storedRevision ?? res.meta?.revision;
+    if (effectiveV12 && baseRevision !== undefined) {
+      try {
+        updated = await api.updateBookmarksV12(syncId, encrypted, baseRevision, false);
+      } catch (err) {
+        if (!(err instanceof UnsupportedVersionException)) throw err;
+        effectiveV12 = false;
+        this.v12cache.set(serviceUrl, false);
+        updated = await api.updateBookmarks(syncId, encrypted, res.lastUpdated!, false);
+      }
+    } else {
+      updated = await api.updateBookmarks(syncId, encrypted, res.lastUpdated!, false);
+    }
     await this.store.set(StoreKey.SyncInfo, {
       id: syncId,
       password: derived,
@@ -1174,6 +1329,77 @@ export class BackgroundCore {
           supportsV12: effectiveV12,
         }, target.newServiceUrl),
       );
+    } else if (target.direction === 'merge') {
+      // Union both sides: dry-run merge → fail-closed snapshots of BOTH
+      // sides → populate natives with the union → PUT the union on the
+      // remote base (revision CAS on v1.2, timestamp otherwise).
+      const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
+      let remoteTree: BookmarkNode[];
+      try {
+        remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
+      } catch (err) {
+        throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+      }
+      const natives = await this.adapter.readAll(syncToolbar);
+      const { tree: merged } = mergeTrees(natives, remoteTree);
+      if (!validateBookmarkIds(merged)) {
+        this.log.log(XbsLogLevel.Warning, 'sync', 'Merged tree failed id validation, repairing');
+        repairBookmarkIds(merged);
+      }
+      const union = ensureContainersExist(merged);
+      await writeSafety(this.store, {
+        operation: 'merge-local',
+        side: 'local',
+        tree: natives,
+        syncId: info.id,
+        derivedKey: info.password,
+      });
+      await writeSafety(this.store, {
+        operation: 'merge-remote',
+        side: 'remote',
+        tree: remoteTree,
+        syncId,
+        derivedKey: info.password,
+      });
+      await this.saveUndo({
+        kind: 'switch-merge',
+        opDerivedKey: derived,
+        opSyncId: syncId,
+        opServiceUrl: target.newServiceUrl,
+        ...(await this.capturePrev()),
+        localEnc: await encryptData(JSON.stringify(natives), derived),
+        localCount: countNodes(natives),
+        remotePreBlob: remote.bookmarks ?? '',
+      });
+      await this.withSuspended(async () => {
+        const mappings = await overwriteAll(this.adapter, union, syncToolbar);
+        await this.idMapper.set(mappings);
+      });
+      const encrypted = await encryptData(JSON.stringify(union), derived);
+      let updated: import('../shared/api.js').UpdateBookmarksResponse;
+      if (effectiveV12 && remote.meta?.revision !== undefined) {
+        try {
+          updated = await newApi.updateBookmarksV12(syncId, encrypted, remote.meta.revision, false);
+        } catch (err) {
+          if (!(err instanceof UnsupportedVersionException)) throw err;
+          effectiveV12 = false;
+          this.v12cache.set(target.newServiceUrl, false);
+          updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+        }
+      } else {
+        updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
+      }
+      await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
+      await this.store.set(StoreKey.Bookmarks, encrypted);
+      await this.store.set(StoreKey.SyncInfo, {
+        id: syncId,
+        password: derived,
+        version: remoteVersion,
+        serviceUrl: target.newServiceUrl,
+        supportsV12: effectiveV12,
+      });
+      await persistMeta(this.store, updated.meta);
+      await this.store.set(StoreKey.SyncEnabled, true);
     } else {
       // Push the local tree onto the existing remote (revision CAS on v1.2,
       // timestamp otherwise, with 412 fallback). Fail-closed first: the push

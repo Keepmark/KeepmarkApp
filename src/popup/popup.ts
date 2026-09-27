@@ -17,6 +17,7 @@ import {
 } from './ui.js';
 import {
   MessageCommand,
+  type MergePreview,
   type PingResponse,
   type StatusResponse,
   type UndoState,
@@ -125,7 +126,8 @@ async function initConnect(): Promise<void> {
         | 'existing';
       const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value as
         | 'pull'
-        | 'push';
+        | 'push'
+        | 'merge';
       const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
       const syncId = input('sync-id').value.trim();
       const password = input('password').value;
@@ -145,6 +147,28 @@ async function initConnect(): Promise<void> {
       try {
         if (mode === 'new') {
           await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
+        } else if (direction === 'merge') {
+          // Two-phase: preview first so the user sees exactly what the union
+          // will upload/download, then confirm before anything mutates.
+          const preview = await send<MergePreview>({
+            command: MessageCommand.PreviewMerge,
+            serviceUrl,
+            syncId,
+            password,
+          });
+          if (
+            !window.confirm(
+              `Merge keeps everything from both sides (never deletes).\n\n` +
+                `• ${preview.localOnly} local bookmarks will upload (of ${preview.localCount})\n` +
+                `• ${preview.remoteOnly} server bookmarks will download (of ${preview.remoteCount})\n` +
+                `• ${preview.titleConflicts} same-address bookmarks differ in title (server title kept)\n` +
+                `• ${preview.foldersCreated} folders will be created, ${preview.separatorsAdopted} separators kept from both sides\n\n` +
+                `Items you deleted on one side while offline will reappear. Continue?`,
+            )
+          ) {
+            return;
+          }
+          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
         } else {
           await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
         }

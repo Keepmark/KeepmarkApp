@@ -328,6 +328,168 @@ describe('background core', () => {
     expect(state.puts.length).toBe(1);
   });
 
+  it('connect-merge unions local and remote with dual safety nets', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'L', url: 'https://l.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const res = await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://x.test/',
+      syncId: SYNC_ID,
+      password: PASSWORD,
+      direction: 'merge',
+    });
+    expect(res).toEqual({ id: SYNC_ID });
+    // Natives hold the union of both sides.
+    const children = await mockApi.getChildren('unfiled_____');
+    const titles = children.map((c) => c.title);
+    expect(titles).toContain('L');
+    expect(titles).toContain('R');
+    // One push carrying the union, based on the remote timestamp.
+    expect(state.puts).toHaveLength(1);
+    const pushed = JSON.parse(await decrypt_blob(state.puts[0].blob, derived)) as BookmarkNode[];
+    expect(JSON.stringify(pushed)).toContain('https://l.test');
+    expect(JSON.stringify(pushed)).toContain('https://r.test');
+    // Fail-closed snapshots of both destroyed sides.
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.map((s) => s.operation).sort()).toEqual(['merge-local', 'merge-remote']);
+    const undo = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as {
+      kind: string;
+    } | null;
+    expect(undo?.kind).toBe('connect-merge');
+  });
+
+  it('connect-merge with a wrong password mutates nothing', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    state.remoteBlob = await encryptData(JSON.stringify([]), derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'L', url: 'https://l.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ConnectExisting,
+        serviceUrl: 'https://x.test/',
+        syncId: SYNC_ID,
+        password: 'wrong password',
+        direction: 'merge',
+      }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    expect(state.puts).toHaveLength(0);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+    expect((await core.handleMessage({ command: MessageCommand.GetSafetyList })) as unknown[]).toHaveLength(0);
+  });
+
+  it('connect-merge surfaces a mid-merge 409 with both snapshots intact', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+    state.remoteLastUpdated = 't9';
+    state.failNextPut409 = true;
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'L', url: 'https://l.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const { DataOutOfSyncException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ConnectExisting,
+        serviceUrl: 'https://x.test/',
+        syncId: SYNC_ID,
+        password: PASSWORD,
+        direction: 'merge',
+      }),
+    ).rejects.toBeInstanceOf(DataOutOfSyncException);
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.map((s) => s.operation).sort()).toEqual(['merge-local', 'merge-remote']);
+  });
+
+  it('merge preview counts without mutating', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    const remote: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeMockApi();
+    await mockApi.create({ parentId: 'unfiled_____', title: 'L', url: 'https://l.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const preview = (await core.handleMessage({
+      command: MessageCommand.PreviewMerge,
+      serviceUrl: 'https://x.test/',
+      syncId: SYNC_ID,
+      password: PASSWORD,
+    })) as { localOnly: number; remoteOnly: number };
+    expect(preview).toMatchObject({ localOnly: 1, remoteOnly: 1 });
+    expect(state.puts).toHaveLength(0);
+    expect((await mockApi.getChildren('unfiled_____')).map((c) => c.title)).toEqual(['L']);
+    const { InvalidCredentialsException } = await import('../src/shared/errors');
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.PreviewMerge,
+        serviceUrl: 'https://x.test/',
+        syncId: SYNC_ID,
+        password: 'wrong password',
+      }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+  });
+
   it('native change during suspend is not lost (re-scheduled on release)', async () => {
     const state = baseState();
     const { core, ports } = await linkedCore(state);
@@ -562,6 +724,48 @@ describe('background core', () => {
     expect(state.puts).toHaveLength(1); // local tree uploaded onto the existing remote
     const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info).toMatchObject({ id: 'target-id', serviceUrl: 'https://new.test/' });
+  });
+
+  it('switch to existing sync with merge unions both trees', async () => {
+    const state = baseState();
+    const { core, mockApi } = await linkedCore(state);
+    // Local side holds 'A'; the target remote holds 'T'.
+    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
+    const target: BookmarkNode[] = [
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'T', url: 'https://t.test' }] },
+      { id: 3, title: BookmarkContainer.Menu, children: [] },
+      { id: 4, title: BookmarkContainer.Toolbar, children: [] },
+    ];
+    state.remoteBlob = await encryptData(JSON.stringify(target), targetDerived);
+    state.remoteLastUpdated = 't-target';
+    state.puts.length = 0;
+    const res = (await core.handleMessage({
+      command: MessageCommand.SwitchService,
+      switch: {
+        newServiceUrl: 'https://new.test/',
+        mode: 'existing',
+        syncId: 'target-id',
+        newPassword: 'target-password',
+        direction: 'merge',
+      },
+    })) as { id: string };
+    expect(res.id).toBe('target-id');
+    expect(state.puts).toHaveLength(1); // the union uploaded once
+    const pushed = JSON.parse(await decrypt_blob(state.puts[0].blob, targetDerived));
+    expect(JSON.stringify(pushed)).toContain('https://a.test');
+    expect(JSON.stringify(pushed)).toContain('https://t.test');
+    const children = await mockApi.getChildren('unfiled_____');
+    const titles = children.map((c) => c.title);
+    expect(titles).toContain('A');
+    expect(titles).toContain('T');
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.map((s) => s.operation).sort()).toEqual(['merge-local', 'merge-remote']);
+    const undo = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as {
+      kind: string;
+    } | null;
+    expect(undo?.kind).toBe('switch-merge');
   });
 
   it('switch to existing sync with pull replaces local with remote', async () => {

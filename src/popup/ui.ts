@@ -175,13 +175,17 @@ export function describeUndo(kind: string, count: number | undefined, when: numb
         ? 'downloaded the server copy'
         : kind === 'connect-push'
           ? 'uploaded over the server copy'
-          : kind === 'switch-new'
-            ? 'moved to a new sync'
+          : kind === 'connect-merge'
+            ? 'merged local and server bookmarks'
+            : kind === 'switch-new'
+              ? 'moved to a new sync'
             : kind === 'switch-pull'
               ? 'moved and downloaded the server copy'
               : kind === 'switch-push'
                 ? 'moved and uploaded over the server copy'
-                : kind === 'change-password'
+                : kind === 'switch-merge'
+                  ? 'moved and merged with the server copy'
+                  : kind === 'change-password'
                   ? 'changed the sync password'
                   : kind === 'restore'
                     ? 'restored bookmarks'
@@ -210,7 +214,7 @@ export function validateServiceUrl(raw: string): string | null {
 /** Pure connect-form validation (foolproof rules). Null = valid. */
 export function validateConnect(input: {
   mode: 'new' | 'existing';
-  direction: 'pull' | 'push';
+  direction: 'pull' | 'push' | 'merge';
   serviceUrl: string;
   syncId: string;
   password: string;

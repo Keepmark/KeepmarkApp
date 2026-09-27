@@ -22,6 +22,7 @@ import {
 import {
   MessageCommand,
   type DuplicateGroup,
+  type MergePreview,
   type PingResponse,
   type SafetyEntry,
   type StatusResponse,
@@ -34,10 +35,12 @@ import { planDuplicateDeletion } from '../shared/duplicates.js';
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 let preview: SwitchPreviewResult | undefined;
+/** Merge dry-run from the last Check target (merge direction only). */
+let mergeStats: MergePreview | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
 /** Inputs the current preview was made for — submit requires an exact match. */
-let previewFor: { newServiceUrl: string; mode: string; syncId?: string; direction: 'push' | 'pull' } | undefined;
+let previewFor: { newServiceUrl: string; mode: string; syncId?: string; direction: 'push' | 'pull' | 'merge' } | undefined;
 
 function sectionError(id: string, message: string): void {
   const el = $(id);
@@ -391,6 +394,8 @@ const SafetyOperations: Record<string, string> = {
   'pre-restore': 'pre-restore snapshot',
   restore: 'restore',
   'delete-remote': 'server delete',
+  'merge-local': 'merge: local side',
+  'merge-remote': 'merge: server side',
 };
 
 async function refreshSafety(): Promise<void> {
@@ -578,10 +583,11 @@ function switchMode(): 'new' | 'existing' {
     | 'existing';
 }
 
-function switchDirection(): 'push' | 'pull' {
+function switchDirection(): 'push' | 'pull' | 'merge' {
   return (document.querySelector('input[name="m-switch-direction"]:checked') as HTMLInputElement).value as
     | 'push'
-    | 'pull';
+    | 'pull'
+    | 'merge';
 }
 
 function updateMoveForm(): void {
@@ -591,6 +597,7 @@ function updateMoveForm(): void {
   // Confirm row always visible: a typo in existing mode locks you out.
   preview = undefined;
   previewFor = undefined;
+  mergeStats = undefined;
   $('m-btn-switch').toggleAttribute('disabled', true);
   ($('move-gate-hint') as HTMLElement).hidden = false;
   $('move-error').hidden = true;
@@ -606,7 +613,9 @@ function updateMoveForm(): void {
       ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks. No sync ID needed — a new one is shown after the move.`
       : direction === 'push'
         ? `Will overwrite the remote sync on ${url} with ${n ?? 'your'} local bookmarks.`
-        : `Will replace local bookmarks with the remote sync from ${url}.`;
+        : direction === 'merge'
+          ? `Will union local and remote bookmarks on ${url} (never deletes; preview at step 1).`
+          : `Will replace local bookmarks with the remote sync from ${url}.`;
 }
 
 async function previewTarget(): Promise<void> {
@@ -650,6 +659,38 @@ async function previewTarget(): Promise<void> {
         `Remote sync: ${mode === 'new' ? 'n/a (will be created)' : preview.remoteExists ? `found, updated ${preview.remoteLastUpdated ?? '?'}` : 'NOT FOUND — check the ID'}`,
         `Local bookmarks: ${preview.localCount ?? '?'}`,
       ];
+      // Merge direction: dry-run the union so the user sees exactly what
+      // will upload/download before the Move button unlocks. Needs the
+      // target password (already in the form for the submit step).
+      mergeStats = undefined;
+      if (mode === 'existing' && switchDirection() === 'merge' && preview.remoteExists) {
+        const mergePassword = input('m-switch-password').value;
+        if (!mergePassword) {
+          box.textContent = lines.join('\n') + '\nEnter the target password above, then Check target again for the merge preview.';
+          box.hidden = false;
+          ($('m-btn-switch') as HTMLButtonElement).disabled = true;
+          ($('move-gate-hint') as HTMLElement).hidden = false;
+          return;
+        }
+        try {
+          mergeStats = await send<MergePreview>({
+            command: MessageCommand.PreviewMerge,
+            serviceUrl: newServiceUrl,
+            syncId: syncId!,
+            password: mergePassword,
+          });
+          lines.push(
+            `Merge preview (never deletes): ${mergeStats.localOnly} local will upload (of ${mergeStats.localCount}), ` +
+              `${mergeStats.remoteOnly} remote will download (of ${mergeStats.remoteCount}), ` +
+              `${mergeStats.titleConflicts} title conflicts (server title kept), ` +
+              `${mergeStats.foldersCreated} folders created, ${mergeStats.separatorsAdopted} separators kept from both sides. ` +
+              `Items deleted on one side while offline will reappear.`,
+          );
+        } catch (err) {
+          sectionError('move-error', (err as Error).message);
+          return;
+        }
+      }
       box.textContent = lines.join('\n');
     }
     box.hidden = false;
@@ -693,6 +734,27 @@ async function submitMove(): Promise<void> {
   await withBusy('m-btn-switch', 'Moving…', async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
+      if (direction === 'merge') {
+        // Merge executes on explicit per-counts confirmation: the union never
+        // deletes, but resurrects items deleted while offline — say so first.
+        const s = mergeStats;
+        const summary = s
+          ? `${s.localOnly} local will upload, ${s.remoteOnly} remote will download, ` +
+            `${s.titleConflicts} title conflicts (server title kept).`
+          : 'Merge preview unavailable — press “Check target” again.';
+        if (!s) {
+          sectionError('move-error', summary);
+          return;
+        }
+        if (
+          !window.confirm(
+            `Merge keeps everything from both sides and never deletes.\n\n${summary}\n\n` +
+              `Items deleted on one side while offline will reappear. Continue?`,
+          )
+        ) {
+          return;
+        }
+      }
       const res = await send<{ id: string }>({
         command: MessageCommand.SwitchService,
         switch: { newServiceUrl, mode, syncId, newPassword, direction },
