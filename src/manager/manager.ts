@@ -8,6 +8,7 @@ import {
   $,
   contractGate,
   copyText,
+  describeMoveResult,
   describeUndo,
   formatBytes,
   validatePasswordChange,
@@ -801,7 +802,10 @@ async function submitMove(): Promise<void> {
     // Consume the preview AFTER withBusy (it restores the pre-click state
     // last): the unlocked button must never re-fire with stale inputs.
     updateMoveForm();
-    showResult('move-result', `Moved. New sync ID: ${movedId}`);
+    // Contextual success: restate WHAT ran (mode + direction + target), not
+    // just the new id — the wizard offers four different outcomes.
+    const done = describeMoveResult({ mode, direction, newServiceUrl, syncId });
+    showResult('move-result', `${done} New sync ID: ${movedId}`);
     const copy = document.createElement('button');
     copy.textContent = 'Copy ID';
     copy.className = 'mini';

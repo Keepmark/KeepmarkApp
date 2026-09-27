@@ -156,6 +156,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`.
   Every box needs `role="alert"`, starts `hidden`, and is emptied (not just
   hidden) when cleared; `hideErrors()` must cover all of them.
+- Success evidence mirrors it: multi-outcome operations restate WHAT ran
+  (mode + direction + target), not just "Done". Build the message in a pure
+  shared helper (e.g. `describeMoveResult` in `ui.ts`) with a unit test per
+  outcome, never inline in the click handler.
 - No `any` leaks, no `window`/`document` outside `src/popup/`, no `Buffer`
   (use `atob`/`btoa` helpers in `crypto.ts` — work in SW + Node).
 - `base: './'` in app configs (relative asset URLs — absolute breaks); html

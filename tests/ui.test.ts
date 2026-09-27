@@ -10,6 +10,7 @@ vi.mock('webextension-polyfill', () => ({
 
 import {
   contractGate,
+  describeMoveResult,
   describeUndo,
   formatBytes,
   renderStatusCard,
@@ -243,6 +244,23 @@ describe('describeUndo', () => {
       expect(text).toContain('Undo restores');
     }
     expect(describeUndo('connect-pull', undefined, 0)).not.toContain('bookmarks)');
+  });
+});
+
+describe('describeMoveResult', () => {
+  it('names mode, direction and target in all four outcomes', () => {
+    expect(
+      describeMoveResult({ mode: 'new', direction: 'push', newServiceUrl: 'https://n.test/' }),
+    ).toBe('Created a new sync on https://n.test/ and uploaded your bookmarks.');
+    expect(
+      describeMoveResult({ mode: 'existing', direction: 'push', newServiceUrl: 'https://n.test/', syncId: 's1' }),
+    ).toBe('Overwrote the remote sync s1 on https://n.test/ with your local bookmarks.');
+    expect(
+      describeMoveResult({ mode: 'existing', direction: 'merge', newServiceUrl: 'https://n.test/', syncId: 's1' }),
+    ).toBe('Merged your local bookmarks with the remote sync s1 on https://n.test/ (nothing deleted).');
+    expect(
+      describeMoveResult({ mode: 'existing', direction: 'pull', newServiceUrl: 'https://n.test/', syncId: 's1' }),
+    ).toBe('Replaced your local bookmarks with the remote sync s1 from https://n.test/.');
   });
 });
 

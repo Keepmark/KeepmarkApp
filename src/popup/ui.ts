@@ -166,6 +166,27 @@ export function contractGate(input: {
   };
 }
 
+/** Contextual wizard success: restates WHAT ran (mode + direction +
+ * target), since the move wizard has four different outcomes. Pure for
+ * testability; the caller appends the new sync ID + copy button. */
+export function describeMoveResult(input: {
+  mode: 'new' | 'existing';
+  direction: 'push' | 'pull' | 'merge';
+  newServiceUrl: string;
+  syncId?: string;
+}): string {
+  if (input.mode === 'new') {
+    return `Created a new sync on ${input.newServiceUrl} and uploaded your bookmarks.`;
+  }
+  if (input.direction === 'push') {
+    return `Overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with your local bookmarks.`;
+  }
+  if (input.direction === 'merge') {
+    return `Merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
+  }
+  return `Replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
+}
+
 /** Human-readable undo slot description for banners. */
 export function describeUndo(kind: string, count: number | undefined, when: number): string {
   const what =
