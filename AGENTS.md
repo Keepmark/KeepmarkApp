@@ -148,6 +148,14 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - Existing files over new files; small diffs; no speculative features.
 - Destructive ops resolve by stable identity (synced IDs, never ephemeral),
   validate first, keep safety backups, never swallow errors (log with context).
+- Error evidence belongs to the step that produced it: in top-down wizards
+  and multi-action sections, each action cluster gets its own adjacent error
+  box (`<base>-error`, `<base>-error-2`, …) instead of one top-of-section box
+  the user must scroll to find. E.g. move wizard step 1 → `move-error`,
+  step 2 submit → `move-error-2`; safety list actions → `backup-error-2`;
+  in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`.
+  Every box needs `role="alert"`, starts `hidden`, and is emptied (not just
+  hidden) when cleared; `hideErrors()` must cover all of them.
 - No `any` leaks, no `window`/`document` outside `src/popup/`, no `Buffer`
   (use `atob`/`btoa` helpers in `crypto.ts` — work in SW + Node).
 - `base: './'` in app configs (relative asset URLs — absolute breaks); html

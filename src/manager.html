@@ -59,6 +59,7 @@
         </div>
         <p id="m-delete-v12-hint" class="hint" hidden>Server delete needs API v1.2 — this service speaks v1.1, so the server copy
           cannot be deleted from here (Unlink above only removes this device; the server copy stays).</p>
+        <div id="status-error-2" class="error" role="alert" hidden></div>
         <div id="status-result" class="result" hidden></div>
       </section>
 
@@ -80,6 +81,7 @@
           Encrypted entries need the current sync link to restore.</p>
         <div class="row"><button id="m-btn-safety">Refresh safety list</button></div>
         <div id="m-safety-list"></div>
+        <div id="backup-error-2" class="error" role="alert" hidden></div>
       </section>
 
       <section id="sec-duplicates" hidden>
@@ -88,6 +90,7 @@
         <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete all listed</button></div>
         <div id="dup-result" class="result" hidden></div>
         <div id="m-dup-list"></div>
+        <div id="dup-error-2" class="error" role="alert" hidden></div>
       </section>
 
       <section id="sec-move" hidden>
@@ -115,6 +118,7 @@
         <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
         <div id="move-summary" class="hint"></div>
         <div class="row"><button id="m-btn-switch" disabled>Move sync</button></div>
+        <div id="move-error-2" class="error" role="alert" hidden></div>
         <p id="move-gate-hint" class="hint">“Move sync” unlocks only after a successful “Check target”,
           and stays locked to those exact inputs — change anything and check again.</p>
         <div id="move-result" class="result" hidden></div>

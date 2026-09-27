@@ -254,10 +254,14 @@ export function validateSwitch(input: {
 }): string | null {
   const urlErr = validateServiceUrl(input.newServiceUrl);
   if (urlErr) return urlErr;
-  if (!input.newPassword) return 'A new password is required.';
-  // Confirm in BOTH modes: a typo in existing mode locks you out of the
-  // target sync with no recovery path.
-  if (input.newPassword !== input.confirm) return 'Passwords do not match.';
+  if (!input.newPassword) {
+    return input.mode === 'new' ? 'A new password is required.' : 'The target sync password is required.';
+  }
+  // Confirm only when inventing a password (new mode): a typo there locks
+  // you out of the fresh sync. In existing mode the password is verified by
+  // decrypting the target BEFORE anything mutates — a typo fails safely as
+  // InvalidCredentials with zero side effects, so no confirmation needed.
+  if (input.mode === 'new' && input.newPassword !== input.confirm) return 'Passwords do not match.';
   if (input.mode === 'existing' && !input.syncId?.trim()) {
     return 'Sync ID is required for an existing sync.';
   }

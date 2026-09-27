@@ -309,7 +309,10 @@ describe('validateSwitch', () => {
     ).toBe('Sync ID is required for an existing sync.');
     expect(
       validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: 'id', newPassword: 'a', confirm: 'b' }),
-    ).toBe('Passwords do not match.');
+    ).toBeNull(); // existing verifies by decrypting: typo fails safely, no confirmation asked
+    expect(
+      validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: 'id', newPassword: '', confirm: '' }),
+    ).toBe('The target sync password is required.');
     expect(
       validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'a' }),
     ).toBeNull();

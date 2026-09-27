@@ -65,7 +65,7 @@ function sectionError(id: string, message: string): void {
 }
 
 function hideErrors(): void {
-  for (const id of ['status-error', 'backup-error', 'dup-error', 'move-error', 'logs-error', 'settings-error', 'pw-error']) {
+  for (const id of ['status-error', 'status-error-2', 'backup-error', 'backup-error-2', 'dup-error', 'dup-error-2', 'move-error', 'move-error-2', 'logs-error', 'settings-error', 'pw-error']) {
     const el = $(id);
     el.hidden = true;
     el.textContent = '';
@@ -163,7 +163,7 @@ function initUndoBanner(): void {
         await refreshStatus();
         await refreshUndoBanner();
       } catch (err) {
-        sectionError('status-error', (err as Error).message);
+        sectionError('status-error-2', (err as Error).message);
       }
     });
   });
@@ -195,7 +195,7 @@ function initStatusSection(): void {
       try {
         await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
       } catch (err) {
-        sectionError('status-error', (err as Error).message);
+        sectionError('status-error-2', (err as Error).message);
       }
       await refreshStatus();
     }),
@@ -217,7 +217,7 @@ function initStatusSection(): void {
         ping = undefined;
         await refreshStatus();
       } catch (err) {
-        sectionError('status-error', (err as Error).message);
+        sectionError('status-error-2', (err as Error).message);
       }
     }),
   );
@@ -245,7 +245,7 @@ function initStatusSection(): void {
           ping = undefined;
           await refreshStatus();
         } catch (err) {
-          sectionError('status-error', (err as Error).message);
+          sectionError('status-error-2', (err as Error).message);
         }
       });
       // withBusy restores the pre-click disabled state last: re-assert the
@@ -423,7 +423,7 @@ async function refreshSafety(): Promise<void> {
   try {
     entries = await send<SafetyEntry[]>({ command: MessageCommand.GetSafetyList });
   } catch (err) {
-    sectionError('backup-error', (err as Error).message);
+    sectionError('backup-error-2', (err as Error).message);
     return;
   }
   if (entries.length === 0) {
@@ -459,7 +459,7 @@ async function refreshSafety(): Promise<void> {
           void refreshSafety();
           void refreshStatus();
         })
-        .catch((err: Error) => sectionError('backup-error', err.message))
+        .catch((err: Error) => sectionError('backup-error-2', err.message))
         .finally(() => {
           restore.disabled = false;
         });
@@ -477,7 +477,7 @@ async function refreshSafety(): Promise<void> {
           showResult('backup-result', `Deleted ${entry.fileName}.`);
           void refreshSafety();
         })
-        .catch((err: Error) => sectionError('backup-error', err.message))
+        .catch((err: Error) => sectionError('backup-error-2', err.message))
         .finally(() => {
           del.disabled = false;
         });
@@ -548,7 +548,7 @@ async function scanDuplicates(): Promise<void> {
           send({ command: MessageCommand.RemoveBookmark, id: entry.id })
             .then(() => scanDuplicates())
             .catch((err: Error) => {
-              sectionError('dup-error', err.message);
+              sectionError('dup-error-2', err.message);
               btn.disabled = false;
               btn.textContent = 'Delete';
             });
@@ -620,13 +620,17 @@ function updateMoveForm(): void {
   // modes — a typo in existing mode locks you out with no recovery.
   $('m-switch-password-label').textContent = mode === 'new' ? 'New password' : 'Target sync password';
   $('m-switch-confirm-label').textContent = mode === 'new' ? 'Confirm password' : 'Confirm target password';
-  // Confirm row always visible: a typo in existing mode locks you out.
+  // Confirm row only when inventing a password (new mode). In existing
+  // mode the password is verify-before-mutate: a typo fails safely as
+  // InvalidCredentials, so no confirmation is asked.
+  ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
   $('m-btn-switch').toggleAttribute('disabled', true);
   ($('move-gate-hint') as HTMLElement).hidden = false;
   $('move-error').hidden = true;
+  $('move-error-2').hidden = true;
   $('move-preview').hidden = true;
   const result = $('move-result') as HTMLElement;
   result.hidden = true;
@@ -741,7 +745,7 @@ async function submitMove(): Promise<void> {
   const confirm = input('m-switch-confirm').value;
   const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm });
   if (invalid) {
-    sectionError('move-error', invalid);
+    sectionError('move-error-2', invalid);
     return;
   }
   if (
@@ -752,7 +756,7 @@ async function submitMove(): Promise<void> {
     previewFor.syncId !== syncId ||
     previewFor.direction !== direction
   ) {
-    sectionError('move-error', 'Inputs changed since the check — press “Check target” again.');
+    sectionError('move-error-2', 'Inputs changed since the check — press “Check target” again.');
     return;
   }
   // Set on success so the post-busy gate below knows the preview was spent.
@@ -769,7 +773,7 @@ async function submitMove(): Promise<void> {
             `${s.titleConflicts} title conflicts (server title kept).`
           : 'Merge preview unavailable — press “Check target” again.';
         if (!s) {
-          sectionError('move-error', summary);
+          sectionError('move-error-2', summary);
           return;
         }
         if (
@@ -790,7 +794,7 @@ async function submitMove(): Promise<void> {
       movedId = res.id;
     } catch (err) {
       input('m-switch-confirm').value = '';
-      sectionError('move-error', (err as Error).message);
+      sectionError('move-error-2', (err as Error).message);
     }
   });
   if (movedId) {
