@@ -116,6 +116,7 @@ async function refreshStatus(): Promise<void> {
     status = undefined;
     ping = undefined;
     renderStatusCard('m', { status, ping });
+    updateStatusActions();
     updateDangerZone();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
     sectionError('status-error', (err as Error).message);
@@ -132,6 +133,7 @@ async function refreshStatus(): Promise<void> {
   }
   if (my !== statusSeq) return;
   renderStatusCard('m', { status, ping });
+  updateStatusActions();
   updateDangerZone();
   ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
   await refreshUndoBanner();
@@ -190,8 +192,9 @@ function initSidebar(): void {
 }
 
 function initStatusSection(): void {
-  $('m-btn-sync-now').addEventListener('click', () =>
-    withBusy('m-btn-sync-now', 'Syncing…', async () => {
+  $('m-btn-sync-now').addEventListener('click', () => {
+    if (($('m-btn-sync-now') as HTMLButtonElement).disabled) return;
+    void withBusy('m-btn-sync-now', 'Syncing…', async () => {
       hideErrors();
       try {
         await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
@@ -199,20 +202,23 @@ function initStatusSection(): void {
         sectionError('status-error-2', (err as Error).message);
       }
       await refreshStatus();
-    }),
-  );
-  $('m-btn-refresh').addEventListener('click', () =>
-    withBusy('m-btn-refresh', 'Refreshing…', () => refreshStatus()),
-  );
+    });
+  });
+  $('m-btn-refresh').addEventListener('click', () => {
+    if (($('m-btn-refresh') as HTMLButtonElement).disabled) return;
+    void withBusy('m-btn-refresh', 'Refreshing…', () => refreshStatus());
+  });
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
   });
-  $('m-btn-unlink').addEventListener('click', () =>
-    withBusy('m-btn-unlink', 'Unlinking…', async () => {
+  $('m-btn-unlink').addEventListener('click', () => {
+    // Disabled buttons don't fire clicks anyway; deleting the server sync
+    // already unlinks, so there is nothing left to unlink afterwards.
+    // Checked BEFORE withBusy (it disables the button while running, so a
+    // check inside would always self-trigger).
+    if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
+    void withBusy('m-btn-unlink', 'Unlinking…', async () => {
       hideErrors();
-      // Disabled buttons don't fire clicks anyway; deleting the server copy
-      // already unlinks, so there is nothing left to unlink afterwards.
-      if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
       if (!window.confirm('Unlink this device? Sync stops; native bookmarks are untouched.')) return;
       try {
         await send({ command: MessageCommand.DisableSync });
@@ -223,8 +229,8 @@ function initStatusSection(): void {
       } catch (err) {
         sectionError('status-error-2', (err as Error).message);
       }
-    }),
-  );
+    });
+  });
   $('m-btn-delete-remote').addEventListener('click', () =>
     void (async () => {
       // Defense in depth (checked BEFORE withBusy: the wrapper disables the
@@ -258,6 +264,22 @@ function initStatusSection(): void {
       updateDangerZone();
     })(),
   );
+}
+
+/**
+ * Link gating for the status actions: Sync now needs a link to sync, and
+ * Refresh status re-reads the link — both stay disabled while unlinked.
+ * (Linking from the popup re-enables them via the storage listener in
+ * init(): no manual refresh needed.)
+ */
+function updateStatusActions(): void {
+  const linked = !!status?.syncEnabled;
+  const syncNow = $('m-btn-sync-now') as HTMLButtonElement;
+  syncNow.disabled = !linked;
+  syncNow.title = linked ? '' : 'Nothing to sync — this device is not linked.';
+  const refresh = $('m-btn-refresh') as HTMLButtonElement;
+  refresh.disabled = !linked;
+  refresh.title = linked ? '' : 'Nothing to refresh — this device is not linked.';
 }
 
 /**
@@ -1059,6 +1081,13 @@ function init(): void {
   initMoveSection();
   initLogsSection();
   initSettingsSection();
+  // Follow link changes made elsewhere (e.g. connecting from the popup):
+  // the status card, actions and danger zone re-gate themselves without a
+  // manual refresh. refreshStatus() is race-guarded (statusSeq), so bursts
+  // of storage events collapse onto the newest read.
+  browser.storage.onChanged.addListener((changes) => {
+    if ('syncEnabled' in changes || 'syncInfo' in changes) void refreshStatus();
+  });
   void refreshStatus();
 }
 void init();
