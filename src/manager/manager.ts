@@ -37,6 +37,22 @@ let ping: PingResponse | undefined;
 let preview: SwitchPreviewResult | undefined;
 /** Merge dry-run from the last Check target (merge direction only). */
 let mergeStats: MergePreview | undefined;
+/** Move URL prefilled once from the current link (never clobbers typing). */
+let moveUrlPrefilled = false;
+
+/** Fill an empty move URL with the current link (same host is the common
+ * case). Runs on section visits and status refreshes until it sticks. */
+function prefillMoveUrl(): void {
+  if (moveUrlPrefilled) return;
+  if (input('m-switch-url').value.trim()) {
+    moveUrlPrefilled = true;
+    return;
+  }
+  if (status?.serviceUrl) {
+    input('m-switch-url').value = status.serviceUrl;
+    moveUrlPrefilled = true;
+  }
+}
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
 /** Inputs the current preview was made for — submit requires an exact match. */
@@ -81,6 +97,7 @@ function showSection(name: string, moveFocus = false): void {
   }
   if (name === 'status') void refreshStatus();
   if (name === 'backup') void refreshSafety();
+  if (name === 'move') updateMoveForm();
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
@@ -106,6 +123,7 @@ async function refreshStatus(): Promise<void> {
   if (my !== statusSeq) return;
   const view: StatusView = { status, ping: undefined };
   renderStatusCard('m', view);
+  prefillMoveUrl();
   try {
     ping = await send<PingResponse>({ command: MessageCommand.Ping });
   } catch {
@@ -594,6 +612,9 @@ function updateMoveForm(): void {
   const mode = switchMode();
   ($('m-switch-id-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
+  // Prepopulate once with the current link: most moves stay on the same
+  // service (new sync id, same host). Never clobbers user input afterwards.
+  prefillMoveUrl();
   // Password labels follow the mode: in existing mode it is the target
   // sync's CURRENT password, not a new one. The confirmation stays in both
   // modes — a typo in existing mode locks you out with no recovery.
