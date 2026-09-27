@@ -31,7 +31,7 @@ import {
   type UndoState,
 } from '../shared/messages.js';
 import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
-import { planDuplicateDeletion } from '../shared/duplicates.js';
+import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
 
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
@@ -493,6 +493,9 @@ let dupSeq = 0;
 /** Groups from the last scan (drives Delete-all). */
 let lastDupGroups: DuplicateGroup[] = [];
 
+/** Copies marked for deletion in the current scan (default: all but newest). */
+let dupMarked: Set<number> = new Set();
+
 async function scanDuplicates(): Promise<void> {
   const my = ++dupSeq;
   const box = $('m-dup-list');
@@ -506,21 +509,35 @@ async function scanDuplicates(): Promise<void> {
   } catch (err) {
     if (my !== dupSeq) return;
     lastDupGroups = [];
+    dupMarked = new Set();
+    updateDupBar();
     sectionError('dup-error', (err as Error).message);
     return;
   }
   if (my !== dupSeq) return;
   lastDupGroups = groups;
+  dupMarked = defaultMarkedIds(groups);
   if (groups.length === 0) {
     box.innerHTML = '<p class="clean">No duplicates — everything is clean ✓</p>';
+    updateDupBar();
     return;
   }
   $('nav-dup-count').textContent = `(${groups.length})`;
-  const deletable = planDuplicateDeletion(groups);
-  ($('m-btn-duplicates-delete-all') as HTMLButtonElement).disabled = deletable.length === 0;
-  ($('m-btn-duplicates-delete-all') as HTMLButtonElement).textContent =
-    deletable.length > 0 ? `Delete all listed (${deletable.length})` : 'Delete all listed';
-  groups.forEach((group) => {
+  renderDuplicates();
+  updateDupBar();
+}
+
+/** "N marked" counter + Delete-marked button state. */
+function updateDupBar(): void {
+  const btn = $('m-btn-duplicates-delete-all') as HTMLButtonElement;
+  btn.disabled = dupMarked.size === 0;
+  btn.textContent = dupMarked.size > 0 ? `Delete marked (${dupMarked.size})` : 'Delete marked';
+}
+
+function renderDuplicates(): void {
+  const box = $('m-dup-list');
+  box.textContent = '';
+  for (const group of lastDupGroups) {
     const div = document.createElement('div');
     div.className = 'dup-group';
     const head = document.createElement('div');
@@ -529,38 +546,95 @@ async function scanDuplicates(): Promise<void> {
     const sample = group.entries[0]?.url;
     head.textContent =
       sample && sample !== group.url
-        ? `${sample} (+ variants, grouped as ${group.url}) — keep newest, delete ${group.entries.length - 1}`
-        : `${group.url} — keep newest, delete ${group.entries.length - 1}`;
-    const ul = document.createElement('ul');
-    group.entries.forEach((entry, i) => {
-      const li = document.createElement('li');
-      const locked = i === group.entries.length - 1;
-      li.textContent = `${locked ? '🔒 ' : ''}${entry.title ?? ''} (${entry.path})`;
-      if (!locked) {
-        const btn = document.createElement('button');
-        btn.textContent = 'Delete';
-        btn.id = `dup-del-${entry.id}`;
-        btn.setAttribute('aria-label', `Delete duplicate ${entry.title ?? group.url} in ${entry.path}`);
-        btn.addEventListener('click', () => {
-          hideErrors();
-          if (!window.confirm(`Delete "${entry.title ?? entry.url ?? group.url}" in ${entry.path}?`)) return;
-          btn.disabled = true;
-          btn.textContent = 'Deleting…';
-          send({ command: MessageCommand.RemoveBookmark, id: entry.id })
-            .then(() => scanDuplicates())
-            .catch((err: Error) => {
-              sectionError('dup-error-2', err.message);
-              btn.disabled = false;
-              btn.textContent = 'Delete';
-            });
-        });
-        li.append(' ', btn);
+        ? `${sample} (+ variants, grouped as ${group.url})`
+        : group.url;
+    const count = document.createElement('span');
+    count.className = 'badge';
+    count.textContent = `${group.entries.length}`;
+    head.append(' ', count);
+    div.append(head);
+    const markedHere = group.entries.filter((e) => dupMarked.has(e.id));
+    for (const entry of group.entries) {
+      const marked = dupMarked.has(entry.id);
+      const locked = isSelectionLocked(lastDupGroups, dupMarked, entry.id);
+      const row = document.createElement('div');
+      row.className = 'dup-row';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = `dup-toggle${marked ? ' on' : ''}`;
+      toggle.disabled = locked;
+      toggle.setAttribute('aria-pressed', String(marked));
+      toggle.setAttribute(
+        'aria-label',
+        marked ? `Unmark deletion of ${entry.title ?? group.url}` : locked ? 'Always kept copy' : `Mark ${entry.title ?? group.url} for deletion`,
+      );
+      toggle.title = locked ? 'Always kept — unmark another copy first' : toggle.getAttribute('aria-label')!;
+      const glyph = document.createElement('span');
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.textContent = marked ? '✕' : locked ? '🔒' : '';
+      toggle.append(glyph);
+      toggle.addEventListener('click', () => {
+        hideErrors();
+        if (dupMarked.has(entry.id)) dupMarked.delete(entry.id);
+        else if (!isSelectionLocked(lastDupGroups, dupMarked, entry.id)) dupMarked.add(entry.id);
+        renderDuplicates();
+        updateDupBar();
+      });
+      const text = document.createElement('div');
+      text.className = 'dup-text';
+      if (entry.url) {
+        const link = document.createElement('a');
+        link.href = entry.url;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.textContent = entry.title ?? entry.url;
+        text.append(link);
+      } else {
+        text.textContent = entry.title ?? '';
       }
-      ul.append(li);
+      const path = document.createElement('div');
+      path.className = 'dup-sub';
+      path.textContent = entry.path;
+      text.append(path);
+      row.append(toggle, text);
+      div.append(row);
+    }
+    // Per-group armed delete (two-step, like the Android client).
+    const footer = document.createElement('div');
+    footer.className = 'row';
+    const del = document.createElement('button');
+    del.className = 'mini danger';
+    del.textContent = markedHere.length > 0 ? `Delete ${markedHere.length} marked` : 'Delete marked';
+    del.disabled = markedHere.length === 0;
+    del.addEventListener('click', () => {
+      hideErrors();
+      if (
+        !window.confirm(
+          `Delete ${markedHere.length} marked cop${markedHere.length === 1 ? 'y' : 'ies'} from this address? One copy always stays. A safety snapshot is taken first.`,
+        )
+      ) {
+        return;
+      }
+      del.disabled = true;
+      send<{ deleted: number; safety: string }>({
+        command: MessageCommand.RemoveDuplicates,
+        ids: markedHere.map((e) => e.id),
+      })
+        .then((res) => {
+          showResult(
+            'dup-result',
+            `Deleted ${res.deleted} duplicates (safety: ${res.safety} — see Backup → Safety backups).`,
+          );
+          void scanDuplicates();
+        })
+        .catch((err: Error) => {
+          sectionError('dup-error-2', err.message);
+          del.disabled = false;
+        });
     });
-    div.append(head, ul);
-    box.append(div);
-  });
+    footer.append(del);
+    div.append(footer);
+  }
 }
 
 function initDuplicatesSection(): void {
@@ -570,11 +644,11 @@ function initDuplicatesSection(): void {
   $('m-btn-duplicates-delete-all').addEventListener('click', () =>
     withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
       hideErrors();
-      const ids = planDuplicateDeletion(lastDupGroups);
+      const ids = [...dupMarked];
       if (ids.length === 0) return;
       if (
         !window.confirm(
-          `Delete ${ids.length} duplicates in one push? A safety snapshot is taken first — see Backup → Safety backups.`,
+          `Delete ${ids.length} marked duplicates in one push? One copy of each address stays. A safety snapshot is taken first — see Backup → Safety backups.`,
         )
       ) {
         return;

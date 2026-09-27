@@ -9,8 +9,10 @@ import {
   validateTree,
 } from '../src/shared/backup';
 import {
+  defaultMarkedIds,
   deleteByIds,
   getDuplicateGroups,
+  isSelectionLocked,
   normalizeUrl,
   planDuplicateDeletion,
 } from '../src/shared/duplicates';
@@ -121,6 +123,17 @@ describe('duplicates', () => {
     const groups = getDuplicateGroups(tree);
     expect(planDuplicateDeletion(groups)).toEqual([1, 2]);
     expect(planDuplicateDeletion(groups, new Set([2, 3]))).toEqual([2]); // 3 locked
+  });
+
+  it('default selection marks all but newest; last unmarked copy locks', () => {
+    const groups = getDuplicateGroups(tree);
+    expect([...defaultMarkedIds(groups)].sort()).toEqual([1, 2]);
+    // 3 is the lone survivor: marking it would wipe the link.
+    expect(isSelectionLocked(groups, new Set([1, 2]), 3)).toBe(true);
+    expect(isSelectionLocked(groups, new Set([1]), 3)).toBe(false);
+    expect(isSelectionLocked(groups, new Set([1]), 2)).toBe(false);
+    expect(isSelectionLocked(groups, new Set([1, 2, 3]), 3)).toBe(false); // already marked
+    expect(isSelectionLocked(groups, new Set(), 999)).toBe(false); // unknown id
   });
 
   it('ignores separators, keeps path case, and sees top-level nodes', () => {

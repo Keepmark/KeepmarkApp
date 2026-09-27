@@ -279,6 +279,39 @@ dd {
   padding-left: 18px;
 }
 
+.dup-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+
+.dup-toggle {
+  flex: 0 0 auto;
+  min-width: 2.2em;
+  font-weight: bold;
+}
+
+.dup-toggle.on {
+  border-color: var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+}
+
+.dup-toggle:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.dup-text {
+  flex: 1 1 auto;
+  overflow-wrap: break-word;
+}
+
+.dup-sub {
+  font-size: 12px;
+  color: var(--muted, GrayText);
+}
+
 #m-log-list {
   font-size: 12px;
   white-space: pre-wrap;

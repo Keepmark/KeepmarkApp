@@ -74,14 +74,31 @@ export function getDuplicateGroups(bookmarks: BookmarkNode[]): DuplicateGroup[] 
 }
 
 /**
+ * Default selection: every copy marked except the newest (max id) per group.
+ * Same lock as planDuplicateDeletion — single source via the plan itself.
+ */
+export function defaultMarkedIds(groups: DuplicateGroup[]): Set<number> {
+  return new Set(planDuplicateDeletion(groups));
+}
+
+/**
+ * True when id is the last unmarked copy of its group: marking it would wipe
+ * the link entirely, so the UI must refuse (core enforces this too).
+ */
+export function isSelectionLocked(groups: DuplicateGroup[], marked: Set<number>, id: number): boolean {
+  if (marked.has(id)) return false;
+  const group = groups.find((g) => g.entries.some((e) => e.id === id));
+  if (!group) return false;
+  return group.entries.every((e) => e.id === id || marked.has(e.id));
+}
+/**
  * Ids to delete for the given groups. Entries are id-sorted with the max id
  * locked (the newest copy always survives, deterministically). Pass a subset
  * of entry ids to delete only those (locked entries in the subset are
  * silently ignored).
  *
- * Atomicity note: deletions run as sequential whole-blob reconcile+push
- * steps, so no partial blob is ever persisted — each step leaves a
- * consistent state behind.
+ * Runs as one bulk RemoveDuplicates call (one snapshot + one push) — never
+ * one push per item.
  */
 export function planDuplicateDeletion(groups: DuplicateGroup[], onlyIds?: Set<number>): number[] {
   const out: number[] = [];
