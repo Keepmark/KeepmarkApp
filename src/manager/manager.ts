@@ -845,6 +845,9 @@ async function submitMove(): Promise<void> {
   }
   // Set on success so the post-busy gate below knows the preview was spent.
   let movedId: string | undefined;
+  // Local count for the success line (new/push upload exactly these; capture
+  // before the move — merge/pull rewrite the local tree).
+  const localCount = status?.bookmarkCount;
   await withBusy('m-btn-switch', 'Moving…', async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
@@ -887,7 +890,7 @@ async function submitMove(): Promise<void> {
     updateMoveForm();
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
-    const done = describeMoveResult({ mode, direction, newServiceUrl, syncId });
+    const done = describeMoveResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
     showResult('move-result', `${done} New sync ID: ${movedId}`);
     const copy = document.createElement('button');
     copy.textContent = 'Copy ID';
@@ -895,6 +898,13 @@ async function submitMove(): Promise<void> {
     copy.setAttribute('aria-label', 'Copy the new sync ID');
     copy.addEventListener('click', () => void copyText(movedId!, 'Copy sync ID:'));
     $('move-result').append(' ', copy);
+    // updateMoveForm() above re-locked the button and reshown the gate hint:
+    // the hint contradicts the result, so hide it, then bring the result
+    // into view (it sits below the fold on small windows).
+    ($('move-gate-hint') as HTMLElement).hidden = true;
+    const box = $('move-result') as HTMLElement;
+    box.scrollIntoView({ block: 'nearest' });
+    box.focus({ preventScroll: true });
     await refreshStatus();
   } else {
     // Failed: the still-valid preview keeps the button unlocked, so keep

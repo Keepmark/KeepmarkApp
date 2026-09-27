@@ -174,17 +174,20 @@ export function describeMoveResult(input: {
   direction: 'push' | 'pull' | 'merge';
   newServiceUrl: string;
   syncId?: string;
+  /** Local bookmark count for the outcomes that upload (new/push); omitted → 'your'. */
+  bookmarkCount?: number;
 }): string {
+  const n = input.bookmarkCount ?? 'your';
   if (input.mode === 'new') {
-    return `Created a new sync on ${input.newServiceUrl} and uploaded your bookmarks.`;
+    return `Move complete — created a new sync on ${input.newServiceUrl} and uploaded ${n} bookmarks.`;
   }
   if (input.direction === 'push') {
-    return `Overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with your local bookmarks.`;
+    return `Move complete — overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with ${n} local bookmarks.`;
   }
   if (input.direction === 'merge') {
-    return `Merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
+    return `Move complete — merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
   }
-  return `Replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
+  return `Move complete — replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
 }
 
 /** Human-readable undo slot description for banners. */
