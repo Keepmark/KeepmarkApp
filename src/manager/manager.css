@@ -227,6 +227,10 @@ button.danger {
   padding: 1px 8px;
 }
 
+.badge.official {
+  border-style: solid;
+}
+
 dl {
   display: grid;
   grid-template-columns: auto 1fr;

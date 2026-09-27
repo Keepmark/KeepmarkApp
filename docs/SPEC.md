@@ -365,7 +365,9 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 - Validation is pure and client-side first: `validateServiceUrl` (https
   always; http loopback-only), `validateConnect` (password required; new mode
   confirm match; existing requires id; push requires confirm tick),
-  `validateSwitch` (confirm in BOTH modes; id for existing),
+  `validateSwitch` (confirm field only in new mode — existing verifies
+  by decrypting the target before anything mutates, so a typo fails safely;
+  id required for existing),
   `validatePasswordChange` (current required, next ≠ current, confirm match).
 - Status card (`renderStatusCard`, prefix `p`/`m`/`t`): unlinked clears EVERY
   field to `—` (regression-pinned); badge `Official/Custom service` + `· API

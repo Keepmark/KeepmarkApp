@@ -6,6 +6,8 @@
   --danger: #c0392b;
   --muted: GrayText;
   --border: ButtonBorder;
+  --ok: #1e7e34;
+  --warn: #b7791f;
 }
 
 * {
@@ -101,7 +103,7 @@ select {
 }
 
 .warning {
-  color: var(--warn, #b7791f);
+  color: var(--warn);
   font-size: 12px;
   border: 1px solid currentColor;
   border-radius: 6px;
@@ -146,16 +148,6 @@ dd {
   overflow-wrap: anywhere;
 }
 
-.dup-group {
-  margin: 6px 0;
-  font-size: 12px;
-}
-
-.dup-group ul {
-  margin: 2px 0;
-  padding-left: 16px;
-}
-
 .card {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -179,13 +171,13 @@ dd {
 }
 
 .pill.ok {
-  color: #1e7e34;
-  border-color: #1e7e34;
+  color: var(--ok);
+  border-color: var(--ok);
 }
 
 .pill.warn {
-  color: #b7791f;
-  border-color: #b7791f;
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .pill.bad {
@@ -204,6 +196,10 @@ dd {
   border: 1px dashed var(--border);
   border-radius: 999px;
   padding: 1px 8px;
+}
+
+.badge.official {
+  border-style: solid;
 }
 
 .status-grid {
@@ -236,7 +232,7 @@ button.mini {
 
 .undo {
   margin: 8px 0;
-  border: 1px dashed var(--warn, #b7791f);
+  border: 1px dashed var(--warn);
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
