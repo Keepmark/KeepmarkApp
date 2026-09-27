@@ -1512,10 +1512,10 @@ export class BackgroundCore {
       }
       throw err;
     }
-    this.log.log(XbsLogLevel.Info, 'sync', `Server copy ${sanitizeSyncId(info.id)} deleted, unlinking device`);
+    this.log.log(XbsLogLevel.Info, 'sync', `Sync ${sanitizeSyncId(info.id)} deleted from server, unlinking device`);
     await this.disableSync();
     await this.ports.chrome
-      .notify('Server copy deleted', 'The sync was deleted from the service. This device is now unlinked; local bookmarks are untouched.')
+      .notify('Sync deleted from server', 'The sync was deleted from the service. This device is now unlinked; local bookmarks are untouched.')
       .catch(() => undefined);
     return { deleted: true };
   }

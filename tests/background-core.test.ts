@@ -1317,7 +1317,7 @@ describe('background core v1.2', () => {
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
     expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
-    expect(ports.notices.some((n) => n.title === 'Server copy deleted')).toBe(true);
+    expect(ports.notices.some((n) => n.title === 'Sync deleted from server')).toBe(true);
     // The delete carries no undo by design: the slot is gone with the link.
     expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
     // Natives untouched: the local bookmark survives the server wipe.

@@ -210,6 +210,9 @@ function initStatusSection(): void {
   $('m-btn-unlink').addEventListener('click', () =>
     withBusy('m-btn-unlink', 'Unlinking…', async () => {
       hideErrors();
+      // Disabled buttons don't fire clicks anyway; deleting the server copy
+      // already unlinks, so there is nothing left to unlink afterwards.
+      if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
       if (!window.confirm('Unlink this device? Sync stops; native bookmarks are untouched.')) return;
       try {
         await send({ command: MessageCommand.DisableSync });
@@ -234,14 +237,14 @@ function initStatusSection(): void {
         // confirms plus the automatic backup download in the background.
         if (
           !window.confirm(
-            'Delete the SERVER copy of your sync? Local bookmarks stay, but the server copy is gone forever. A backup file is downloaded first.',
+            'Permanently delete your sync from the server? Local bookmarks stay, but the server data is gone forever. A backup file is downloaded first.',
           )
         )
           return;
-        if (!window.confirm('Last chance: confirm deletion of the server copy.')) return;
+        if (!window.confirm('Last chance: confirm deletion of the sync on the server.')) return;
         try {
           await send({ command: MessageCommand.DeleteRemoteSync });
-          showResult('status-result', 'Server copy deleted. Device unlinked; local bookmarks untouched.');
+          showResult('status-result', 'Sync deleted from server. This device is now unlinked; local bookmarks are untouched.');
           status = undefined;
           ping = undefined;
           await refreshStatus();
@@ -258,11 +261,17 @@ function initStatusSection(): void {
 }
 
 /**
- * v1.2 gating for the danger zone: the delete button is enabled only when
- * the linked service speaks v1.2 (live probe wins, stored flag as fallback
+ * Danger-zone gating: both buttons act on the current link, so both stay
+ * disabled while unlinked (deleting the server sync already unlinks — after
+ * that there is nothing left to unlink). The delete button additionally
+ * needs a v1.2-speaking service (live probe wins, stored flag as fallback
  * when offline). Legacy services see the button disabled plus the reason.
  */
 function updateDangerZone(): void {
+  const linked = !!status?.syncEnabled;
+  const unlink = $('m-btn-unlink') as HTMLButtonElement;
+  unlink.disabled = !linked;
+  unlink.title = linked ? '' : 'Nothing to unlink — this device is not linked.';
   const btn = $('m-btn-delete-remote') as HTMLButtonElement;
   const hint = $('m-delete-v12-hint') as HTMLElement;
   const contract = $('m-api-contract');
