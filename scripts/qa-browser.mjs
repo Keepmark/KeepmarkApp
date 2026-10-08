@@ -280,18 +280,18 @@ async function resolve(ctx, m, direction) {
   await armConfirm(m);
   await click(m, `#conflict-btn-${direction}`);
   const res = await waitFor(async () => {
-    if (await visible(m, '#status-result') && /Conflict resolved/.test((await text(m, '#status-result')) ?? '')) return 'ok';
+    if (await visible(m, '#conflict-result') && /Conflict resolved/.test((await text(m, '#conflict-result')) ?? '')) return 'ok';
     if (await visible(m, '#conflict-error')) return `error: ${await text(m, '#conflict-error')}`;
     return undefined;
   }, 30000);
-  check(`${ctx.kind}: resolve conflict via ${direction}`, res === 'ok', res === 'ok' ? await text(m, '#status-result') : res);
+  check(`${ctx.kind}: resolve conflict via ${direction}`, res === 'ok', res === 'ok' ? await text(m, '#conflict-result') : res);
   const asked = await confirms(m);
   check(`${ctx.kind}: ${direction} asked for confirmation`, asked.length === 1, asked[0]?.slice(0, 70));
   const gone = await waitFor(async () => !(await visible(m, '#m-conflict-section')), 10000);
   check(`${ctx.kind}: conflict panel cleared after ${direction}`, gone);
   await sleep(1500);
   check(`${ctx.kind}: success evidence still visible after the panel closed`,
-    /Safety backups/.test((await visible(m, '#status-result')) ? (await text(m, '#status-result')) ?? '' : ''));
+    /Safety backups/.test((await visible(m, '#conflict-result')) ? (await text(m, '#conflict-result')) ?? '' : ''));
   await shot(ctx, m, `conflict-resolved-${direction}`);
 }
 

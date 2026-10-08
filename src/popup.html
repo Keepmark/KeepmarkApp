@@ -29,13 +29,13 @@
         <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" />
       </label>
       <fieldset class="options" role="radiogroup" aria-label="Link direction">
-        <legend>First sync</legend>
+        <legend>Which copy do you want to keep?</legend>
         <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
-          <span><b>Download <span class="tag ok">Recommended</span></b><small>Replace this browser's bookmarks with the server copy.</small></span></label>
+          <span><b>Keep the server copy <span class="tag ok">Recommended</span></b><small>Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="merge" />
-          <span><b>Merge</b><small>Keep everything from both sides. Nothing is deleted; shows a preview first.</small></span></label>
+          <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept. Shows the counts first.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="push" />
-          <span><b class="danger-text">Upload</b><small>Replace the server copy with this browser's bookmarks (deletes server data!).</small></span></label>
+          <span><b class="danger-text">Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
       </fieldset>
       <div id="conn-push-warn" hidden>
         <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>

@@ -42,40 +42,41 @@
         <!-- Conflict resolution section (shown when status.conflict === true) -->
         <div id="m-conflict-section" class="conflict-section" hidden>
           <h3>Sync conflict</h3>
-          <p class="hint">The server has newer changes (<span id="m-conflict-remote-time"></span>). Your local changes (<span id="m-conflict-local-count"></span> items) could not be pushed.</p>
-          <dl class="conflict-stats">
-            <dt>Local only (will upload)</dt><dd id="conflict-stat-local"></dd>
-            <dt>Server only (will download)</dt><dd id="conflict-stat-remote"></dd>
-            <dt>Title conflicts (server wins)</dt><dd id="conflict-stat-titles"></dd>
-            <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
-            <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
-            <dt>Moved to another folder</dt><dd id="conflict-stat-moved"></dd>
-            <dt>Description/tags differ</dt><dd id="conflict-stat-meta"></dd>
-          </dl>
-          <p id="conflict-explain" class="hint" hidden></p>
-          <div class="row conflict-actions">
-            <button id="conflict-btn-pull">Download</button>
-            <button id="conflict-btn-push">Upload</button>
-            <button id="conflict-btn-merge">Merge</button>
+          <p class="hint">The server copy changed on another device while this browser had unsynced edits.
+            Syncing is paused until you choose which copy to keep.</p>
+          <div class="conflict-sides">
+            <div><span>This browser</span><strong id="m-conflict-local-count"></strong><small>items</small></div>
+            <div><span>Server</span><strong id="m-conflict-remote-count"></strong><small id="m-conflict-remote-time"></small></div>
           </div>
-          <ul class="hint conflict-hints">
-            <li><strong>Download</strong>: <span id="conflict-hint-pull"></span></li>
-            <li><strong>Upload</strong>: <span id="conflict-hint-push"></span></li>
-            <li><strong>Merge</strong>: <span id="conflict-hint-merge"></span></li>
-          </ul>
+          <p id="conflict-explain" class="hint" hidden></p>
+          <div class="conflict-actions" role="group" aria-label="Resolve the conflict">
+            <button id="conflict-btn-merge" class="conflict-choice"><b>Merge both <span class="tag ok">Recommended</span></b><small id="conflict-hint-merge"></small></button>
+            <button id="conflict-btn-pull" class="conflict-choice"><b>Keep the server copy</b><small id="conflict-hint-pull"></small></button>
+            <button id="conflict-btn-push" class="conflict-choice"><b>Keep this browser's copy</b><small id="conflict-hint-push"></small></button>
+          </div>
+          <div id="conflict-error" class="error" role="alert" hidden></div>
           <details class="conflict-details">
-            <summary>Show details (first 5 each)</summary>
+            <summary>What differs (counts and first 5 of each)</summary>
+            <dl class="conflict-stats">
+              <dt>Local only (merge uploads)</dt><dd id="conflict-stat-local"></dd>
+              <dt>Server only (merge downloads)</dt><dd id="conflict-stat-remote"></dd>
+              <dt>Title conflicts (server title kept)</dt><dd id="conflict-stat-titles"></dd>
+              <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
+              <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
+              <dt>Moved to another folder</dt><dd id="conflict-stat-moved"></dd>
+              <dt>Description/tags differ</dt><dd id="conflict-stat-meta"></dd>
+            </dl>
             <div class="conflict-detail-grid">
-              <div><h4>Local only → will upload</h4><ul id="conflict-list-local"></ul></div>
-              <div><h4>Server only → will download</h4><ul id="conflict-list-remote"></ul></div>
+              <div><h4>Local only</h4><ul id="conflict-list-local"></ul></div>
+              <div><h4>Server only</h4><ul id="conflict-list-remote"></ul></div>
               <div><h4>Title conflicts (local → server)</h4><ul id="conflict-list-titles"></ul></div>
               <div><h4>Folders created</h4><ul id="conflict-list-folders"></ul></div>
               <div><h4>Moved (local → server folder)</h4><ul id="conflict-list-moved"></ul></div>
               <div><h4>Description/tags differ</h4><ul id="conflict-list-meta"></ul></div>
             </div>
           </details>
-          <div id="conflict-error" class="error" role="alert" hidden></div>
         </div>
+        <div id="conflict-result" class="result" role="status" hidden></div>
         <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the Keepmark popup to connect a sync first.
           (“Move service” needs an existing link to move from.)</p>
         <div class="row">
@@ -133,32 +134,43 @@
 
       <section id="sec-move" hidden>
         <h2>Move to another service</h2>
-        <p class="hint">Nothing syncs until you confirm at step 2. A safety backup of the current side is downloaded first.</p>
+        <p class="hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
+          is saved to Backup → Safety backups first.</p>
         <h3>1. Target</h3>
-        <label>New service URL <input id="m-switch-url" type="url" /></label>
-        <div role="radiogroup" aria-label="Move mode">
-        <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> <strong>New sync</strong> — create it and upload my bookmarks</label>
-        <label class="check"><input type="radio" name="m-switch-mode" value="existing" /> <strong>Existing sync</strong> — link it and choose the direction below</label>
-        </div>
-        <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" /></label>
+        <label>Target service URL <input id="m-switch-url" type="url" /></label>
+        <fieldset class="options" role="radiogroup" aria-label="Move mode">
+          <legend>Into which sync?</legend>
+          <label class="check option"><input type="radio" name="m-switch-mode" value="new" checked />
+            <span><b>A new sync</b><small>Create it on the target service and upload this browser's bookmarks.</small></span></label>
+          <label class="check option"><input type="radio" name="m-switch-mode" value="existing" />
+            <span><b>An existing sync</b><small>You already sync on the target service: open it with its sync ID and password.</small></span></label>
+        </fieldset>
+        <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" class="mono" /></label>
+        <div id="m-switch-existing-pw-slot"></div>
         <div id="m-switch-direction-row" hidden>
-          <div role="radiogroup" aria-label="Move direction">
-          <label class="check"><input type="radio" name="m-switch-direction" value="push" /> <strong>Upload</strong> — replace the server copy with the bookmarks on this device</label>
-          <label class="check"><input type="radio" name="m-switch-direction" value="pull" checked /> <strong>Download</strong> — replace the bookmarks on this device with the server copy</label>
-          <label class="check"><input type="radio" name="m-switch-direction" value="merge" /> <strong>Merge</strong> — keep everything from both sides (nothing is deleted; preview first)</label>
-          </div>
+          <fieldset class="options" role="radiogroup" aria-label="Move direction">
+            <legend>Which copy do you want to keep?</legend>
+            <label class="check option"><input type="radio" name="m-switch-direction" value="pull" checked />
+              <span><b>Keep the server copy</b><small>Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
+            <label class="check option"><input type="radio" name="m-switch-direction" value="push" />
+              <span><b>Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
+            <label class="check option"><input type="radio" name="m-switch-direction" value="merge" />
+              <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
+          </fieldset>
         </div>
-        <div class="row"><button id="m-btn-preview">Check target</button></div>
+        <div class="row"><button id="m-btn-preview" class="primary">Check target</button></div>
         <div id="move-error" class="error" role="alert" hidden></div>
         <div id="move-preview" class="preview" hidden></div>
-        <h3>2. Confirm</h3>
-        <label><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
-        <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
-        <div id="move-summary" class="hint"></div>
-        <p id="move-gate-hint" class="hint">Press “Check target” above first: the Move button appears here once
-          the check passes, and only for those exact inputs — change anything and check again.</p>
-        <div class="row" id="move-go-row" hidden><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
-        <div id="move-error-2" class="error" role="alert" hidden></div>
+        <p id="move-gate-hint" class="hint">Step 2 opens once the check passes, and only for these exact inputs —
+          change anything and check again.</p>
+        <div id="move-step2" hidden>
+          <h3>2. Confirm</h3>
+          <label id="m-switch-password-row"><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
+          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
+          <div id="move-summary" class="hint"></div>
+          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
+          <div id="move-error-2" class="error" role="alert" hidden></div>
+        </div>
         <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
       </section>
 

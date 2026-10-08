@@ -78,7 +78,7 @@ function hideErrors(): void {
     el.textContent = '';
   }
   // Stale success/result boxes must not survive next to a new error.
-  for (const id of ['status-result', 'backup-result', 'move-result', 'pw-result', 'settings-result']) {
+  for (const id of ['status-result', 'conflict-result', 'backup-result', 'move-result', 'pw-result', 'settings-result']) {
     $(id).hidden = true;
   }
 }
@@ -224,21 +224,21 @@ function renderConflictSection(): void {
   }
   section.hidden = false;
   const { mergeStats } = conflictPreview;
-  $('m-conflict-remote-time').textContent =
-    mergeStats.remoteCount > 0 ? `remote has ${mergeStats.remoteCount} items` : 'remote is empty';
   $('m-conflict-local-count').textContent = String(mergeStats.localCount);
+  $('m-conflict-remote-count').textContent = String(mergeStats.remoteCount);
+  $('m-conflict-remote-time').textContent = mergeStats.remoteCount > 0 ? 'items' : 'items (empty)';
   $('conflict-stat-local').textContent = String(mergeStats.localOnly);
   $('conflict-stat-remote').textContent = String(mergeStats.remoteOnly);
   $('conflict-stat-titles').textContent = String(mergeStats.titleConflicts);
   $('conflict-stat-folders').textContent = String(mergeStats.foldersCreated);
   $('conflict-stat-separators').textContent = String(mergeStats.separatorsAdopted);
-  $('conflict-hint-pull').textContent =
-    `replace local with the server copy (${mergeStats.remoteCount} items). Local bookmarks backed up first.`;
-  $('conflict-hint-push').textContent =
-    `replace the server copy with local (${mergeStats.localCount} items). Server copy backed up first.`;
   $('conflict-hint-merge').textContent =
-    `keep both sides, nothing deleted: ${mergeStats.localOnly} to upload, ${mergeStats.remoteOnly} to download, ` +
-    `${mergeStats.titleConflicts} title conflicts. Both sides backed up first.`;
+    `Nothing is deleted: ${mergeStats.localOnly} local-only upload, ${mergeStats.remoteOnly} server-only download` +
+    (mergeStats.titleConflicts > 0 ? `, ${mergeStats.titleConflicts} title conflicts keep the server title.` : '.');
+  $('conflict-hint-pull').textContent =
+    `Download: this browser gets the ${mergeStats.remoteCount} server items; its unsynced edits are discarded.`;
+  $('conflict-hint-push').textContent =
+    `Upload: the server gets your ${mergeStats.localCount} items; changes made on other devices are discarded.`;
   fillList('conflict-list-local', conflictPreview.localOnlySample, mergeStats.localOnly);
   fillList('conflict-list-remote', conflictPreview.remoteOnlySample, mergeStats.remoteOnly);
   fillList('conflict-list-titles', conflictPreview.titleConflictsSample, mergeStats.titleConflicts);
@@ -275,9 +275,9 @@ function explainConflict(p: ConflictPreviewResponse): string {
 }
 
 const conflictConfirm: Record<ConflictResolutionDirection, string> = {
-  pull: 'Replace your local bookmarks with the server copy? Your local bookmarks are saved to Backup → Safety backups first.',
-  push: 'Replace the server copy with your local bookmarks? The server copy is saved to Backup → Safety backups first.',
-  merge: 'Merge both sides into one tree (nothing is deleted) and upload it? Both sides are saved to Backup → Safety backups first.',
+  pull: 'Replace the bookmarks in this browser with the server copy? Its unsynced edits are lost; a copy is saved to Backup → Safety backups first.',
+  push: 'Replace the server copy with the bookmarks in this browser? Changes from other devices are lost; a copy is saved to Backup → Safety backups first.',
+  merge: 'Merge both copies into one and sync it everywhere? Nothing is deleted, but items removed on one side while offline come back. Both copies are saved to Backup → Safety backups first.',
 };
 
 const conflictDone: Record<ConflictResolutionDirection, string> = {
@@ -290,29 +290,30 @@ const conflictDone: Record<ConflictResolutionDirection, string> = {
 async function resolveConflict(direction: ConflictResolutionDirection): Promise<void> {
   hideErrors();
   if (!window.confirm(conflictConfirm[direction])) return;
-  const ids = ['conflict-btn-pull', 'conflict-btn-push', 'conflict-btn-merge'];
-  const others = ids.filter((id) => id !== `conflict-btn-${direction}`).map((id) => $(id) as HTMLButtonElement);
-  const prev = others.map((b) => b.disabled);
-  others.forEach((b) => (b.disabled = true));
+  // Not withBusy(): it swaps textContent and would flatten the <b>/<small>
+  // markup. Lock all three, retitle only the chosen one's label.
+  const buttons = ['conflict-btn-pull', 'conflict-btn-push', 'conflict-btn-merge'].map((id) => $(id) as HTMLButtonElement);
+  const prev = buttons.map((b) => b.disabled);
+  const label = $(`conflict-btn-${direction}`).querySelector('b') as HTMLElement;
+  const original = [...label.childNodes];
   const busy: Record<ConflictResolutionDirection, string> = {
     pull: 'Downloading…',
     push: 'Uploading…',
     merge: 'Merging…',
   };
+  buttons.forEach((b) => (b.disabled = true));
+  label.textContent = busy[direction];
   try {
-    await withBusy(`conflict-btn-${direction}`, busy[direction], async () => {
-      try {
-        await send({ command: MessageCommand.ResolveConflict, direction });
-        // The conflict section hides as soon as the conflict clears: the
-        // success evidence (naming the safety backups) must live outside it.
-        showResult('status-result', conflictDone[direction]);
-        await refreshStatus();
-      } catch (err) {
-        sectionError('conflict-error', (err as Error).message);
-      }
-    });
+    await send({ command: MessageCommand.ResolveConflict, direction });
+    // The conflict section hides as soon as the conflict clears: the
+    // success evidence (naming the safety backups) sits right below it.
+    showResult('conflict-result', conflictDone[direction]);
+    await refreshStatus();
+  } catch (err) {
+    sectionError('conflict-error', (err as Error).message);
   } finally {
-    others.forEach((b, i) => (b.disabled = prev[i]));
+    label.replaceChildren(...original);
+    buttons.forEach((b, i) => (b.disabled = prev[i]));
   }
 }
 
@@ -922,12 +923,18 @@ function updateMoveForm(): void {
   // Password labels follow the mode: in existing mode it is the target
   // sync's CURRENT password, not a new one. The confirmation stays in both
   // modes — a typo in existing mode locks you out with no recovery.
-  $('m-switch-password-label').textContent = mode === 'new' ? 'New password' : 'Target sync password';
+  $('m-switch-password-label').textContent = mode === 'new' ? 'New password' : 'Sync password';
   $('m-switch-confirm-label').textContent = mode === 'new' ? 'Confirm password' : 'Confirm target password';
   // Confirm row only when inventing a password (new mode). In existing
   // mode the password is verify-before-mutate: a typo fails safely as
   // InvalidCredentials, so no confirmation is asked.
   ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
+  // Existing sync: its password is part of the target (the check needs it
+  // for the merge counts), so the field sits in step 1; a new sync invents
+  // its password at confirm time, in step 2.
+  const pwRow = $('m-switch-password-row');
+  if (mode === 'existing') $('m-switch-existing-pw-slot').append(pwRow);
+  else $('m-switch-confirm-row').before(pwRow);
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
@@ -947,7 +954,7 @@ function updateMoveForm(): void {
       : direction === 'push'
         ? `Will replace the server copy on ${url} with ${n ?? 'your'} local bookmarks.`
         : direction === 'merge'
-          ? `Will merge your local bookmarks with the server copy on ${url} (nothing is deleted; preview at step 1).`
+          ? `Will merge your local bookmarks with the server copy on ${url} (nothing is deleted; counts above).`
           : `Will replace your local bookmarks with the server copy from ${url}.`;
 }
 
@@ -999,7 +1006,7 @@ async function previewTarget(): Promise<void> {
       if (mode === 'existing' && switchDirection() === 'merge' && preview.remoteExists) {
         const mergePassword = input('m-switch-password').value;
         if (!mergePassword) {
-          box.textContent = lines.join('\n') + '\nEnter the target password above, then Check target again for the merge preview.';
+          box.textContent = lines.join('\n') + '\nEnter the sync password above, then Check target again for the merge counts.';
           box.hidden = false;
           setMoveGate(false);
           return;
@@ -1038,7 +1045,9 @@ async function previewTarget(): Promise<void> {
  *  together, with the gate hint standing in for it while locked. */
 function setMoveGate(ok: boolean): void {
   ($('m-btn-switch') as HTMLButtonElement).disabled = !ok;
-  ($('move-go-row') as HTMLElement).hidden = !ok;
+  ($('move-step2') as HTMLElement).hidden = !ok;
+  // One primary action at a time: once step 2 is open, Move is the main one.
+  $('m-btn-preview').classList.toggle('primary', !ok);
   ($('move-gate-hint') as HTMLElement).hidden = ok;
 }
 
