@@ -171,7 +171,7 @@ async function initConnect(): Promise<void> {
           });
           if (
             !window.confirm(
-              `Merge keeps everything from both sides (never deletes).\n\n` +
+              `Merge keeps everything from both sides (nothing is deleted).\n\n` +
                 `• ${preview.localOnly} local bookmarks will upload (of ${preview.localCount})\n` +
                 `• ${preview.remoteOnly} server bookmarks will download (of ${preview.remoteCount})\n` +
                 `• ${preview.titleConflicts} same-address bookmarks differ in title (server title kept)\n` +

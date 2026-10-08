@@ -27,7 +27,7 @@
             <span id="m-service-badge" class="badge"></span>
           </div>
           <dl class="status-grid">
-            <dt>Server</dt><dd id="m-server">…</dd>
+            <dt>Service</dt><dd id="m-server">…</dd>
             <dt>Service version</dt><dd id="m-swversion">…</dd>
             <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
             <dt>Bookmarks</dt><dd id="m-count">…</dd>
@@ -45,7 +45,7 @@
           <p class="hint">The server has newer changes (<span id="m-conflict-remote-time"></span>). Your local changes (<span id="m-conflict-local-count"></span> items) could not be pushed.</p>
           <dl class="conflict-stats">
             <dt>Local only (will upload)</dt><dd id="conflict-stat-local"></dd>
-            <dt>Remote only (will download)</dt><dd id="conflict-stat-remote"></dd>
+            <dt>Server only (will download)</dt><dd id="conflict-stat-remote"></dd>
             <dt>Title conflicts (server wins)</dt><dd id="conflict-stat-titles"></dd>
             <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
             <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
@@ -54,29 +54,29 @@
           </dl>
           <p id="conflict-explain" class="hint" hidden></p>
           <div class="row conflict-actions">
-            <button id="conflict-btn-pull">Take remote</button>
-            <button id="conflict-btn-push">Upload local</button>
-            <button id="conflict-btn-merge">Merge both sides</button>
+            <button id="conflict-btn-pull">Download</button>
+            <button id="conflict-btn-push">Upload</button>
+            <button id="conflict-btn-merge">Merge</button>
           </div>
           <ul class="hint conflict-hints">
-            <li><strong>Take remote</strong>: <span id="conflict-hint-pull"></span></li>
-            <li><strong>Upload local</strong>: <span id="conflict-hint-push"></span></li>
+            <li><strong>Download</strong>: <span id="conflict-hint-pull"></span></li>
+            <li><strong>Upload</strong>: <span id="conflict-hint-push"></span></li>
             <li><strong>Merge</strong>: <span id="conflict-hint-merge"></span></li>
           </ul>
           <details class="conflict-details">
             <summary>Show details (first 5 each)</summary>
             <div class="conflict-detail-grid">
               <div><h4>Local only → will upload</h4><ul id="conflict-list-local"></ul></div>
-              <div><h4>Remote only → will download</h4><ul id="conflict-list-remote"></ul></div>
-              <div><h4>Title conflicts (local → remote)</h4><ul id="conflict-list-titles"></ul></div>
+              <div><h4>Server only → will download</h4><ul id="conflict-list-remote"></ul></div>
+              <div><h4>Title conflicts (local → server)</h4><ul id="conflict-list-titles"></ul></div>
               <div><h4>Folders created</h4><ul id="conflict-list-folders"></ul></div>
-              <div><h4>Moved (local → remote folder)</h4><ul id="conflict-list-moved"></ul></div>
+              <div><h4>Moved (local → server folder)</h4><ul id="conflict-list-moved"></ul></div>
               <div><h4>Description/tags differ</h4><ul id="conflict-list-meta"></ul></div>
             </div>
           </details>
           <div id="conflict-error" class="error" role="alert" hidden></div>
         </div>
-        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the extension popup to connect a sync first.
+        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the Keepmark popup to connect a sync first.
           (“Move service” needs an existing link to move from.)</p>
         <div class="row">
           <button id="m-btn-sync-now" class="primary">Sync now</button>
@@ -102,29 +102,29 @@
 
       <section id="sec-backup" hidden>
         <h2>Backup</h2>
-        <p class="hint">Encrypted backups protected by their own password (min 8 chars).</p>
+        <p class="hint">Save your local bookmarks to an encrypted file (password of your choice, at least 8 characters), or restore from one. The file opens only with that password.</p>
         <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
         <div class="row">
-          <button id="m-btn-export">Export backup</button>
-          <button id="m-btn-import">Import backup</button>
+          <button id="m-btn-export">Export encrypted backup</button>
+          <button id="m-btn-import">Choose backup file…</button>
           <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
         <div id="backup-error" class="error" role="alert" hidden></div>
         <div id="m-import-preview" class="preview" hidden></div>
-        <div class="row"><button id="m-btn-import-confirm" class="primary" disabled>Confirm import</button></div>
+        <div class="row"><button id="m-btn-import-confirm" class="primary" disabled>Replace local with backup</button></div>
         <div id="backup-result" class="result" hidden></div>
         <h3>Safety backups</h3>
-        <p class="hint">Automatic snapshots taken before every destructive step (newest 5 kept).
+        <p class="hint">Automatic snapshots taken before every overwrite or deletion (newest 5 kept).
           Encrypted entries need the current sync link to restore.</p>
-        <div class="row"><button id="m-btn-safety">Refresh safety list</button></div>
+        <div class="row"><button id="m-btn-safety">Refresh list</button></div>
         <div id="m-safety-list"></div>
         <div id="backup-error-2" class="error" role="alert" hidden></div>
       </section>
 
       <section id="sec-duplicates" hidden>
-        <h2>Duplicates</h2>
-        <p class="hint">Same address saved more than once. Tick copies to delete — one copy of each address always stays. Click a title to open it.</p>
-        <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete all listed</button></div>
+        <h2>Duplicate bookmarks</h2>
+        <p class="hint">Same URL saved more than once. Mark copies to delete — one copy of each URL always stays. Click a title to open it.</p>
+        <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete marked</button></div>
         <div id="dup-error" class="error" role="alert" hidden></div>
         <div id="dup-result" class="result" hidden></div>
         <div id="m-dup-list"></div>
@@ -137,15 +137,15 @@
         <h3>1. Target</h3>
         <label>New service URL <input id="m-switch-url" type="url" /></label>
         <div role="radiogroup" aria-label="Move mode">
-        <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> Create new sync (upload my bookmarks)</label>
-        <label class="check"><input type="radio" name="m-switch-mode" value="existing" /> Use existing sync</label>
+        <label class="check"><input type="radio" name="m-switch-mode" value="new" checked /> <strong>New sync</strong> — create it and upload my bookmarks</label>
+        <label class="check"><input type="radio" name="m-switch-mode" value="existing" /> <strong>Existing sync</strong> — link it and choose the direction below</label>
         </div>
         <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" /></label>
         <div id="m-switch-direction-row" hidden>
           <div role="radiogroup" aria-label="Move direction">
-          <label class="check"><input type="radio" name="m-switch-direction" value="push" /> Overwrite remote with my bookmarks</label>
-          <label class="check"><input type="radio" name="m-switch-direction" value="pull" checked /> Replace local with remote</label>
-          <label class="check"><input type="radio" name="m-switch-direction" value="merge" /> Merge both sides (never deletes; shows a preview first)</label>
+          <label class="check"><input type="radio" name="m-switch-direction" value="push" /> <strong>Upload</strong> — replace the server copy with the bookmarks on this device</label>
+          <label class="check"><input type="radio" name="m-switch-direction" value="pull" checked /> <strong>Download</strong> — replace the bookmarks on this device with the server copy</label>
+          <label class="check"><input type="radio" name="m-switch-direction" value="merge" /> <strong>Merge</strong> — keep everything from both sides (nothing is deleted; preview first)</label>
           </div>
         </div>
         <div class="row"><button id="m-btn-preview">Check target</button></div>
@@ -155,9 +155,9 @@
         <label><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
         <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
         <div id="move-summary" class="hint"></div>
-        <div class="row"><button id="m-btn-switch" class="primary" disabled>Move sync</button></div>
+        <div class="row"><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
         <div id="move-error-2" class="error" role="alert" hidden></div>
-        <p id="move-gate-hint" class="hint">“Move sync” unlocks only after a successful “Check target”,
+        <p id="move-gate-hint" class="hint">“Move now” unlocks only after a successful “Check target”,
           and stays locked to those exact inputs — change anything and check again.</p>
         <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
       </section>
@@ -179,7 +179,7 @@
             <option value="1">Warning</option>
             <option value="2">Info</option>
             <option value="3">Debug</option>
-            <option value="4">Verbose</option>
+            <option value="4">Verbose (may include your bookmark titles/URLs)</option>
           </select>
         </label>
         <div id="settings-error" class="error" role="alert" hidden></div>

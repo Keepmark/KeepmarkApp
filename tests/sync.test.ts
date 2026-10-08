@@ -91,7 +91,7 @@ describe('first-sync flows', () => {
 
   it('pull rejects newer remote versions', async () => {
     const { deps } = makeDeps({ getVersion: async () => ({ version: '99.0.0' }) });
-    await expect(pullExistingSync(deps, 'id', 'pw')).rejects.toThrow(/newer than this client/);
+    await expect(pullExistingSync(deps, 'id', 'pw')).rejects.toThrow(/created by a newer client/);
   });
 
   it('pushBookmarks encrypts and advances lastUpdated', async () => {

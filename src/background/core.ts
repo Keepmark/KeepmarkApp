@@ -608,7 +608,7 @@ export class BackgroundCore {
       .download(`keepmark-conflict-${Date.now()}.json`, JSON.stringify(localTree))
       .catch(() => undefined);
     await this.ports.chrome
-      .notify('Sync conflict', 'Remote changed first. Open the manager to resolve.')
+      .notify('Sync conflict', 'The server copy changed first. Open the manager to resolve.')
       .catch(() => undefined);
   }
 
@@ -648,7 +648,7 @@ export class BackgroundCore {
     }
     if (res.version && compareVersions(res.version, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
-        `Sync version ${res.version} is newer than this client (${SyncClientVersion}).`,
+        `This sync was created by a newer client (v${res.version}). Update the extension to open it.`,
       );
     }
     const plain = await decryptData(res.bookmarks ?? '', info.password!);
@@ -851,12 +851,12 @@ export class BackgroundCore {
         const remoteVersion = versionRes.version ?? undefined;
         if (!remoteVersion) {
           throw new UnsupportedSyncVersionException(
-            'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+            'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
           );
         }
         if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
           throw new UnsupportedSyncVersionException(
-            `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+            `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
           );
         }
         const derived = await deriveKey(password, syncId, remoteVersion);
@@ -938,12 +938,12 @@ export class BackgroundCore {
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
       throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
       );
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
-        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
       );
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
@@ -1035,12 +1035,12 @@ export class BackgroundCore {
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
       throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
       );
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
-        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
       );
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
@@ -1076,12 +1076,12 @@ export class BackgroundCore {
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
       throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
       );
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
-        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
       );
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
@@ -1528,12 +1528,12 @@ export class BackgroundCore {
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
       throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
       );
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(
-        `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
       );
     }
     const derived = await deriveKey(target.newPassword, syncId, remoteVersion);

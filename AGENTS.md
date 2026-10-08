@@ -14,7 +14,7 @@ interop, English-only).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only. Name/version in `package.json` (`keepmark-app@0.1.5`)
+- License GPL-3.0-only. Name/version in `package.json` (`keepmark-app@0.1.6`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 

@@ -17,7 +17,7 @@
     <h2>Connect this browser</h2>
     <div class="seg" role="radiogroup" aria-label="Sync mode">
       <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span>New sync</span></label>
-      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span>Use existing</span></label>
+      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span>Existing sync</span></label>
     </div>
     <p class="hint mode-hint mode-new">Create a sync on the service and upload this browser's bookmarks.</p>
     <p class="hint mode-hint mode-existing">Link this browser to a sync ID from your other device.</p>
@@ -26,16 +26,16 @@
     </label>
     <div id="conn-existing-only" hidden>
       <label>Sync ID
-        <input id="sync-id" type="text" class="mono" placeholder="sync id from your other device" />
+        <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" />
       </label>
       <fieldset class="options" role="radiogroup" aria-label="Link direction">
         <legend>First sync</legend>
         <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
           <span><b>Download <span class="tag ok">Recommended</span></b><small>Replace this browser's bookmarks with the server copy.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="merge" />
-          <span><b>Merge</b><small>Keep everything from both sides. Never deletes; shows a preview first.</small></span></label>
+          <span><b>Merge</b><small>Keep everything from both sides. Nothing is deleted; shows a preview first.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="push" />
-          <span><b class="danger-text">Upload</b><small>Overwrite the server copy with this browser's bookmarks (deletes server data!).</small></span></label>
+          <span><b class="danger-text">Upload</b><small>Replace the server copy with this browser's bookmarks (deletes server data!).</small></span></label>
       </fieldset>
       <div id="conn-push-warn" hidden>
         <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>
@@ -67,7 +67,7 @@
         <span id="p-service-badge" class="badge"></span>
       </div>
       <dl class="status-grid">
-        <dt>Server</dt>
+        <dt>Service</dt>
         <dd id="p-server">…</dd>
         <dt>Service version</dt>
         <dd id="p-swversion">…</dd>

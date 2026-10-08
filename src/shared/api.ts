@@ -69,16 +69,16 @@ export interface ServiceInfoResponse {
 }
 
 const STRINGS: Record<string, string> = {
-  ErrSyncNotFound: 'Sync not found on this service.',
-  ErrInvalidService: 'Not a valid xBrowserSync service.',
-  ErrNotAcceptingNewSyncs: 'Service is not accepting new syncs.',
-  ErrDailyNewSyncLimit: 'Daily new-sync limit reached.',
-  ErrDataOutOfSync: 'Remote changed since last sync; pull before pushing.',
+  ErrSyncNotFound: 'Sync not found on this service. It may have been removed (syncs expire after 3 weeks of inactivity).',
+  ErrInvalidService: 'This does not look like a valid xBrowserSync service. Check the service URL.',
+  ErrNotAcceptingNewSyncs: 'This service is not accepting new syncs right now. You can still connect an existing sync ID.',
+  ErrDailyNewSyncLimit: 'Daily new-sync limit reached on this service. Try again tomorrow.',
+  ErrDataOutOfSync: 'The server copy changed since your last sync. Download the latest version before uploading.',
   ErrUnsupportedVersion: 'Not supported (requires service v1.2).',
-  ErrSyncTooLarge: 'Sync data exceeds the service limit.',
-  ErrThrottled: 'Throttled by the service, retry later.',
-  ErrServiceOffline: 'Service offline or unreachable.',
-  ErrUnexpectedResponse: 'Unexpected response from the service.',
+  ErrSyncTooLarge: 'Sync data exceeds the service size limit. Remove some bookmarks and retry.',
+  ErrThrottled: 'Too many requests. The service asked us to slow down — retry in a few minutes.',
+  ErrServiceOffline: 'Cannot reach the service. Check your connection and the service URL.',
+  ErrUnexpectedResponse: 'The service returned data in an unexpected format.',
 };
 
 const tr = (key: string): string => STRINGS[key] ?? key;

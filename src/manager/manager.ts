@@ -233,11 +233,11 @@ function renderConflictSection(): void {
   $('conflict-stat-folders').textContent = String(mergeStats.foldersCreated);
   $('conflict-stat-separators').textContent = String(mergeStats.separatorsAdopted);
   $('conflict-hint-pull').textContent =
-    `replace local with the server copy (${mergeStats.remoteCount} items). Local side backed up first.`;
+    `replace local with the server copy (${mergeStats.remoteCount} items). Local bookmarks backed up first.`;
   $('conflict-hint-push').textContent =
-    `overwrite the server with local (${mergeStats.localCount} items). Server copy backed up first.`;
+    `replace the server copy with local (${mergeStats.localCount} items). Server copy backed up first.`;
   $('conflict-hint-merge').textContent =
-    `union, nothing deleted: ${mergeStats.localOnly} up, ${mergeStats.remoteOnly} down, ` +
+    `keep both sides, nothing deleted: ${mergeStats.localOnly} to upload, ${mergeStats.remoteOnly} to download, ` +
     `${mergeStats.titleConflicts} title conflicts. Both sides backed up first.`;
   fillList('conflict-list-local', conflictPreview.localOnlySample, mergeStats.localOnly);
   fillList('conflict-list-remote', conflictPreview.remoteOnlySample, mergeStats.remoteOnly);
@@ -259,7 +259,7 @@ function explainConflict(p: ConflictPreviewResponse): string {
   const urlLevel = m.localOnly + m.remoteOnly + m.titleConflicts;
   if (d.orderOnly) {
     return 'Both sides hold the same bookmarks in the same folders — only the order differs. ' +
-      'Take remote loses nothing but your local ordering.';
+      'Download loses nothing but your local ordering.';
   }
   if (urlLevel === 0 && d.moved === 0 && d.metadataChanged === 0 && d.foldersDiffer) {
     return 'Same bookmarks on both sides; the folder structure differs (e.g. an empty folder exists on one side only).';
@@ -275,15 +275,15 @@ function explainConflict(p: ConflictPreviewResponse): string {
 }
 
 const conflictConfirm: Record<ConflictResolutionDirection, string> = {
-  pull: 'Replace your local bookmarks with the server copy? Your local side is saved to the safety backups first.',
-  push: 'Overwrite the server copy with your local bookmarks? The server copy is saved to the safety backups first.',
-  merge: 'Merge both sides into one tree (nothing deleted) and upload it? Both sides are saved to the safety backups first.',
+  pull: 'Replace your local bookmarks with the server copy? Your local bookmarks are saved to Backup → Safety backups first.',
+  push: 'Replace the server copy with your local bookmarks? The server copy is saved to Backup → Safety backups first.',
+  merge: 'Merge both sides into one tree (nothing is deleted) and upload it? Both sides are saved to Backup → Safety backups first.',
 };
 
 const conflictDone: Record<ConflictResolutionDirection, string> = {
-  pull: 'Conflict resolved — took the server copy. Your previous local side is in Backup → Safety backups.',
-  push: 'Conflict resolved — uploaded your local side. The previous server copy is in Backup → Safety backups.',
-  merge: 'Conflict resolved — merged both sides (nothing deleted). Both previous sides are in Backup → Safety backups.',
+  pull: 'Conflict resolved: downloaded the server copy. Your previous local bookmarks are in Backup → Safety backups.',
+  push: 'Conflict resolved: uploaded your local bookmarks. The previous server copy is in Backup → Safety backups.',
+  merge: 'Conflict resolved: merged both sides (nothing deleted). Both previous sides are in Backup → Safety backups.',
 };
 
 /** Execute the chosen conflict resolution (confirmed, busy-guarded). */
@@ -295,8 +295,8 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
   const prev = others.map((b) => b.disabled);
   others.forEach((b) => (b.disabled = true));
   const busy: Record<ConflictResolutionDirection, string> = {
-    pull: 'Taking remote…',
-    push: 'Uploading local…',
+    pull: 'Downloading…',
+    push: 'Uploading…',
     merge: 'Merging…',
   };
   try {
@@ -393,10 +393,10 @@ function initStatusSection(): void {
     if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
     void withBusy('m-btn-unlink', 'Unlinking…', async () => {
       hideErrors();
-      if (!window.confirm('Unlink this device? Sync stops; native bookmarks are untouched.')) return;
+      if (!window.confirm('Unlink this device? Syncing stops; the bookmarks on this device stay untouched.')) return;
       try {
         await send({ command: MessageCommand.DisableSync });
-        showResult('status-result', 'Unlinked. Native bookmarks are untouched.');
+        showResult('status-result', 'Device unlinked. The bookmarks on this device stay untouched; link again to resume syncing.');
         status = undefined;
         ping = undefined;
         await refreshStatus();
@@ -494,7 +494,7 @@ function initBackupSection(): void {
       hideErrors();
       const password = input('m-backup-password').value;
       if (password.length < MinBackupPasswordLength) {
-        sectionError('backup-error', `Enter a backup password first (min ${MinBackupPasswordLength} chars).`);
+        sectionError('backup-error', `Enter a backup password first (at least ${MinBackupPasswordLength} characters).`);
         return;
       }
       try {
@@ -521,7 +521,7 @@ function initBackupSection(): void {
     if (!file) return;
     const password = input('m-backup-password').value;
     if (password.length < MinBackupPasswordLength) {
-      sectionError('backup-error', `Enter the backup password first (min ${MinBackupPasswordLength} chars), then choose the file again.`);
+      sectionError('backup-error', `Enter the backup password first (at least ${MinBackupPasswordLength} characters), then choose the file again.`);
       (e.target as HTMLInputElement).value = '';
       return;
     }
@@ -542,8 +542,8 @@ function initBackupSection(): void {
         importPreview = { name: file.name, size: file.size, lastModified: file.lastModified };
         const box = $('m-import-preview');
         box.textContent =
-          `${file.name}: ${preview.count} nodes — Confirm import replaces your local ` +
-          `bookmarks and pushes to the service (a safety snapshot is taken first).`;
+          `${file.name}: ${preview.count} item(s) — “Replace local with backup” replaces your local ` +
+          `bookmarks and uploads them to the service (a safety backup is saved first).`;
         box.hidden = false;
         ($('m-btn-import-confirm') as HTMLButtonElement).disabled = false;
       } catch (err) {
@@ -571,7 +571,7 @@ function initBackupSection(): void {
       }
       if (
         !window.confirm(
-          `Import replaces your local bookmarks and pushes to the service. Continue? (Undo is in Status.)`,
+          `Replace your local bookmarks with the backup and upload it to the service? (Undo is in Status.)`,
         )
       ) {
         return;
@@ -590,7 +590,7 @@ function initBackupSection(): void {
         ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
         showResult(
           'backup-result',
-          `Imported ${res.count} nodes and pushed to the service (safety: ${res.safety} — see Safety backups below).`,
+          `Restored ${res.count} item(s) and uploaded them to the service (safety backup: ${res.safety} — see Safety backups below).`,
         );
         await refreshSafety();
       } catch (err) {
@@ -607,19 +607,19 @@ function initBackupSection(): void {
 let importPreview: { name: string; size: number; lastModified: number } | undefined;
 
 const SafetyOperations: Record<string, string> = {
-  'take-remote': 'link: took remote',
-  'upload-local': 'link: uploaded local',
-  'create-empty': 'link: created empty',
-  'import-backup': 'backup import',
-  'change-password': 'password change',
-  'switch-take-remote': 'move: took remote',
-  'switch-upload': 'move: uploaded local',
-  'duplicates-cleanup': 'duplicates cleanup',
-  'pre-restore': 'pre-restore snapshot',
-  restore: 'restore',
-  'delete-remote': 'server delete',
-  'merge-local': 'merge: local side',
-  'merge-remote': 'merge: server side',
+  'take-remote': 'Downloaded server copy — Connect',
+  'upload-local': 'Uploaded local bookmarks — Connect',
+  'create-empty': 'Created empty sync — Connect',
+  'import-backup': 'Imported encrypted backup',
+  'change-password': 'Changed sync password — Settings',
+  'switch-take-remote': 'Downloaded server copy — Move service',
+  'switch-upload': 'Uploaded local bookmarks — Move service',
+  'duplicates-cleanup': 'Deleted duplicates',
+  'pre-restore': 'Before safety-backup restore',
+  restore: 'Restored safety backup',
+  'delete-remote': 'Deleted sync from server',
+  'merge-local': 'Merged both sides (local copy)',
+  'merge-remote': 'Merged both sides (server copy)',
 };
 
 async function refreshSafety(): Promise<void> {
@@ -635,7 +635,7 @@ async function refreshSafety(): Promise<void> {
   if (entries.length === 0) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = 'No safety backups yet — one is taken before every destructive step.';
+    p.textContent = 'No safety backups yet.';
     box.append(p);
     return;
   }
@@ -654,13 +654,13 @@ async function refreshSafety(): Promise<void> {
     restore.setAttribute('aria-label', `Restore safety backup ${entry.fileName}`);
     restore.addEventListener('click', () => {
       hideErrors();
-      if (!window.confirm(`Restore ${entry.fileName}? Current state is snapshotted first.`)) return;
+      if (!window.confirm(`Restore ${entry.fileName}? A safety backup of the current state is saved first.`)) return;
       restore.disabled = true;
       send<{ count: number; safety: string }>({ command: MessageCommand.RestoreSafety, fileName: entry.fileName })
         .then((res) => {
           showResult(
             'backup-result',
-            `Restored ${res.count} nodes (pre-restore snapshot: ${res.safety}).`,
+            `Restored ${res.count} item(s). A pre-restore backup was saved first (${res.safety}).`,
           );
           void refreshSafety();
           void refreshStatus();
@@ -723,7 +723,7 @@ async function scanDuplicates(): Promise<void> {
   lastDupGroups = groups;
   dupMarked = defaultMarkedIds(groups);
   if (groups.length === 0) {
-    box.innerHTML = '<p class="clean">No duplicates — everything is clean ✓</p>';
+    box.innerHTML = '<p class="clean">No duplicates. Your library is clean.</p>';
     updateDupBar();
     return;
   }
@@ -828,7 +828,7 @@ function renderDuplicates(): void {
         .then((res) => {
           showResult(
             'dup-result',
-            `Deleted ${res.deleted} duplicates (safety: ${res.safety} — see Backup → Safety backups).`,
+            `Deleted ${res.deleted} duplicates (safety backup: ${res.safety} — see Backup → Safety backups).`,
           );
           void scanDuplicates();
         })
@@ -853,7 +853,7 @@ function initDuplicatesSection(): void {
       if (ids.length === 0) return;
       if (
         !window.confirm(
-          `Delete ${ids.length} marked duplicates in one push? One copy of each address stays. A safety snapshot is taken first — see Backup → Safety backups.`,
+          `Delete ${ids.length} marked duplicates in one push? One copy of each URL stays. A safety backup is saved first — see Backup → Safety backups.`,
         )
       ) {
         return;
@@ -865,7 +865,7 @@ function initDuplicatesSection(): void {
         });
         showResult(
           'dup-result',
-          `Deleted ${res.deleted} duplicates (safety: ${res.safety} — see Backup → Safety backups).`,
+          `Deleted ${res.deleted} duplicates (safety backup: ${res.safety} — see Backup → Safety backups).`,
         );
         await scanDuplicates();
       } catch (err) {
@@ -922,10 +922,10 @@ function updateMoveForm(): void {
     mode === 'new'
       ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks. No sync ID needed — a new one is shown after the move.`
       : direction === 'push'
-        ? `Will overwrite the remote sync on ${url} with ${n ?? 'your'} local bookmarks.`
+        ? `Will replace the server copy on ${url} with ${n ?? 'your'} local bookmarks.`
         : direction === 'merge'
-          ? `Will union local and remote bookmarks on ${url} (never deletes; preview at step 1).`
-          : `Will replace local bookmarks with the remote sync from ${url}.`;
+          ? `Will merge your local bookmarks with the server copy on ${url} (nothing is deleted; preview at step 1).`
+          : `Will replace your local bookmarks with the server copy from ${url}.`;
 }
 
 async function previewTarget(): Promise<void> {
@@ -966,7 +966,7 @@ async function previewTarget(): Promise<void> {
     } else {
       const lines = [
         `Service v${preview.serviceVersion ?? '?'} (${preview.versionCompatible ? 'compatible' : 'TOO OLD — move blocked'})`,
-        `Remote sync: ${mode === 'new' ? 'n/a (will be created)' : preview.remoteExists ? `found, updated ${preview.remoteLastUpdated ?? '?'}` : 'NOT FOUND — check the ID'}`,
+        `Target sync: ${mode === 'new' ? 'n/a (will be created)' : preview.remoteExists ? `found, updated ${preview.remoteLastUpdated ?? '?'}` : 'NOT FOUND — check the ID'}`,
         `Local bookmarks: ${preview.localCount ?? '?'}`,
       ];
       // Merge direction: dry-run the union so the user sees exactly what
@@ -990,7 +990,7 @@ async function previewTarget(): Promise<void> {
             password: mergePassword,
           });
           lines.push(
-            `Merge preview (never deletes): ${mergeStats.localOnly} local will upload (of ${mergeStats.localCount}), ` +
+            `Merge preview (nothing is deleted): ${mergeStats.localOnly} local will upload (of ${mergeStats.localCount}), ` +
               `${mergeStats.remoteOnly} remote will download (of ${mergeStats.remoteCount}), ` +
               `${mergeStats.titleConflicts} title conflicts (server title kept), ` +
               `${mergeStats.foldersCreated} folders created, ${mergeStats.separatorsAdopted} separators kept from both sides. ` +
@@ -1061,7 +1061,7 @@ async function submitMove(): Promise<void> {
         }
         if (
           !window.confirm(
-            `Merge keeps everything from both sides and never deletes.\n\n${summary}\n\n` +
+            `Merge keeps everything from both sides (nothing is deleted).\n\n${summary}\n\n` +
               `Items deleted on one side while offline will reappear. Continue?`,
           )
         ) {

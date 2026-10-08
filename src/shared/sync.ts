@@ -246,12 +246,12 @@ export async function pullExistingSync(
   const remoteVersion = versionRes.version;
   if (!remoteVersion) {
     throw new UnsupportedSyncVersionException(
-      'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
+      'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
     );
   }
   if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
     throw new UnsupportedSyncVersionException(
-      `Sync version ${remoteVersion} is newer than this client (${SyncClientVersion}).`,
+      `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
     );
   }
   const derived = await deriveKey(password, syncId, remoteVersion);
