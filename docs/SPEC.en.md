@@ -414,7 +414,7 @@ implement `NativeAdapter` (`src/background/adapter.ts`).
 
 | Area | Firefox (MV2) | Chromium (MV3) |
 |---|---|---|
-| Manifest | `manifest_version 2`, `browser_action`, `background.page`, `browser_specific_settings.gecko` (`keepmark@proton.me`, min 140.0, `data_collection_permissions: [none]`), `incognito: not_allowed` | `manifest_version 3`, `action`, `background.service_worker` (module, single-file ESM), `host_permissions [https://*/*, http://*/*]`, `minimum_chrome_version 109` |
+| Manifest | `manifest_version 2`, `browser_action`, `background.page`, `browser_specific_settings.gecko` (`keepmark@proton.me`, min 142.0, `data_collection_permissions: [none]`), `incognito: not_allowed` | `manifest_version 3`, `action`, `background.service_worker` (module, single-file ESM), `host_permissions [https://*/*, http://*/*]`, `minimum_chrome_version 109` |
 | Roots | `menu________` / `unfiled_____` / `toolbar_____`, all 3 containers | Other `2` + Toolbar `1`; no Menu root → `[xbs] Menu` folder inside Other (created on demand; read/write through it) |
 | Separators | native `type: 'separator'` | `───` / `|` bookmark placeholders |
 | New-tab URL | `about:newtab`, `about:` config detection | `chrome://newtab/` or `edge://newtab/` |
