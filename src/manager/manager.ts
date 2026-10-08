@@ -511,7 +511,16 @@ function initBackupSection(): void {
       }
     }),
   );
-  $('m-btn-import').addEventListener('click', () => ($('m-import-file') as HTMLInputElement).click());
+  // Import is verify-then-confirm: once a file is read with a password, both
+  // are pinned (the field locks) and Confirm uses exactly that pair. Pressing
+  // Import again starts over with an editable field.
+  $('m-btn-import').addEventListener('click', () => {
+    // Starting over from a pending read: unlock and clear, then the picker's
+    // change handler asks for the password again. A fresh import keeps the
+    // password just typed (it must be entered before choosing the file).
+    if (importPreview) resetImport();
+    ($('m-import-file') as HTMLInputElement).click();
+  });
   ($('m-import-file') as HTMLInputElement).addEventListener('change', async (e) => {
     hideErrors();
     ($('m-import-preview') as HTMLElement).hidden = true;
@@ -539,11 +548,13 @@ function initBackupSection(): void {
           json,
           password,
         });
-        importPreview = { name: file.name, size: file.size, lastModified: file.lastModified };
+        importPreview = { name: file.name, size: file.size, lastModified: file.lastModified, password };
+        lockImportPassword(true);
         const box = $('m-import-preview');
         box.textContent =
           `${file.name}: ${preview.count} item(s) — “Replace local with backup” replaces your local ` +
-          `bookmarks and uploads them to the service (a safety backup is saved first).`;
+          `bookmarks and uploads them to the service (a safety backup is saved first). ` +
+          `Password verified and locked — press “Import backup” again to start over.`;
         box.hidden = false;
         ($('m-btn-import-confirm') as HTMLButtonElement).disabled = false;
       } catch (err) {
@@ -558,7 +569,6 @@ function initBackupSection(): void {
       hideErrors();
       const fileEl = $('m-import-file') as HTMLInputElement;
       const file = fileEl.files?.[0];
-      const password = input('m-backup-password').value;
       if (
         !file ||
         !importPreview ||
@@ -581,21 +591,17 @@ function initBackupSection(): void {
         const res = await send<{ count: number; safety: string }>({
           command: MessageCommand.ImportBackup,
           json,
-          password,
+          password: importPreview.password,
         });
-        input('m-backup-password').value = '';
-        fileEl.value = '';
-        importPreview = undefined;
-        ($('m-import-preview') as HTMLElement).hidden = true;
-        ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
+        resetImport();
         showResult(
           'backup-result',
           `Restored ${res.count} item(s) and uploaded them to the service (safety backup: ${res.safety} — see Safety backups below).`,
         );
         await refreshSafety();
       } catch (err) {
-        // Never leave a failed password in the DOM.
-        input('m-backup-password').value = '';
+        // Never leave a failed password in the DOM (or pinned in memory).
+        resetImport();
         sectionError('backup-error', (err as Error).message);
       }
     }),
@@ -603,8 +609,26 @@ function initBackupSection(): void {
   $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', 'Loading…', () => refreshSafety()));
 }
 
-/** File the current import preview was made for — confirm requires identity. */
-let importPreview: { name: string; size: number; lastModified: number } | undefined;
+/** Lock the shared backup password while a read preview is pending: export
+ * and the pending import would otherwise silently use different values. */
+function lockImportPassword(locked: boolean): void {
+  (input('m-backup-password') as HTMLInputElement).disabled = locked;
+  ($('m-btn-export') as HTMLButtonElement).disabled = locked;
+}
+
+/** Drop any pending import: unlock + clear the password, forget the file. */
+function resetImport(): void {
+  importPreview = undefined;
+  lockImportPassword(false);
+  input('m-backup-password').value = '';
+  ($('m-import-file') as HTMLInputElement).value = '';
+  ($('m-import-preview') as HTMLElement).hidden = true;
+  ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
+}
+
+/** File (and verified password) the current import preview was made for —
+ * confirm requires the same file and reuses that password. */
+let importPreview: { name: string; size: number; lastModified: number; password: string } | undefined;
 
 const SafetyOperations: Record<string, string> = {
   'take-remote': 'Downloaded server copy — Connect',
