@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
-import { platformAlias, root } from './vite.shared';
+import { platformAlias, stripLzutf8InnerHtml, root } from './vite.shared';
 
 /** Fail unless the SW bundle (and the manifest pointing at it) is in place. */
 function checkSw(): Plugin {
@@ -32,5 +32,5 @@ export default defineConfig({
       fileName: () => 'background.js',
     },
   },
-  plugins: [checkSw()],
+  plugins: [stripLzutf8InnerHtml(), checkSw()],
 });

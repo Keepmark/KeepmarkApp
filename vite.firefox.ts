@@ -1,6 +1,6 @@
 // Firefox MV2 build: popup page + background page.
 import { defineConfig } from 'vite';
-import { copyStatic, platformAlias, root } from './vite.shared';
+import { copyStatic, stripLzutf8InnerHtml, platformAlias, root } from './vite.shared';
 
 const outDir = `${root}/build/firefox`;
 
@@ -21,5 +21,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [copyStatic('firefox', outDir)],
+  plugins: [stripLzutf8InnerHtml(), copyStatic('firefox', outDir)],
 });

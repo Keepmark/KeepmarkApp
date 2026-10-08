@@ -48,4 +48,22 @@ export function copyStatic(platform: 'firefox' | 'chromium', outDir: string): Pl
   };
 }
 
+// lzutf8's debug logger does `document.body.innerHTML += ...`, which AMO's
+// validator flags ("Unsafe assignment to innerHTML"). Dead code for us
+// (appendToDocument is never set); drop the write at bundle time.
+export function stripLzutf8InnerHtml(): Plugin {
+  const needle = 'document.body.innerHTML += message + "<br/>";';
+  return {
+    name: 'strip-lzutf8-innerhtml',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/[\\/]lzutf8[\\/]/.test(id) || !code.includes('document.body.innerHTML')) return null;
+      if (!code.includes(needle)) {
+        throw new Error('strip-lzutf8-innerhtml: lzutf8 changed, update the needle');
+      }
+      return { code: code.replace(needle, ';'), map: null };
+    },
+  };
+}
+
 export { root };
