@@ -68,8 +68,13 @@ npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser
 - Queue lives only in the background context; popup talks via messages.
 - Native edits (listener debounce, popup add/remove) reconcile native→synced
   through stored id mappings (stable ids), then push.
-- 409: stash the uncommitted tree as a `keepmark-conflict-*.json` download,
-  notify, then pull latest. Never auto-merge, never drop silently.
+- 409: the conflict is persisted (survives worker sleeps/restarts), the
+  uncommitted tree is stashed as a `keepmark-conflict-*.json` download and a
+  notification points to the manager, where you pick Take remote / Upload
+  local / Merge (each confirmed, destroyed side safety-backed-up first).
+  No auto-pull while it is pending; never auto-merge, never drop silently.
+- Native edits that never reached the server are checked before every pull:
+  they become a conflict instead of being overwritten.
 - Sync loss (401): queue cleared, credentials wiped, notification.
 - "Sync now" = pull-if-newer then push.
 

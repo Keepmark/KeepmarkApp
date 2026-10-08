@@ -58,7 +58,7 @@ h1 {
 .brand-chip {
   display: inline-flex;
   align-items: center;
-  background: #0a323d;
+  background: #172552;
   border-radius: 6px;
   padding: 2px 6px;
   line-height: 0;
@@ -240,6 +240,25 @@ button.mini {
 
 .undo .row {
   margin-top: 4px;
+}
+
+/* Conflict action button */
+.conflict-action-row {
+  margin-top: 8px;
+}
+
+#btn-resolve-conflict {
+  width: 100%;
+  background: var(--warn);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+#btn-resolve-conflict:hover {
+  filter: brightness(1.1);
 }
 
 .check {

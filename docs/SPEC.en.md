@@ -153,10 +153,10 @@ The server message is appended as a `(server: …)` suffix, else `(HTTP n)`.
 | 404 | `InvalidServiceException` | not a valid service |
 | 405 | `NotAcceptingNewSyncsException` | not accepting new syncs |
 | 406 | `DailyNewSyncLimitException` | quota; e2e consumes it (§11.2) |
-| 409 | `DataOutOfSyncException` | remote moved → clear queue, queue local job at front, stash uncommitted tree as a `keepmark-conflict-*.json` download + `Sync conflict` notification, then pull. Never merge |
+| 409 | `DataOutOfSyncException` | remote moved → conflict **persisted** in `StoreKey.ConflictState` (encrypted local tree + remote `lastUpdated` seen; survives MV3 worker sleeps and browser restarts), plaintext `keepmark-conflict-*.json` download + `Sync conflict` notification, queue stops (`ConflictCapturedException`). While pending: no auto-pull (`checkForUpdates`/local jobs skip), native edits refresh the stored local side, no push. UI (`GetConflictState` / `GetConflictPreview` / `ResolveConflict`) offers **Pull** / **Push** / **Merge** (union, never deletes), each confirmed. Never auto-merge. |
 | 412 | `UnsupportedVersionException` | v1.2 on legacy → downgrade + legacy retry; surfaced as `Not supported (requires service v1.2)` |
 | 413 | `SyncTooLargeException` | blob exceeds `maxSyncSize` |
-| 429 | `ThrottledException` | queue cleared, sync-lost path |
+| 429 | `ThrottledException` | transient: job requeued at the front, drain stops (no tight loop); credentials are never wiped for a 429 |
 | 5xx/network/timeout/abort | `ServiceOfflineException` | non-local jobs requeued at front, error rethrown |
 
 Non-HTTP: decryption failure → `InvalidCredentialsException` (wrong
@@ -207,8 +207,10 @@ The popup never touches the queue. `drain()` executes up to 10 steps.
 | Failure | Policy |
 |---|---|
 | `ServiceOfflineException` on a non-local job | job back to front, error rethrown |
-| `DataOutOfSyncException` (409) | clear queue, `enqueueFront('local')`, error rethrown |
-| `SyncNotFound` / `IncompleteSyncInfo` / `Throttled` / `UnsupportedSyncVersion` | clear queue, `onSyncLost` (caller disables sync) |
+| `DataOutOfSyncException` (409) | conflict persisted (see §3.4), queue stops via `ConflictCapturedException`; the failed job is dropped (the stored conflict carries the local side) |
+| `SyncNotFound` / `IncompleteSyncInfo` / `UnsupportedSyncVersion` | clear queue, `onSyncLost` (caller disables sync) |
+| `ThrottledException` (429) | like offline: job back to front, error rethrown |
+| `InvalidCredentialsException` | clear queue, credentials kept (user relinks) |
 
 ### 4.2 Jobs and flows
 
@@ -220,8 +222,19 @@ The popup never touches the queue. `drain()` executes up to 10 steps.
 - `remote` (push): reconcile native→synced whole-tree pass per container via
   stored id mappings (`reconcileContainer`); no-op → no push; else
   `pushCurrent` (revision CAS iff v1.2 link + stored revision, else
-  timestamp). On 409 → conflict download + notification, rethrow (the queue
-  converts it into a local job).
+  timestamp). Id mappings are persisted only after the PUT lands. On 409 →
+  conflict persisted + download + notification (§3.4).
+- Before every pull (`local` job) the natives are reconciled against the
+  cached tree: unpushed native edits (offline push whose in-memory queue died
+  with the worker/browser) become a conflict instead of being wiped by
+  `clearAndPopulate`.
+- `ResolveConflict`: the destroyed side is snapshotted first (fail closed);
+  every PUT is based on the `lastUpdated` / `meta.revision` of the remote just
+  downloaded (`pushOnBase`), never on the stored base that caused the 409.
+  Pull replaces natives with the fresh remote; Push uploads the stored local
+  side and re-anchors mappings; Merge uploads the union FIRST (3 attempts,
+  re-fetch + re-merge from the original local side) and overwrites natives
+  only after success. The conflict clears only on success (retryable).
 - `localAndRemote`/restore: snapshot undo, overwrite natives, push.
 - "Sync now" = `checkForUpdates` (pull-if-newer) then push, one round trip.
 - `quiesce()` (drain, errors swallowed) runs before every direct GET+PUT
@@ -409,8 +422,8 @@ implement `NativeAdapter` (`src/background/adapter.ts`).
 | CSP | `connect-src https: http://localhost:* http://127.0.0.1:*; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'` | same connect-src |
 | Background | persistent page | service worker: alarm-driven (no `setTimeout`), single bundle, no local chunk imports, no dynamic `import()` |
 
-Icons come from the official Keepmark brand (`../Keepmark/brand/`): ribbon
-manifest icons (48/128), navy-tile + keyhole toolbar icons (16/32, grayscale
+Icons come from the official Keepmark brand (`../Keepmark/brand/`): navy-tile
+manifest icons (48/128) + toolbar icons (16/32, grayscale
 notsynced), white-mark in-page chip.
 
 ## 9. Security and privacy requirements

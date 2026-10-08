@@ -151,10 +151,10 @@ Server message appended as `(server: …)` suffix, else `(HTTP n)`.
 | 404 | `InvalidServiceException` | not a valid service |
 | 405 | `NotAcceptingNewSyncsException` | no new syncs |
 | 406 | `DailyNewSyncLimitException` | quota; e2e consumes it (§11.2) |
-| 409 | `DataOutOfSyncException` | remote moved → clear queue, queue local job at front, stash uncommitted tree as `keepmark-conflict-*.json` download + `Sync conflict` notification, then pull. Never merge |
+| 409 | `DataOutOfSyncException` | remote moved → conflict **persisted** in `StoreKey.ConflictState` (encrypted local tree + remote `lastUpdated` seen; survives MV3 worker sleeps and browser restarts), plaintext `keepmark-conflict-*.json` download + `Sync conflict` notification, queue stops (`ConflictCapturedException`). While pending: no auto-pull (`checkForUpdates`/local jobs skip), native edits refresh the stored local side, no push. UI (`GetConflictState` / `GetConflictPreview` / `ResolveConflict`) offers **Pull** / **Push** / **Merge** (union, never deletes), each confirmed. Never auto-merge. |
 | 412 | `UnsupportedVersionException` | v1.2 on legacy → downgrade + legacy retry; surfaced as `Not supported (requires service v1.2)` |
 | 413 | `SyncTooLargeException` | blob exceeds `maxSyncSize` |
-| 429 | `ThrottledException` | queue cleared, sync lost path |
+| 429 | `ThrottledException` | transient: job requeued at the front, drain stops (no tight loop); credentials are never wiped for a 429 |
 | 5xx/network/timeout/abort | `ServiceOfflineException` | non-local jobs requeued at front, error rethrown |
 
 Non-HTTP: decrypt failure → `InvalidCredentialsException` (wrong password);
@@ -205,8 +205,10 @@ Popup never touches the queue. `drain()` executes up to 10 steps.
 | Failure | Policy |
 |---|---|
 | `ServiceOfflineException` on non-local job | job back to front, error rethrown |
-| `DataOutOfSyncException` (409) | clear queue, `enqueueFront('local')`, error rethrown |
-| `SyncNotFound` / `IncompleteSyncInfo` / `Throttled` / `UnsupportedSyncVersion` | clear queue, `onSyncLost` (caller disables sync) |
+| `DataOutOfSyncException` (409) | conflict persisted (see §3.4), queue stops via `ConflictCapturedException`; the failed job is dropped (the stored conflict carries the local side) |
+| `SyncNotFound` / `IncompleteSyncInfo` / `UnsupportedSyncVersion` | clear queue, `onSyncLost` (caller disables sync) |
+| `ThrottledException` (429) | like offline: job back to front, error rethrown |
+| `InvalidCredentialsException` | clear queue, credentials kept (user relinks) |
 
 ### 4.2 Jobs and flows
 
@@ -218,8 +220,19 @@ Popup never touches the queue. `drain()` executes up to 10 steps.
 - `remote` (push): reconcile native→synced whole-tree pass per container via
   stored id mappings (`reconcileContainer`); no-op → no push; else
   `pushCurrent` (revision CAS iff v1.2 link + stored revision, else
-  timestamp). 409 → conflict download + notification, rethrow (queue converts
-  to local job).
+  timestamp). Id mappings are persisted only after the PUT lands. On 409 →
+  conflict persisted + download + notification (§3.4).
+- Before every pull (`local` job) the natives are reconciled against the
+  cached tree: unpushed native edits (offline push whose in-memory queue died
+  with the worker/browser) become a conflict instead of being wiped by
+  `clearAndPopulate`.
+- `ResolveConflict`: the destroyed side is snapshotted first (fail closed);
+  every PUT is based on the `lastUpdated` / `meta.revision` of the remote just
+  downloaded (`pushOnBase`), never on the stored base that caused the 409.
+  Pull replaces natives with the fresh remote; Push uploads the stored local
+  side and re-anchors mappings; Merge uploads the union FIRST (3 attempts,
+  re-fetch + re-merge from the original local side) and overwrites natives
+  only after success. The conflict clears only on success (retryable).
 - `localAndRemote`/restore: snapshot undo, overwrite natives, push.
 - "Sync now" = `checkForUpdates` (pull-if-newer) then push, one round trip.
 - `quiesce()` (drain, errors swallowed) runs before every direct GET+PUT
@@ -318,6 +331,9 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   kind + count + time with confirm (`Undo the last link operation?…`).
 - `GetRemovedSync` / `ClearRemovedSync`: surfaces the 401 snapshot with
   Download/Dismiss (manager/popup banner area).
+- `GetConflictState`: returns `{hasConflict, localCount?, remoteLastUpdated?, localTreeEncrypted?}` — called when `status.conflict === true` to render resolution UI.
+- `GetConflictPreview`: returns detailed `MergeStats` + samples (localOnly/remoteOnly/titleConflicts/foldersCreated + first 5 paths each) for the conflict resolution card.
+- `ResolveConflict {direction:'pull'|'push'|'merge'}`: executes the chosen resolution; safety backup of destroyed side(s) taken first; on success clears conflict state and refreshes status.
 - `SetVerbosity {level}` / `GetLogs` / `Ping` / `GetStatus` / `DownloadFile`:
   verbosity persisted (`LogVerbosity`), applied at startup; logs viewer
   renders `[LEVEL] tag: message` (already sanitized); ping is a 3 s
@@ -408,8 +424,8 @@ detection); `tsconfig.paths` mirrors it for `tsc`. Both adapters implement
 | CSP | `connect-src https: http://localhost:* http://127.0.0.1:*; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'` | same connect-src |
 | Background | persistent page | service worker: alarm-driven (no `setTimeout`), single bundle, no local chunk imports, no dynamic `import()` |
 
-Icons from official Keepmark brand (`../Keepmark/brand/`): ribbon manifest
-icons (48/128), navy-tile + keyhole toolbar (16/32, grayscale notsynced),
+Icons from official Keepmark brand (`../Keepmark/brand/`): navy-tile manifest
+icons (48/128) + toolbar (16/32, grayscale notsynced),
 white-mark in-page chip.
 
 ## 9. Security and privacy requirements
@@ -495,6 +511,43 @@ blocked on AMO signing; no multi-account/auto-backup/QR; toolbar toggle +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
 assuming state.
+
+## 13. Development requirements (prevent regression)
+
+### 13.1 Concurrency & gate discipline
+
+- **Every `await _gate.WaitAsync()` MUST have a matching `_gate.Release()` in a `finally` block.** No exceptions. The `SyncQueue` runner wraps `runJob` in try/finally but individual engine methods that acquire the gate directly must release it.
+- **Conflict resolution methods** (`ResolveConflictPullAsync`, `ResolveConflictPushAsync`, `ResolveConflictMergeAsync`) MUST:
+  1. Set `_resolvingConflict = true` at start of `try`
+  2. Reset `_resolvingConflict = false` in `finally` (after `_gate.Release()`)
+  3. Never call other public sync methods that might re-acquire the gate (avoid deadlock)
+- **`ForceSyncAsync` and `PushInBackgroundAsync`** MUST check `_resolvingConflict` **after** acquiring `_gate` and return early if true. This prevents false Conflict status during resolution.
+- **Background timers** (poll, native debounce) MUST NOT fire sync logic while `_resolvingConflict` is true.
+
+### 13.2 Merge retry discipline
+
+- **Merge push MUST retry on 409** (DataOutOfSyncException) with re-fetch + re-merge (max 3 attempts). Single push attempt is insufficient when remote can change during merge.
+- Re-merge uses the **same pure `BookmarkMerge.Merge` function** as preview, so counts always match.
+
+### 13.3 State capture completeness
+
+- **All conflict entry points** must capture conflict state: push (409), pull (if local dirty), auto-sync (both dirty). The `conflictState` must include: local tree, remoteLastUpdated, encrypted local blob, local count.
+- **Preview API** (`GetConflictPreview`) MUST re-fetch remote at call time, not return cached state.
+
+### 13.4 Test coverage requirements
+
+- **Concurrency tests**: race between auto-sync and conflict resolution (Pull/Push/Merge)
+- **Merge retry test**: simulate 409 on push, verify re-merge + retry succeeds
+- **Gate release test**: every engine method acquiring `_gate` verified to release in `finally`
+- **Flag test**: `_resolvingConflict` prevents ForceSyncAsync/background push during resolution
+
+## 14. Release checklist (KeepmarkApp)
+
+- [ ] `npm test` green (all 269+ tests)
+- [ ] `npm run lint` clean
+- [ ] `npm run build` (Firefox + Chromium) succeeds
+- [ ] Manual browser QA: conflict → merge → safety backup visible
+- [ ] `npm run package` → zips in `dist/`
 
 ## 13. Verification guide (for the outsourced reviewer)
 

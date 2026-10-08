@@ -83,6 +83,9 @@ async function refreshAll(): Promise<void> {
   } else {
     state.textContent = status.lastUpdated ? `Synced ${new Date(status.lastUpdated).toLocaleString()}` : 'Synced';
   }
+  // Show/hide conflict resolution button
+  const conflictAction = $('p-conflict-action') as HTMLElement;
+  conflictAction.hidden = !status?.conflict;
   await refreshUndoBanner();
 }
 
@@ -198,7 +201,14 @@ function initMain(): void {
     clearErrors();
     await withBusy('btn-sync-now', 'Syncing…', async () => {
       try {
-        await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
+        const result = await send<{ queued: boolean; conflict?: boolean }>({
+          command: MessageCommand.SyncBookmarks,
+          sync: { type: 'remote', runSync: true },
+        });
+        if (result.conflict) {
+          // Conflict captured — will be shown on next refresh
+          return;
+        }
       } catch (err) {
         showError('main', (err as Error).message);
       }
@@ -207,6 +217,14 @@ function initMain(): void {
   });
   $('btn-manage').addEventListener('click', () => {
     const url = browser.runtime.getURL('manager.html');
+    if (new URLSearchParams(location.search).has('fullpage')) {
+      location.href = url;
+    } else {
+      void browser.tabs.create({ url }).then(() => window.close());
+    }
+  });
+  $('btn-resolve-conflict').addEventListener('click', () => {
+    const url = browser.runtime.getURL('manager.html?section=status');
     if (new URLSearchParams(location.search).has('fullpage')) {
       location.href = url;
     } else {

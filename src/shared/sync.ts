@@ -438,14 +438,15 @@ export function describeMoveResult(input: {
   bookmarkCount?: number;
 }): string {
   const n = input.bookmarkCount ?? 'your';
+  const sync = input.syncId ? `the remote sync ${input.syncId}` : 'the remote sync';
   if (input.mode === 'new') {
     return `Move complete — created a new sync on ${input.newServiceUrl} and uploaded ${n} bookmarks.`;
   }
   if (input.direction === 'push') {
-    return `Move complete — overwrote the remote sync ${input.syncId} on ${input.newServiceUrl} with ${n} local bookmarks.`;
+    return `Move complete — overwrote ${sync} on ${input.newServiceUrl} with ${n} local bookmarks.`;
   }
   if (input.direction === 'merge') {
-    return `Move complete — merged your local bookmarks with the remote sync ${input.syncId} on ${input.newServiceUrl} (nothing deleted).`;
+    return `Move complete — merged your local bookmarks with ${sync} on ${input.newServiceUrl} (nothing deleted).`;
   }
-  return `Move complete — replaced your local bookmarks with the remote sync ${input.syncId} from ${input.newServiceUrl}.`;
+  return `Move complete — replaced your local bookmarks with ${sync} from ${input.newServiceUrl}.`;
 }

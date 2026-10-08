@@ -37,7 +37,10 @@ export type SafetyOperation =
   | 'restore'
   | 'delete-remote'
   | 'merge-local'
-  | 'merge-remote';
+  | 'merge-remote'
+  | 'conflict-pull'
+  | 'conflict-push'
+  | 'conflict-merge';
 
 /** One manifest row (mirrors Keepmark safety-index.json). */
 export interface SafetyEntry {

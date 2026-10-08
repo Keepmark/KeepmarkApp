@@ -61,6 +61,39 @@
           cannot be deleted from here (Unlink above only removes this device; the sync on the server stays).</p>
         <div id="status-error-2" class="error" role="alert" hidden></div>
         <div id="status-result" class="result" hidden></div>
+        <!-- Conflict resolution section (shown when status.conflict === true) -->
+        <div id="m-conflict-section" class="conflict-section" hidden>
+          <h3>⚠️ Sync conflict</h3>
+          <p class="hint">The server has newer changes (<span id="m-conflict-remote-time"></span>). Your local changes (<span id="m-conflict-local-count"></span> items) could not be pushed.</p>
+          <dl class="conflict-stats">
+            <dt>Local only (will upload)</dt><dd id="conflict-stat-local"></dd>
+            <dt>Remote only (will download)</dt><dd id="conflict-stat-remote"></dd>
+            <dt>Title conflicts (server wins)</dt><dd id="conflict-stat-titles"></dd>
+            <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
+            <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
+          </dl>
+          <div class="row conflict-actions">
+            <button id="conflict-btn-pull">Take remote</button>
+            <button id="conflict-btn-push">Upload local</button>
+            <button id="conflict-btn-merge">Merge both sides</button>
+          </div>
+          <ul class="hint conflict-hints">
+            <li><strong>Take remote</strong>: <span id="conflict-hint-pull"></span></li>
+            <li><strong>Upload local</strong>: <span id="conflict-hint-push"></span></li>
+            <li><strong>Merge</strong>: <span id="conflict-hint-merge"></span></li>
+          </ul>
+          <details class="conflict-details">
+            <summary>Show details (first 5 each)</summary>
+            <div class="conflict-detail-grid">
+              <div><h4>Local only → will upload</h4><ul id="conflict-list-local"></ul></div>
+              <div><h4>Remote only → will download</h4><ul id="conflict-list-remote"></ul></div>
+              <div><h4>Title conflicts (local → remote)</h4><ul id="conflict-list-titles"></ul></div>
+              <div><h4>Folders created</h4><ul id="conflict-list-folders"></ul></div>
+            </div>
+          </details>
+          <div id="conflict-error" class="error" role="alert" hidden></div>
+          <div id="conflict-result" class="result" hidden></div>
+        </div>
       </section>
 
       <section id="sec-backup" hidden>

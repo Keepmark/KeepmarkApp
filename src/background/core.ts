@@ -18,6 +18,7 @@ import {
   UnexpectedResponseException,
   UnsupportedSyncVersionException,
   UnsupportedVersionException,
+  ConflictCapturedException,
 } from '../shared/errors.js';
 import type { IXbsLogger } from '../shared/logging.js';
 import { sanitizeSyncId, XbsLogLevel } from '../shared/logging.js';
@@ -48,6 +49,10 @@ import {
   type SyncJobType,
   type UndoKind,
   type UndoState,
+  // Conflict resolution types
+  type ConflictStateResponse,
+  type ConflictPreviewResponse,
+  type ConflictResolutionDirection,
 } from '../shared/messages.js';
 import { reconcileContainer } from '../shared/reconcile.js';
 import { Store, StoreKey, type SyncInfo } from '../shared/store.js';
@@ -139,6 +144,23 @@ interface Creds {
   syncToolbar: boolean;
 }
 
+/** Persisted conflict (StoreKey.ConflictState). The local tree is encrypted
+ *  under the link key, like every other stored tree. */
+interface StoredConflict {
+  syncId: string;
+  localEnc: string;
+  localCount: number;
+  remoteLastUpdated: string;
+  capturedAt: string;
+}
+
+interface ConflictData {
+  localTree: BookmarkNode[];
+  localEncrypted: string;
+  localCount: number;
+  remoteLastUpdated: string;
+}
+
 export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
@@ -155,6 +177,7 @@ export class BackgroundCore {
    * a downgraded service falls back to the timestamp path on retry.
    */
   private readonly v12cache = new Map<string, boolean>();
+
 
   constructor(
     private store: Store,
@@ -255,6 +278,13 @@ export class BackgroundCore {
         return this.removeDuplicates(msg.ids);
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
+      // Conflict resolution
+      case MessageCommand.GetConflictState:
+        return this.getConflictState();
+      case MessageCommand.GetConflictPreview:
+        return this.getConflictPreview();
+      case MessageCommand.ResolveConflict:
+        return this.resolveConflict(msg.direction);
       default:
         throw new UnexpectedResponseException(`Unknown command: ${(msg as { command: string }).command}`);
     }
@@ -266,7 +296,11 @@ export class BackgroundCore {
     await this.setBadge(true);
     try {
       if (job.type === 'local') await this.doLocalJob();
-      else if (job.type === 'remote') await this.pushAfterNativeChange();
+      else if (job.type === 'remote') {
+        const result = await this.pushAfterNativeChange();
+        // If conflict captured, throw signal to stop queue — UI will resolve.
+        if (result.conflict) throw new ConflictCapturedException();
+      }
       else await this.doRestoreJob(job.bookmarks);
     } finally {
       await this.setBadge(false);
@@ -274,7 +308,7 @@ export class BackgroundCore {
   }
 
   /** Enqueue through the real queue to keep FIFO order with native events. */
-  private async queueSync(type: SyncJobType, bookmarks?: BookmarkNode[]): Promise<{ queued: boolean }> {
+  private async queueSync(type: SyncJobType, bookmarks?: BookmarkNode[]): Promise<{ queued: boolean; conflict?: boolean }> {
     // "Sync now" semantics for manual remote syncs: pull first when the
     // remote moved, then push — a single round trip from the popup.
     if (type === 'remote') {
@@ -282,7 +316,12 @@ export class BackgroundCore {
     }
     this.queue.enqueue(type, false, bookmarks);
     const err = await this.drain();
-    if (err) throw err;
+    if (err) {
+      if (err instanceof ConflictCapturedException) {
+        return { queued: true, conflict: true };
+      }
+      throw err;
+    }
     return { queued: true };
   }
 
@@ -301,6 +340,8 @@ export class BackgroundCore {
         await this.queue.execute();
       } catch (err) {
         last = err as Error;
+        // Conflict captured for user resolution: stop queue, return signal.
+        if (err instanceof ConflictCapturedException) return err;
         // Offline/throttled requeue the job at the front: retrying immediately
         // would hammer the service in a tight loop — stop and let the next
         // event/alarm retry instead.
@@ -323,6 +364,23 @@ export class BackgroundCore {
 
   private async doLocalJob(): Promise<void> {
     const { info, syncToolbar } = await this.requireCreds();
+    // A pending conflict waits for the user: never pull over it.
+    if (await this.hasConflict()) {
+      this.log.log(XbsLogLevel.Info, 'sync', 'Pull skipped: conflict pending user resolution');
+      return;
+    }
+    // Native edits that never reached the server (offline push, then the
+    // in-memory queue died with an MV3 worker sleep / browser restart) would
+    // be wiped by clearAndPopulate. Surface them as a conflict instead.
+    if (await this.store.get<string>(StoreKey.Bookmarks)) {
+      const pending = await this.reconcileNatives(info, syncToolbar);
+      if (pending.changed) {
+        const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+        const remote = await api.getLastUpdated(info.id!).catch(() => undefined);
+        await this.captureConflict(info, pending.next, remote?.lastUpdated ?? '');
+        throw new ConflictCapturedException();
+      }
+    }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const usable = v12Usable(info);
     // v1.2: extended reads so meta flows (conditional GET when the hash is
@@ -439,7 +497,7 @@ export class BackgroundCore {
   }
 
   /** Reconcile native -> synced and push when anything changed. */
-  async pushAfterNativeChange(): Promise<{ pushed: boolean }> {
+  async pushAfterNativeChange(): Promise<{ pushed: boolean; conflict?: boolean }> {
     const { info, syncToolbar } = await this.requireCreds();
     if (this.suspended > 0) {
       // Lost otherwise: the debounce alarm is one-shot and already consumed.
@@ -447,10 +505,44 @@ export class BackgroundCore {
       this.dirtyDuringSuspend = true;
       return { pushed: false };
     }
-    const tree = await this.cachedTree(info);
+    const { next: reconciled, mappings, changed } = await this.reconcileNatives(info, syncToolbar);
+    if (await this.hasConflict()) {
+      // Conflict pending: keep the stored local side current (the user's
+      // latest edits are what "Upload local" / "Merge" will use), no push.
+      if (changed) await this.captureConflict(info, ensureContainersExist(reconciled), undefined, false);
+      return { pushed: false, conflict: true };
+    }
+    if (!changed) {
+      this.log.log(XbsLogLevel.Debug, 'sync', 'Native change resolved to no-op');
+      return { pushed: false };
+    }
+    const next = ensureContainersExist(reconciled);
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    try {
+      await this.pushCurrent(api, info, next);
+      // Mappings follow the pushed tree only once the server accepted it: on a
+      // 409 the cached tree stays the reconcile base, with matching mappings.
+      await this.idMapper.set(mappings);
+      return { pushed: true };
+    } catch (err) {
+      if (err instanceof DataOutOfSyncException) {
+        // Remote moved under us: persist the conflict for user resolution.
+        const remote = await api.getLastUpdated(info.id!).catch(() => undefined);
+        await this.captureConflict(info, next, remote?.lastUpdated ?? '');
+        return { pushed: false, conflict: true };
+      }
+      throw err;
+    }
+  }
+
+  /** Pure native -> synced pass over the cached tree (nothing persisted). */
+  private async reconcileNatives(
+    info: SyncInfo,
+    syncToolbar: boolean,
+  ): Promise<{ next: BookmarkNode[]; mappings: Awaited<ReturnType<BookmarkIdMapper['all']>>; changed: boolean }> {
+    let next = await this.cachedTree(info);
     let mappings = await this.idMapper.all();
     let changed = false;
-    let next = tree;
     const containers = this.adapter.syncContainers.filter(
       (c) => syncToolbar || c !== BookmarkContainer.Toolbar,
     );
@@ -468,29 +560,112 @@ export class BackgroundCore {
       mappings = r.mappings;
       changed = changed || r.changed;
     }
-    if (!changed) {
-      this.log.log(XbsLogLevel.Debug, 'sync', 'Native change resolved to no-op');
-      return { pushed: false };
+    return { next, mappings, changed };
+  }
+
+  // ------------------------------------------------------------- conflicts
+
+  private async hasConflict(): Promise<boolean> {
+    return (await this.store.get<StoredConflict>(StoreKey.ConflictState)) !== undefined;
+  }
+
+  /**
+   * Persist (or refresh) the pending conflict. `notify` = first capture: also
+   * stash the plaintext conflict file + system notification (safety net).
+   * `remoteLastUpdated` undefined keeps the previously captured value.
+   */
+  private async captureConflict(
+    info: SyncInfo,
+    localTree: BookmarkNode[],
+    remoteLastUpdated?: string,
+    notify = true,
+  ): Promise<void> {
+    const prev = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    await this.store.set(StoreKey.ConflictState, {
+      syncId: info.id!,
+      localEnc: await encryptData(JSON.stringify(localTree), info.password!),
+      localCount: countNodes(localTree),
+      remoteLastUpdated: remoteLastUpdated ?? prev?.remoteLastUpdated ?? '',
+      capturedAt: prev?.capturedAt ?? new Date().toISOString(),
+    } satisfies StoredConflict);
+    if (!notify) return;
+    this.log.log(XbsLogLevel.Warning, 'sync', 'Sync conflict captured, waiting for user resolution');
+    await this.ports.chrome
+      .download(`keepmark-conflict-${Date.now()}.json`, JSON.stringify(localTree))
+      .catch(() => undefined);
+    await this.ports.chrome
+      .notify('Sync conflict', 'Remote changed first. Open the manager to resolve.')
+      .catch(() => undefined);
+  }
+
+  private async loadConflict(info: SyncInfo): Promise<ConflictData | null> {
+    const stored = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    if (!stored) return null;
+    if (stored.syncId !== info.id) {
+      // Belongs to a previous link: meaningless now.
+      await this.store.remove(StoreKey.ConflictState);
+      return null;
     }
-    next = ensureContainersExist(next);
-    await this.idMapper.set(mappings);
-    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
-    try {
-      await this.pushCurrent(api, info, next);
-    } catch (err) {
-      if (err instanceof DataOutOfSyncException) {
-        // Remote moved under us: stash our uncommitted tree before the
-        // queued local job overwrites natives, so nothing is lost silently.
-        await this.ports.chrome
-          .download(`keepmark-conflict-${Date.now()}.json`, JSON.stringify(next))
-          .catch(() => undefined);
-        await this.ports.chrome
-          .notify('Sync conflict', 'Remote changed first; latest was pulled and your version saved as a conflict file.')
-          .catch(() => undefined);
+    const plain = await decryptData(stored.localEnc, info.password!);
+    return {
+      localTree: (plain ? JSON.parse(plain) : []) as BookmarkNode[],
+      localEncrypted: stored.localEnc,
+      localCount: stored.localCount,
+      remoteLastUpdated: stored.remoteLastUpdated,
+    };
+  }
+
+  /** Remote tree on the link's best contract (412 → downgrade + legacy). */
+  private async fetchRemote(
+    api: XSyncApiClient,
+    info: SyncInfo,
+  ): Promise<{ res: import('../shared/api.js').GetBookmarksResponse; tree: BookmarkNode[] }> {
+    let res: import('../shared/api.js').GetBookmarksResponse;
+    if (v12Usable(info)) {
+      try {
+        res = await api.getBookmarksV12(info.id!);
+      } catch (err) {
+        if (!(err instanceof UnsupportedVersionException)) throw err;
+        await this.downgradeV12(info);
+        res = await api.getBookmarks(info.id!);
       }
-      throw err;
+    } else {
+      res = await api.getBookmarks(info.id!);
     }
-    return { pushed: true };
+    if (res.version && compareVersions(res.version, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(
+        `Sync version ${res.version} is newer than this client (${SyncClientVersion}).`,
+      );
+    }
+    const plain = await decryptData(res.bookmarks ?? '', info.password!);
+    let tree: BookmarkNode[];
+    try {
+      tree = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
+    } catch (err) {
+      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+    }
+    return { res, tree };
+  }
+
+  /**
+   * PUT `tree` on the base of the remote just read (`res`) — never on the
+   * stored base, which is exactly what caused the conflict.
+   */
+  private async pushOnBase(
+    api: XSyncApiClient,
+    info: SyncInfo,
+    tree: BookmarkNode[],
+    res: import('../shared/api.js').GetBookmarksResponse,
+  ): Promise<string> {
+    const encrypted = await encryptData(JSON.stringify(tree), info.password!);
+    const rev = v12Usable(info) ? res.meta?.revision : undefined;
+    try {
+      return await pushEncrypted(api, this.store, info.id!, encrypted, res.lastUpdated!, false, rev);
+    } catch (err) {
+      if (!(err instanceof UnsupportedVersionException) || rev === undefined) throw err;
+      await this.downgradeV12(info);
+      return pushEncrypted(api, this.store, info.id!, encrypted, res.lastUpdated!);
+    }
   }
 
   private async doRestoreJob(bookmarks?: BookmarkNode[]): Promise<void> {
@@ -547,6 +722,7 @@ export class BackgroundCore {
     if (!enabled) return;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (!info?.id) return;
+    if (await this.hasConflict()) return; // the user resolves it, no auto-pull
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const remote = await api.getLastUpdated(info.id);
     const local = await this.store.get<string>(StoreKey.LastUpdated);
@@ -913,9 +1089,9 @@ export class BackgroundCore {
       await this.idMapper.set(mappings);
     });
     const encrypted = await encryptData(JSON.stringify(union), derived);
-    const storedRevision = effectiveV12 ? await getStoredRevision(this.store) : undefined;
     let updated: import('../shared/api.js').UpdateBookmarksResponse;
-    const baseRevision = storedRevision ?? res.meta?.revision;
+    // Base = the remote just read; a stored revision belongs to the PREVIOUS link.
+    const baseRevision = res.meta?.revision;
     if (effectiveV12 && baseRevision !== undefined) {
       try {
         updated = await api.updateBookmarksV12(syncId, encrypted, baseRevision, false);
@@ -1189,7 +1365,10 @@ export class BackgroundCore {
    */
   private async removeDuplicates(ids: number[]): Promise<{ deleted: number; safety: string }> {
     const { info, syncToolbar } = await this.requireCreds();
-    const tree = await this.cachedTree(info);
+    // Prune the CURRENT natives (reconciled over the cache), so edits that
+    // are not pushed yet survive the overwrite below.
+    await this.quiesce();
+    const tree = (await this.reconcileNatives(info, syncToolbar)).next;
     // Structural lock: the newest copy (max id) of each group can never be
     // selected — a crafted/buggy caller cannot wipe a group silently.
     const locked = new Set<number>();
@@ -1234,7 +1413,7 @@ export class BackgroundCore {
    * Explicit move confirmation (same words as the manager result box, minus
    * the sync ID — notification centers persist, and the ID is a bearer).
    */
-  private notifyMoveDone(target: SwitchTarget, finalId: string, bookmarkCount?: number): Promise<void> {
+  private notifyMoveDone(target: SwitchTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
     return this.ports.chrome
       .notify(
         'Move completed',
@@ -1242,7 +1421,7 @@ export class BackgroundCore {
           mode: target.mode,
           direction: target.direction,
           newServiceUrl: target.newServiceUrl,
-          syncId: finalId,
+          // No sync ID: notification centers persist, and the ID is a bearer.
           bookmarkCount,
         }),
       )
@@ -1757,7 +1936,239 @@ export class BackgroundCore {
       logLevel: this.log.minLevel as number,
       supportsV12: v12Usable(info),
       removedSync: (await this.store.get(StoreKey.RemovedSync)) !== undefined,
+      conflict: await this.hasConflict(),
     };
+  }
+
+  /** Current conflict state for the resolution UI. */
+  private async getConflictState(): Promise<ConflictStateResponse> {
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    const conflict = info?.id && info.password ? await this.loadConflict(info) : null;
+    if (!conflict) {
+      return { hasConflict: false };
+    }
+    return {
+      hasConflict: true,
+      localCount: conflict.localCount,
+      remoteLastUpdated: conflict.remoteLastUpdated,
+      localTreeEncrypted: conflict.localEncrypted,
+    };
+  }
+
+  /** Detailed merge preview for the conflict resolution UI (fresh remote). */
+  private async getConflictPreview(): Promise<ConflictPreviewResponse> {
+    const { info } = await this.requireCreds();
+    const conflict = await this.loadConflict(info);
+    if (!conflict) {
+      throw new UnexpectedResponseException('No active conflict to preview.');
+    }
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    const { tree: remoteTree } = await this.fetchRemote(api, info);
+    const local = conflict.localTree;
+    const { stats } = mergeTrees(local, remoteTree);
+    return {
+      mergeStats: stats,
+      localCount: stats.localCount,
+      remoteCount: stats.remoteCount,
+      localOnlySample: this.collectLocalOnlyPaths(local, remoteTree).slice(0, 5),
+      remoteOnlySample: this.collectRemoteOnlyPaths(local, remoteTree).slice(0, 5),
+      titleConflictsSample: this.collectTitleConflicts(local, remoteTree).slice(0, 5),
+      foldersCreatedSample: this.collectFoldersCreated(local, remoteTree).slice(0, 5),
+    };
+  }
+
+  /**
+   * Execute the chosen conflict resolution. Every PUT is based on the remote
+   * just downloaded (pushOnBase); the destroyed side is snapshotted first
+   * (fail closed); natives change only after the server accepted the write
+   * (merge) or with the downloaded tree (pull). The conflict clears only on
+   * success, so a failed attempt can simply be retried.
+   */
+  private async resolveConflict(direction: ConflictResolutionDirection): Promise<{ resolved: boolean }> {
+    const { info, syncToolbar } = await this.requireCreds();
+    const conflict = await this.loadConflict(info);
+    if (!conflict) {
+      throw new UnexpectedResponseException('No active conflict to resolve.');
+    }
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    const localTree = conflict.localTree;
+    if (direction === 'pull') {
+      await writeSafety(this.store, {
+        operation: 'conflict-pull',
+        side: 'local',
+        tree: localTree,
+        syncId: info.id!,
+        derivedKey: info.password!,
+      });
+      const { res } = await this.fetchRemote(api, info);
+      const linked = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!;
+      const pulled = await this.withSuspended(() =>
+        pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+          syncId: info.id!,
+          derivedKey: info.password!,
+          blob: res.bookmarks ?? '',
+          lastUpdated: res.lastUpdated!,
+          remoteVersion: res.version ?? info.version,
+          meta: res.meta,
+          supportsV12: v12Usable(linked),
+        }, info.serviceUrl),
+      );
+      await this.store.remove(StoreKey.ConflictState);
+      if (pulled.updateRemote) {
+        await this.pushCurrent(api, (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!, pulled.bookmarks);
+      }
+    } else if (direction === 'push') {
+      const { res, tree: remoteTree } = await this.fetchRemote(api, info);
+      await writeSafety(this.store, {
+        operation: 'conflict-push',
+        side: 'remote',
+        tree: remoteTree,
+        syncId: info.id!,
+        derivedKey: info.password!,
+      });
+      const tree = ensureContainersExist(localTree);
+      await this.pushOnBase(api, info, tree, res);
+      // Natives already hold the local side: re-anchor the id mappings on it.
+      await this.withSuspended(async () => {
+        const mappings = await this.adapter.rebuildMappings(tree, syncToolbar);
+        await this.idMapper.set(mappings);
+      });
+      await this.store.remove(StoreKey.ConflictState);
+    } else {
+      // Merge: union, nothing deleted. Snapshots of both sides once; a 409
+      // (remote moved again) re-fetches and re-merges from the ORIGINAL local
+      // side, up to 3 attempts.
+      let { res, tree: remoteTree } = await this.fetchRemote(api, info);
+      await writeSafety(this.store, {
+        operation: 'conflict-merge',
+        side: 'local',
+        tree: localTree,
+        syncId: info.id!,
+        derivedKey: info.password!,
+      });
+      await writeSafety(this.store, {
+        operation: 'conflict-merge',
+        side: 'remote',
+        tree: remoteTree,
+        syncId: info.id!,
+        derivedKey: info.password!,
+      });
+      for (let attempt = 1; ; attempt++) {
+        const merged = ensureContainersExist(mergeTrees(localTree, remoteTree).tree);
+        try {
+          await this.pushOnBase(api, info, merged, res);
+        } catch (err) {
+          if (!(err instanceof DataOutOfSyncException) || attempt >= 3) throw err;
+          this.log.log(XbsLogLevel.Warning, 'sync', `Conflict merge: 409 on attempt ${attempt}/3, re-merging`);
+          ({ res, tree: remoteTree } = await this.fetchRemote(api, info));
+          continue;
+        }
+        await this.withSuspended(async () => {
+          const mappings = await overwriteAll(this.adapter, merged, syncToolbar);
+          await this.idMapper.set(mappings);
+        });
+        break;
+      }
+      await this.store.remove(StoreKey.ConflictState);
+    }
+    this.log.log(XbsLogLevel.Info, 'sync', `Conflict resolved via ${direction}`);
+    return { resolved: true };
+  }
+
+  /** Helpers to collect sample paths for the preview UI. */
+  private collectLocalOnlyPaths(local: BookmarkNode[], remote: BookmarkNode[]): string[] {
+    const remoteUrls = new Set<string>();
+    const collectUrls = (nodes: BookmarkNode[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator') remoteUrls.add(n.url);
+        if (n.children) collectUrls(n.children);
+      }
+    };
+    collectUrls(remote);
+    const paths: string[] = [];
+    const walk = (nodes: BookmarkNode[], trail: string[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator' && !remoteUrls.has(n.url)) {
+          paths.push([...trail, n.title ?? n.url].join(' / '));
+        }
+        if (n.children) walk(n.children, [...trail, n.title ?? '']);
+      }
+    };
+    walk(local, []);
+    return paths;
+  }
+
+  private collectRemoteOnlyPaths(local: BookmarkNode[], remote: BookmarkNode[]): string[] {
+    const localUrls = new Set<string>();
+    const collectUrls = (nodes: BookmarkNode[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator') localUrls.add(n.url);
+        if (n.children) collectUrls(n.children);
+      }
+    };
+    collectUrls(local);
+    const paths: string[] = [];
+    const walk = (nodes: BookmarkNode[], trail: string[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator' && !localUrls.has(n.url)) {
+          paths.push([...trail, n.title ?? n.url].join(' / '));
+        }
+        if (n.children) walk(n.children, [...trail, n.title ?? '']);
+      }
+    };
+    walk(remote, []);
+    return paths;
+  }
+
+  private collectTitleConflicts(local: BookmarkNode[], remote: BookmarkNode[]): string[] {
+    const remoteByUrl = new Map<string, BookmarkNode>();
+    const index = (nodes: BookmarkNode[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator') remoteByUrl.set(n.url, n);
+        if (n.children) index(n.children);
+      }
+    };
+    index(remote);
+    const conflicts: string[] = [];
+    const walk = (nodes: BookmarkNode[]) => {
+      for (const n of nodes) {
+        if (n.url && n.url !== 'xbs:separator') {
+          const remote = remoteByUrl.get(n.url);
+          if (remote && remote.title !== n.title) {
+            conflicts.push(`${n.title} → ${remote.title} (${n.url})`);
+          }
+        }
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(local);
+    return conflicts;
+  }
+
+  private collectFoldersCreated(local: BookmarkNode[], remote: BookmarkNode[]): string[] {
+    const remotePaths = new Set<string>();
+    const index = (nodes: BookmarkNode[], trail: string[]) => {
+      for (const n of nodes) {
+        if (!n.url || n.url === 'xbs:separator') {
+          const path = [...trail, n.title ?? ''].join(' / ');
+          remotePaths.add(path);
+          if (n.children) index(n.children, [...trail, n.title ?? '']);
+        }
+      }
+    };
+    index(remote, []);
+    const created: string[] = [];
+    const walk = (nodes: BookmarkNode[], trail: string[]) => {
+      for (const n of nodes) {
+        if (!n.url || n.url === 'xbs:separator') {
+          const path = [...trail, n.title ?? ''].join(' / ');
+          if (!remotePaths.has(path)) created.push(path);
+          if (n.children) walk(n.children, [...trail, n.title ?? '']);
+        }
+      }
+    };
+    walk(local, []);
+    return created;
   }
 
   private async countCached(info: SyncInfo): Promise<number | undefined> {
@@ -1872,6 +2283,7 @@ export class BackgroundCore {
     await this.store.remove(StoreKey.SyncRevision);
     await this.store.remove(StoreKey.SyncHash);
     await this.store.remove(StoreKey.UndoSlot);
+    await this.store.remove(StoreKey.ConflictState);
     // Manual unlink retires any server-deletion snapshot: the manager must
     // not offer Download/Dismiss of a stale RemovedSync afterwards.
     if (!err) await this.store.remove(StoreKey.RemovedSync);

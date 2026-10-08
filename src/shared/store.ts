@@ -7,6 +7,9 @@ export enum StoreKey {
   AutoFetchMetadata = 'autoFetchMetadata',
   AutoBackUpSchedule = 'autoBackUpSchedule',
   BookmarkIdMappings = 'bookmarkIdMappings',
+  /** Pending sync conflict (encrypted local tree + remote base seen), persisted
+   *  so MV3 worker sleeps / browser restarts never lose it. */
+  ConflictState = 'conflictState',
   Bookmarks = 'bookmarks',
   CheckForAppUpdates = 'checkForAppUpdates',
   DarkModeEnabled = 'darkModeEnabled',

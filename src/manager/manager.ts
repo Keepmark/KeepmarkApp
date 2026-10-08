@@ -29,6 +29,10 @@ import {
   type StatusResponse,
   type SwitchPreviewResult,
   type UndoState,
+  // Conflict resolution types
+  type ConflictPreviewResponse,
+  type ConflictResolutionDirection,
+  type ConflictStateResponse,
 } from '../shared/messages.js';
 import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
 import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
@@ -40,6 +44,8 @@ let preview: SwitchPreviewResult | undefined;
 let mergeStats: MergePreview | undefined;
 /** Move URL prefilled once from the current link (never clobbers typing). */
 let moveUrlPrefilled = false;
+/** Current conflict preview (fetched when status.conflict === true). */
+let conflictPreview: ConflictPreviewResponse | undefined;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
@@ -66,7 +72,7 @@ function sectionError(id: string, message: string): void {
 }
 
 function hideErrors(): void {
-  for (const id of ['status-error', 'status-error-2', 'backup-error', 'backup-error-2', 'dup-error', 'dup-error-2', 'move-error', 'move-error-2', 'logs-error', 'settings-error', 'pw-error']) {
+  for (const id of ['conflict-error', 'status-error', 'status-error-2', 'backup-error', 'backup-error-2', 'dup-error', 'dup-error-2', 'move-error', 'move-error-2', 'logs-error', 'settings-error', 'pw-error']) {
     const el = $(id);
     el.hidden = true;
     el.textContent = '';
@@ -115,9 +121,11 @@ async function refreshStatus(): Promise<void> {
     // Never leave a stale linked card: redraw cleared, then report.
     status = undefined;
     ping = undefined;
+    conflictPreview = undefined;
     renderStatusCard('m', { status, ping });
     updateStatusActions();
     updateDangerZone();
+    renderConflictSection();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
     sectionError('status-error', (err as Error).message);
     return;
@@ -137,6 +145,14 @@ async function refreshStatus(): Promise<void> {
   updateDangerZone();
   ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
   await refreshUndoBanner();
+
+  // If there's a conflict, fetch the preview and render resolution UI.
+  if (status?.conflict) {
+    await loadConflictPreview();
+  } else {
+    conflictPreview = undefined;
+    renderConflictSection();
+  }
 }
 
 async function refreshUndoBanner(): Promise<void> {
@@ -153,6 +169,107 @@ async function refreshUndoBanner(): Promise<void> {
   }
   $('undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
   banner.hidden = false;
+}
+
+/** Fetch detailed conflict preview from background. */
+async function loadConflictPreview(): Promise<void> {
+  try {
+    conflictPreview = await send<ConflictPreviewResponse>({ command: MessageCommand.GetConflictPreview });
+  } catch (err) {
+    conflictPreview = undefined;
+    sectionError('conflict-error', (err as Error).message);
+  }
+  renderConflictSection();
+}
+
+/** Fill a sample list with plain text (bookmark titles come from web pages:
+ *  never interpolate them into HTML). */
+function fillList(id: string, items: string[], total: number): void {
+  const list = $(id);
+  list.replaceChildren();
+  const rows = total > 0 ? items : [];
+  for (const text of rows.length > 0 ? rows : ['—']) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    if (rows.length === 0) li.className = 'empty';
+    list.appendChild(li);
+  }
+}
+
+/** Render the conflict resolution UI in the status section (text only). */
+function renderConflictSection(): void {
+  const section = $('m-conflict-section');
+  if (!status?.conflict || !conflictPreview) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  const { mergeStats } = conflictPreview;
+  $('m-conflict-remote-time').textContent =
+    mergeStats.remoteCount > 0 ? `remote has ${mergeStats.remoteCount} items` : 'remote is empty';
+  $('m-conflict-local-count').textContent = String(mergeStats.localCount);
+  $('conflict-stat-local').textContent = String(mergeStats.localOnly);
+  $('conflict-stat-remote').textContent = String(mergeStats.remoteOnly);
+  $('conflict-stat-titles').textContent = String(mergeStats.titleConflicts);
+  $('conflict-stat-folders').textContent = String(mergeStats.foldersCreated);
+  $('conflict-stat-separators').textContent = String(mergeStats.separatorsAdopted);
+  $('conflict-hint-pull').textContent =
+    `replace local with the server copy (${mergeStats.remoteCount} items). Local side backed up first.`;
+  $('conflict-hint-push').textContent =
+    `overwrite the server with local (${mergeStats.localCount} items). Server copy backed up first.`;
+  $('conflict-hint-merge').textContent =
+    `union, nothing deleted: ${mergeStats.localOnly} up, ${mergeStats.remoteOnly} down, ` +
+    `${mergeStats.titleConflicts} title conflicts. Both sides backed up first.`;
+  fillList('conflict-list-local', conflictPreview.localOnlySample, mergeStats.localOnly);
+  fillList('conflict-list-remote', conflictPreview.remoteOnlySample, mergeStats.remoteOnly);
+  fillList('conflict-list-titles', conflictPreview.titleConflictsSample, mergeStats.titleConflicts);
+  fillList('conflict-list-folders', conflictPreview.foldersCreatedSample, mergeStats.foldersCreated);
+}
+
+const conflictConfirm: Record<ConflictResolutionDirection, string> = {
+  pull: 'Replace your local bookmarks with the server copy? Your local side is saved to the safety backups first.',
+  push: 'Overwrite the server copy with your local bookmarks? The server copy is saved to the safety backups first.',
+  merge: 'Merge both sides into one tree (nothing deleted) and upload it? Both sides are saved to the safety backups first.',
+};
+
+const conflictDone: Record<ConflictResolutionDirection, string> = {
+  pull: 'Conflict resolved — took the server copy. Your previous local side is in Backup → Safety backups.',
+  push: 'Conflict resolved — uploaded your local side. The previous server copy is in Backup → Safety backups.',
+  merge: 'Conflict resolved — merged both sides (nothing deleted). Both previous sides are in Backup → Safety backups.',
+};
+
+/** Execute the chosen conflict resolution (confirmed, busy-guarded). */
+async function resolveConflict(direction: ConflictResolutionDirection): Promise<void> {
+  hideErrors();
+  if (!window.confirm(conflictConfirm[direction])) return;
+  const ids = ['conflict-btn-pull', 'conflict-btn-push', 'conflict-btn-merge'];
+  const others = ids.filter((id) => id !== `conflict-btn-${direction}`).map((id) => $(id) as HTMLButtonElement);
+  const prev = others.map((b) => b.disabled);
+  others.forEach((b) => (b.disabled = true));
+  const busy: Record<ConflictResolutionDirection, string> = {
+    pull: 'Taking remote…',
+    push: 'Uploading local…',
+    merge: 'Merging…',
+  };
+  try {
+    await withBusy(`conflict-btn-${direction}`, busy[direction], async () => {
+      try {
+        await send({ command: MessageCommand.ResolveConflict, direction });
+        showResult('conflict-result', conflictDone[direction]);
+        await refreshStatus();
+      } catch (err) {
+        sectionError('conflict-error', (err as Error).message);
+      }
+    });
+  } finally {
+    others.forEach((b, i) => (b.disabled = prev[i]));
+  }
+}
+
+function initConflictSection(): void {
+  $('conflict-btn-pull').addEventListener('click', () => void resolveConflict('pull'));
+  $('conflict-btn-push').addEventListener('click', () => void resolveConflict('push'));
+  $('conflict-btn-merge').addEventListener('click', () => void resolveConflict('merge'));
 }
 
 function initUndoBanner(): void {
@@ -197,7 +314,14 @@ function initStatusSection(): void {
     void withBusy('m-btn-sync-now', 'Syncing…', async () => {
       hideErrors();
       try {
-        await send({ command: MessageCommand.SyncBookmarks, sync: { type: 'remote', runSync: true } });
+        const result = await send<{ queued: boolean; conflict?: boolean }>({
+          command: MessageCommand.SyncBookmarks,
+          sync: { type: 'remote', runSync: true },
+        });
+        if (result.conflict) {
+          // Conflict captured — UI will show resolution options via refreshStatus
+          return;
+        }
       } catch (err) {
         sectionError('status-error-2', (err as Error).message);
       }
@@ -1076,6 +1200,7 @@ function init(): void {
   initSidebar();
   initStatusSection();
   initUndoBanner();
+  initConflictSection();
   initBackupSection();
   initDuplicatesSection();
   initMoveSection();

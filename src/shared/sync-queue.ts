@@ -5,7 +5,8 @@
 // - jobs run FIFO, one at a time (gate); popup never touches the queue.
 // - network failure (offline) or throttle → job goes back to the front,
 //   error rethrown. The caller (drain) must NOT tight-loop on these.
-// - DataOutOfSync → queue cleared, a local job is queued at the front, error rethrown.
+// - DataOutOfSync → error propagated to caller (BackgroundCore captures
+//   conflict state for user resolution); queue is NOT auto-cleared.
 // - InvalidCredentials (wrong password) → queue cleared (retrying the same
 //   key is pointless), error rethrown; credentials are kept for the user to fix.
 // - SyncNotFound / IncompleteSyncInfo / UnsupportedSyncVersion →
@@ -111,11 +112,11 @@ export class SyncQueue {
       return;
     }
     if (err instanceof DataOutOfSyncException) {
-      // Drop anything queued behind: a stale remote job pushing after the
-      // fresh pull would immediately re-conflict.
-      this.log.log(XbsLogLevel.Info, 'sync', 'Remote out of sync, clearing queue and resyncing local');
-      this.clear();
-      this.enqueueFront('local');
+      // Conflict: do NOT auto-resolve. Propagate to the caller, which
+      // persists the conflict for user resolution. The failed job is dropped
+      // (the stored conflict carries the local side); the rest of the queue
+      // is left intact.
+      this.log.log(XbsLogLevel.Info, 'sync', 'Remote out of sync (409), conflict captured for user resolution');
       return;
     }
     if (err instanceof InvalidCredentialsException) {

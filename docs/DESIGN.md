@@ -15,9 +15,9 @@ Source of truth for anyone extending popup/manager UI. Extracted from
 ```
 
 - `color-scheme: light dark`, `font: system-ui`, no framework, no webfonts.
-- Brand: `.brand-chip` (`#0a323d` tile + `assets/brand-mark.png` white mark,
+- Brand: `.brand-chip` (`#172552` tile + `assets/brand-mark.png` white mark,
   18px popup / 22px manager). Toolbar/manifest icons come from
-  `../Keepmark/brand/` (navy `#162350`); never recolor by hand.
+  `../Keepmark/brand/` (navy `#172552`); never recolor by hand.
 - `[hidden] { display: none !important; }` is mandatory in every page CSS:
   author `display` rules (`label`, `.row`) override UA `[hidden]` otherwise
   and wizard rows leak into view.

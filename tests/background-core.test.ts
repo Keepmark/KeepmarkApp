@@ -533,10 +533,11 @@ describe('background core', () => {
     expect(state.puts).toHaveLength(1); // only the connect-time push, no repair push
   });
 
-  it('409 on push stashes a conflict file and pulls latest', async () => {
+  it('409 on push captures conflict state for user resolution', async () => {
     const state = baseState();
     const { core, store, ports, derived } = await linkedCore(state);
     state.failNextPut409 = true;
+    // Adding a bookmark triggers native event -> push -> 409
     await expect(
       core.handleMessage({
         command: MessageCommand.AddBookmark,
@@ -544,12 +545,19 @@ describe('background core', () => {
         title: 'Conflict probe',
         url: 'https://probe.test',
       }),
-    ).rejects.toThrow(/conflict/);
-    // Nothing lost silently: conflict file saved + latest pulled.
+    ).rejects.toThrow('Conflict captured for user resolution');
+    // Conflict file saved as safety net
     expect(ports.downloads).toHaveLength(1);
     expect(ports.downloads[0].filename).toMatch(/^keepmark-conflict-/);
     const stashed = JSON.parse(ports.downloads[0].text);
     expect(JSON.stringify(stashed)).toContain('https://probe.test');
+    // Conflict state available for UI
+    const conflictState = await core.handleMessage({ command: MessageCommand.GetConflictState });
+    expect(conflictState).toMatchObject({
+      hasConflict: true,
+      localCount: expect.any(Number),
+      remoteLastUpdated: expect.any(String),
+    });
     expect(await store.get(StoreKey.LastUpdated)).toBeTruthy();
     void derived;
   });
@@ -688,6 +696,8 @@ describe('background core', () => {
     })) as { id: string };
     expect(res.id).toBe(SYNC_ID);
     expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
+    // The sync ID is a bearer token: never in a persisted OS notification.
+    expect(ports.notices.filter((n) => n.title === 'Move completed').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
     // Mode new uploads the local tree as-is to a fresh sync: nothing is
     // destroyed, so no safety file (the undo slot covers the link swap).
     expect(ports.downloads).toHaveLength(0);
@@ -723,6 +733,8 @@ describe('background core', () => {
     })) as { id: string };
     expect(res.id).toBe('target-id');
     expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
+    // The sync ID is a bearer token: never in a persisted OS notification.
+    expect(ports.notices.filter((n) => n.title === 'Move completed').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
     expect(state.puts).toHaveLength(1); // local tree uploaded onto the existing remote
     const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info).toMatchObject({ id: 'target-id', serviceUrl: 'https://new.test/' });
@@ -1548,3 +1560,135 @@ async function decrypt_blob(blob: string, derived: string): Promise<string> {
   const { decryptData } = await import('../src/shared/crypto');
   return decryptData(blob, derived);
 }
+
+// Review 2026-10-08 regressions (A-1..A-5): conflict resolution against a
+// server with real base semantics, persisted conflict state, unpushed
+// native edits never wiped by a pull.
+describe('conflict resolution (review regressions)', () => {
+  const otherTree: BookmarkNode[] = [
+    { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'Theirs', url: 'https://theirs.test' }] },
+  ];
+
+  async function remoteUrls(state: FakeApiState, derived: string): Promise<string[]> {
+    const { decryptData } = await import('../src/shared/crypto');
+    const urls: string[] = [];
+    const walk = (nodes: BookmarkNode[]): void =>
+      nodes.forEach((n) => {
+        if (n.url) urls.push(n.url);
+        walk(n.children ?? []);
+      });
+    walk(JSON.parse(await decryptData(state.remoteBlob, derived)) as BookmarkNode[]);
+    return urls;
+  }
+
+  async function nativeUrls(mockApi: ReturnType<typeof makeMockApi>): Promise<string[]> {
+    return [...mockApi.nodes.values()].map((n) => n.url).filter((u): u is string => !!u);
+  }
+
+  /** Linked, then another device pushes, then a local add → 409 → conflict. */
+  async function conflicted(v12: boolean) {
+    const state = v12 ? v12State() : baseState();
+    const ctx = v12 ? await linkedV12Core(state) : await linkedCore(state);
+    state.remoteBlob = await encryptData(JSON.stringify(otherTree), ctx.derived);
+    state.remoteLastUpdated = 't-other-device';
+    if (v12) state.revision += 5;
+    await ctx.core
+      .handleMessage({ command: MessageCommand.AddBookmark, container: BookmarkContainer.Other, title: 'Mine', url: 'https://mine.test' })
+      .catch(() => undefined);
+    const st = (await ctx.core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(true);
+    return { state, ...ctx };
+  }
+
+  for (const v12 of [false, true]) {
+    const label = v12 ? 'v1.2' : 'v1.1';
+
+    it(`${label}: take remote replaces natives and clears the conflict`, async () => {
+      const { core, mockApi, store } = await conflicted(v12);
+      await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'pull' });
+      const urls = await nativeUrls(mockApi);
+      expect(urls).toContain('https://theirs.test');
+      expect(urls).not.toContain('https://mine.test');
+      expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+      const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as { operation: string; side: string }[];
+      expect(safeties.some((s) => s.operation === 'conflict-pull' && s.side === 'local')).toBe(true);
+    });
+
+    it(`${label}: upload local lands on the fresh remote base`, async () => {
+      const { core, state, derived, store } = await conflicted(v12);
+      await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'push' });
+      const urls = await remoteUrls(state, derived);
+      expect(urls).toContain('https://mine.test');
+      expect(urls).not.toContain('https://theirs.test');
+      expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+      expect(await store.get(StoreKey.LastUpdated)).toBe(state.remoteLastUpdated);
+    });
+
+    it(`${label}: merge uploads the union and mirrors it natively`, async () => {
+      const { core, state, derived, mockApi, store } = await conflicted(v12);
+      await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'merge' });
+      const remote = await remoteUrls(state, derived);
+      expect(remote).toEqual(expect.arrayContaining(['https://mine.test', 'https://theirs.test']));
+      expect(await nativeUrls(mockApi)).toEqual(expect.arrayContaining(['https://mine.test', 'https://theirs.test']));
+      expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+    });
+  }
+
+  it('merge retries once on a 409 race and still succeeds', async () => {
+    const { core, state } = await conflicted(false);
+    state.failNextPut409 = true;
+    await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'merge' });
+    const st = (await core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(false);
+  });
+
+  it('a failed resolution keeps the conflict so it can be retried', async () => {
+    const { core, state } = await conflicted(false);
+    // Push fails once (409) → still conflicted, retry works.
+    state.failNextPut409 = true;
+    await expect(core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'push' })).rejects.toThrow();
+    let st = (await core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(true);
+    await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'push' });
+    st = (await core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(false);
+  });
+
+  it('conflict survives a worker restart and blocks auto-pull over local edits', async () => {
+    const { store, mockApi, state, ports } = await conflicted(false);
+    // Fresh core on the same storage = MV3 worker wake / browser restart.
+    const revived = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    const st = (await revived.handleMessage({ command: MessageCommand.GetStatus })) as { conflict: boolean };
+    expect(st.conflict).toBe(true);
+    await revived.checkForUpdates();
+    expect(await nativeUrls(mockApi)).toContain('https://mine.test');
+  });
+
+  it('unpushed native edits are never wiped by a pull: they become a conflict', async () => {
+    const state = baseState();
+    const { core, mockApi, derived, ports } = await linkedCore(state);
+    // Edit whose push never happened (offline + in-memory queue lost).
+    await mockApi.create({ parentId: 'unfiled_____', title: 'Offline edit', url: 'https://offline.test' });
+    state.remoteBlob = await encryptData(JSON.stringify(otherTree), derived);
+    state.remoteLastUpdated = 't-other-device';
+    await core.checkForUpdates().catch(() => undefined);
+    expect(await nativeUrls(mockApi)).toContain('https://offline.test');
+    const st = (await core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(true);
+    expect(ports.downloads.some((d) => d.filename.startsWith('keepmark-conflict-'))).toBe(true);
+  });
+
+  it('unlink clears a pending conflict', async () => {
+    const { core, store } = await conflicted(false);
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+  });
+});

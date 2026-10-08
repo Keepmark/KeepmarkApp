@@ -56,6 +56,10 @@ export enum MessageCommand {
   SwitchService = 'switch-service',
   DeleteRemoteSync = 'delete-remote-sync',
   DownloadFile = 'download-file',
+  // Conflict resolution
+  GetConflictState = 'get-conflict-state',
+  GetConflictPreview = 'get-conflict-preview',
+  ResolveConflict = 'resolve-conflict',
 }
 
 export type SyncJobType = 'local' | 'remote' | 'localAndRemote';
@@ -86,6 +90,8 @@ export interface StatusResponse {
   supportsV12?: boolean;
   /** True when a server-deleted sync left a local snapshot (see RemovedSync). */
   removedSync?: boolean;
+  /** True when a push received 409 and conflict state is captured. */
+  conflict?: boolean;
 }
 
 /** Plaintext snapshot of a server-deleted sync (no password ever stored). */
@@ -133,6 +139,43 @@ export interface PingResponse {
   remoteLastUpdated?: string;
   /** True when the linked service speaks the v1.2 contract. */
   supportsV12?: boolean;
+}
+
+/** Current conflict state (set when a push gets 409). */
+export interface ConflictStateResponse {
+  hasConflict: boolean;
+  /** Number of items in the local tree that failed to push. */
+  localCount?: number;
+  /** Remote lastUpdated at the moment of conflict. */
+  remoteLastUpdated?: string;
+  /** Full local tree JSON (encrypted with current derived key) — only included on demand. */
+  localTreeEncrypted?: string;
+}
+
+/** Detailed merge preview for the conflict resolution UI. */
+export interface ConflictPreviewResponse {
+  /** Counts from mergeTrees dry-run. */
+  mergeStats: MergePreview;
+  /** Local tree node count (denominator). */
+  localCount: number;
+  /** Remote tree node count (denominator). */
+  remoteCount: number;
+  /** Sample paths for localOnly (first 5). */
+  localOnlySample: string[];
+  /** Sample paths for remoteOnly (first 5). */
+  remoteOnlySample: string[];
+  /** Sample title conflicts (first 5, format "localTitle → remoteTitle"). */
+  titleConflictsSample: string[];
+  /** Sample folders created (first 5). */
+  foldersCreatedSample: string[];
+}
+
+/** Direction to resolve the conflict. */
+export type ConflictResolutionDirection = 'pull' | 'push' | 'merge';
+
+/** Resolve conflict payload — executes the chosen resolution. */
+export interface ResolveConflictPayload {
+  direction: ConflictResolutionDirection;
 }
 
 /** One-slot undo for dangerous link operations. Snapshots are encrypted. */
@@ -202,7 +245,11 @@ export type MessagePayload =
   | { command: MessageCommand.RestoreSafety; fileName: string }
   | { command: MessageCommand.DeleteSafety; fileName: string }
   | { command: MessageCommand.RemoveDuplicates; ids: number[] }
-  | { command: MessageCommand.DownloadFile; filename: string; text: string };
+  | { command: MessageCommand.DownloadFile; filename: string; text: string }
+  // Conflict resolution
+  | { command: MessageCommand.GetConflictState }
+  | { command: MessageCommand.GetConflictPreview }
+  | { command: MessageCommand.ResolveConflict; direction: ConflictResolutionDirection };
 
 /** Merge dry-run result: preview counts only, no trees (message size limits). */
 export type MergePreview = MergeStats;

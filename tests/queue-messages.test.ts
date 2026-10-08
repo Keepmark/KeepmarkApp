@@ -94,7 +94,7 @@ describe('sync queue', () => {
     expect(q.length).toBe(0);
   });
 
-  it('queues a local resync on DataOutOfSync', async () => {
+  it('propagates DataOutOfSync without auto-resolving', async () => {
     const seen: string[] = [];
     const q = new SyncQueue(async (job) => {
       seen.push(job.type);
@@ -103,9 +103,8 @@ describe('sync queue', () => {
     q.enqueue('remote', false);
     await expect(q.execute()).rejects.toBeInstanceOf(DataOutOfSyncException);
     expect(seen).toEqual(['remote']);
-    expect(q.length).toBe(1); // local resync queued at front
-    await q.execute();
-    expect(seen).toEqual(['remote', 'local']);
+    expect(q.length).toBe(0); // queue NOT auto-cleared, job stays at front
+    // Caller (BackgroundCore) captures conflict state and presents UI choices
   });
 
   it('clears and notifies on sync loss', async () => {

@@ -52,7 +52,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
 | `id-mapper.ts` | `syncedId<->nativeId` mappings, sorted, rebuilt on populate | `app/bookmark-id-mapper.service.ts` |
 | `sync.ts` | `checkService`, `createNewSync`, `pullExistingSync`, `pullWithDerivedKey`, `pushBookmarks`, `switchService` | `app/bookmark-sync-provider` + login component |
-| `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline→front, 409→local-first, 401→sync-lost) | `app/sync.service.ts` |
+| `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline/429→front, 409→persisted conflict for user resolution, 401→sync-lost) | `app/sync.service.ts` |
 | `reconcile.ts` | `reconcileContainer`: whole-tree native→synced pass via mappings (replaces Add/Modify/Remove/Move/Reorder cases) | new design (equivalent semantics) |
 | `merge.ts` | `mergeTrees`: pure two-way union by URL (remote kept, local adopted with fresh ids, separators unioned, deletes never merged) + preview stats | new design (connect/switch third direction) |
 | `messages.ts` | `MessageCommand` + payload/response types + `toWireError/fromWireError` (name-based rehydration) | `app/webext.interface.ts` + sendMessage |
@@ -102,9 +102,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `vite.shared.ts` (`platformAlias` + `copyStatic` manifest+assets plugin).
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;
   `res/assets/` → output `assets/`. Icons rebuilt from the official Keepmark
-  brand (`../Keepmark/brand/04-adaptive-foreground.png`: navy `#162350`,
-  keyhole x0.354–0.655/y0.286–0.624): full ribbon icon (48/128), navy-tile +
-  keyhole toolbar icons (16/32, grayscale notsynced), white mark chip in pages.
+  brand (`../Keepmark/brand/10-favicon.png`: navy `#172552`,
+  keyhole x0.362–0.630/y0.300–0.611): navy-tile manifest icons (48/128) +
+  toolbar icons (16/32, grayscale notsynced), white mark chip in pages
+  (from `03-standalone.png`).
 - `scripts/package.mjs` zips `build/*` → `dist/`.
 
 ## 4. Load-bearing contracts (do NOT change lightly)
@@ -118,12 +119,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    only after `capabilities.revision` probe; legacy answers 412), min service
    `1.1.9`, sync format `1.8.0` (never lower — remote≤local version gate).
    Password never transmitted; sync ID in URL is the bearer.
-   409 = pull-before-push, never merge. v1.2 uses revision CAS + conditional
+   409 = persisted conflict, user picks pull/push/merge (never auto-merge); resolution PUTs use the fresh remote base. v1.2 uses revision CAS + conditional
    GET; `DELETE /bookmarks/:id` is gated behind stored `supportsV12` (UI
    disabled + "Not supported (requires service v1.2)" on legacy).
 3. **Sync model**: whole-blob pushes with optimistic `lastUpdated`; stored
    password field holds the DERIVED key, never raw. Queue lives ONLY in the
-   background context. 409 → conflict file + notify + pull. 401 → wipe creds.
+   background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
    one file (`vite.chromium-sw.ts` lib build). Static imports only.
 5. `res/strings`-style i18n: English-only by decision (Keepmark rule); no

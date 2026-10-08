@@ -52,6 +52,14 @@ export class IncompleteSyncInfoException extends XbsException {}
 /** Response shape is not what the API contract promises. */
 export class UnexpectedResponseException extends XbsException {}
 
+/** Signal: a sync conflict (409) was captured for user resolution. Not an error —
+ *  stops the queue so the UI can present choices. */
+export class ConflictCapturedException extends XbsException {
+  constructor() {
+    super('Conflict captured for user resolution');
+  }
+}
+
 /** Map an HTTP status to the matching typed error (shared by api client + tests). */
 export function errorForStatus(status: number, serverMessage: string, local: (key: string) => string): XbsException {
   const withServer = (msg: string): string => {

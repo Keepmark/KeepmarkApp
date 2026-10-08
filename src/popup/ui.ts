@@ -117,7 +117,10 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   }
 
   // Reachability first: a queued-but-offline client is Offline, not Syncing.
-  if (ping && !ping.reachable) {
+  // Conflict state takes priority over everything else.
+  if (status.conflict) {
+    setPill(pill, 'Conflict', 'bad');
+  } else if (ping && !ping.reachable) {
     setPill(pill, 'Offline', 'bad');
   } else if (status.syncing || status.queueLength > 0) {
     setPill(pill, 'Syncing…', 'busy');

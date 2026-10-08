@@ -57,7 +57,7 @@ body {
 .brand-chip {
   display: inline-flex;
   align-items: center;
-  background: #0a323d;
+  background: #172552;
   border-radius: 7px;
   padding: 3px 7px;
   line-height: 0;
@@ -347,3 +347,87 @@ dd {
   padding: 6px 10px;
   max-width: 560px;
 }
+
+/* ===== Conflict resolution ===== */
+.conflict-section {
+  border: 2px solid var(--warn);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.conflict-section h3 {
+  margin-top: 0;
+  color: var(--warn);
+}
+
+.conflict-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 16px;
+  font-size: 13px;
+  margin: 8px 0;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-width: 480px;
+}
+
+.conflict-stats dt {
+  color: var(--muted);
+}
+
+.conflict-stats dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.conflict-actions {
+  margin: 12px 0 4px;
+}
+
+.conflict-hints {
+  margin: 0 0 8px;
+  padding-left: 16px;
+}
+
+.conflict-details {
+  margin-top: 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+
+.conflict-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.conflict-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.conflict-detail-grid h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.conflict-detail-grid ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.conflict-detail-grid li.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
