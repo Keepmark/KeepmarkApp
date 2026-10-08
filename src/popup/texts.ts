@@ -96,3 +96,40 @@ export const MoveImplication =
 export const moveNewConfirm = (url: string, count?: number): string =>
   `Create a new sync on ${url} and upload ${count ?? 'your'} bookmarks?`;
 export const MoveDoneNext = 'Store the sync ID with the password, then move your other devices with it.';
+
+// Undo (Status banner in the manager, popup banner).
+/** What the undo slot `kind` did, in words (never the raw key). */
+export function undoWhat(kind: string): string {
+  switch (kind) {
+    case 'connect-new':
+      return 'created a new sync';
+    case 'connect-pull':
+      return 'downloaded the server copy';
+    case 'connect-push':
+      return 'uploaded over the server copy';
+    case 'connect-merge':
+      return 'merged local and server bookmarks';
+    case 'switch-new':
+      return 'moved to a new sync';
+    case 'switch-pull':
+      return 'moved and downloaded the server copy';
+    case 'switch-push':
+      return 'moved and uploaded over the server copy';
+    case 'switch-merge':
+      return 'moved and merged with the server copy';
+    case 'change-password':
+      return 'changed the sync password';
+    case 'restore':
+      return 'restored bookmarks';
+    case 'duplicates':
+      return 'deleted duplicates';
+    default:
+      return 'imported a backup';
+  }
+}
+export const undoConfirm = (kind: string): { message: string; implication: string; confirmLabel: string } => ({
+  message: 'Undo the last action?',
+  implication: `It reverts “${undoWhat(kind)}”. Changes made since then are discarded.`,
+  confirmLabel: 'Yes, undo',
+});
+export const undoneText = (kind: string): string => `Undone: ${undoWhat(kind)}.`;

@@ -7,6 +7,8 @@ import {
   UnlinkImplication,
   directionConfirm,
   removedSyncText,
+  undoConfirm,
+  undoneText,
 } from '../src/popup/texts';
 
 describe('workflow texts', () => {
@@ -47,5 +49,14 @@ describe('workflow texts', () => {
   it('move says the old sync and the other devices stay', () => {
     expect(MoveImplication).toContain('old sync stays');
     expect(MoveImplication).toContain('other devices stay linked');
+  });
+
+  it('undo names the action in words, never the raw key', () => {
+    expect(undoneText('change-password')).toBe('Undone: changed the sync password.');
+    const c = undoConfirm('connect-pull');
+    expect(c.confirmLabel).toBe('Yes, undo');
+    expect(c.implication).toContain('downloaded the server copy');
+    expect(c.implication).toContain('Changes made since then are discarded');
+    expect(c.implication).not.toContain('connect-pull');
   });
 });

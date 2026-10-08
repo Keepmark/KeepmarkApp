@@ -28,6 +28,7 @@ import {
   DeleteRemoteImplication,
   MoveDoneNext,
   MoveImplication,
+  DirectionOrder,
   directionConfirm,
   moveNewConfirm,
   UnlinkDone,
@@ -39,6 +40,8 @@ import {
   importDone,
   safetyRestoreDone,
   safetyRestoreImplication,
+  undoConfirm,
+  undoneText,
 } from '../popup/texts.js';
 import {
   MessageCommand,
@@ -170,6 +173,9 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+/** Kind of the undo slot the banner shows (its confirm names it). */
+let undoKind = '';
+
 async function refreshUndoBanner(): Promise<void> {
   const banner = $('undo-banner') as HTMLElement;
   let undo: UndoState | null = null;
@@ -182,6 +188,7 @@ async function refreshUndoBanner(): Promise<void> {
     banner.hidden = true;
     return;
   }
+  undoKind = undo.kind;
   $('undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
   banner.hidden = false;
 }
@@ -278,25 +285,27 @@ function explainConflict(p: ConflictPreviewResponse): string {
     (d.moved > 0 ? `, ${d.moved} moved` : '') + (d.metadataChanged > 0 ? `, ${d.metadataChanged} with different description/tags` : '') + '.';
 }
 
-const conflictConfirm: Record<ConflictResolutionDirection, string> = {
-  pull: 'Replace the bookmarks in this browser with the server copy? Its unsynced edits are lost; a copy is saved to Backup → Safety backups first.',
-  push: 'Replace the server copy with the bookmarks in this browser? Changes from other devices are lost; a copy is saved to Backup → Safety backups first.',
-  merge: 'Merge both copies into one and sync it everywhere? Nothing is deleted, but items removed on one side while offline come back. Both copies are saved to Backup → Safety backups first.',
-};
-
 const conflictDone: Record<ConflictResolutionDirection, string> = {
   pull: 'Conflict resolved: downloaded the server copy. Your previous local bookmarks are in Backup → Safety backups.',
   push: 'Conflict resolved: uploaded your local bookmarks. The previous server copy is in Backup → Safety backups.',
   merge: 'Conflict resolved: merged both sides (nothing deleted). Both previous sides are in Backup → Safety backups.',
 };
 
+const conflictButtons = DirectionOrder.map((d) => `conflict-btn-${d}`);
+
 /** Execute the chosen conflict resolution (confirmed, busy-guarded). */
 async function resolveConflict(direction: ConflictResolutionDirection): Promise<void> {
   clearMessages();
-  if (!window.confirm(conflictConfirm[direction])) return;
+  // One open confirm at a time: picking another side replaces it.
+  conflictButtons.forEach((id) => cancelConfirm(id));
+  const ok = await confirmInline(`conflict-btn-${direction}`, {
+    ...directionConfirm[direction],
+    danger: direction !== 'merge',
+  });
+  if (!ok) return;
   // Not withBusy(): it swaps textContent and would flatten the <b>/<small>
   // markup. Lock all three, retitle only the chosen one's label.
-  const buttons = ['conflict-btn-pull', 'conflict-btn-push', 'conflict-btn-merge'].map((id) => $(id) as HTMLButtonElement);
+  const buttons = conflictButtons.map((id) => $(id) as HTMLButtonElement);
   const prev = buttons.map((b) => b.disabled);
   const label = $(`conflict-btn-${direction}`).querySelector('b') as HTMLElement;
   const original = [...label.childNodes];
@@ -330,11 +339,12 @@ function initConflictSection(): void {
 function initUndoBanner(): void {
   $('m-btn-undo').addEventListener('click', async () => {
     clearMessages();
-    if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+    // Asked BEFORE withBusy (confirmInline owns the button while open).
+    if (!(await confirmInline('m-btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
     await withBusy('m-btn-undo', 'Undoing…', async () => {
       try {
         const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
-        showResult('status-result', `Undone: ${res.undone}.`);
+        showResult('status-result', undoneText(res.undone));
         await refreshStatus();
         await refreshUndoBanner();
       } catch (err) {

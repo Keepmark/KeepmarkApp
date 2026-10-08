@@ -340,8 +340,9 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   `UnlinkImplication`: ID + password needed, unsynced edits, Undo cleared), clears state per §4.3, result text, status redrawn cleared.
 - `UndoLastLink` / `DismissUndo` / `GetUndoState`: one encrypted slot;
   unlink invalidates it; undo restores previous link state; the banner
-  describes kind + count + time with confirm (`Undo the last link
-  operation?…`).
+  describes kind + count + time; inline confirm `Undo the last action?`
+  naming the action in words (`undoConfirm`), result `Undone: <what>.`
+  (`undoneText`).
 - `GetRemovedSync` / `ClearRemovedSync`: surfaces the 401 snapshot with
   Download/Dismiss.
 - `SetVerbosity {level}` / `GetLogs` / `Ping` / `GetStatus` / `DownloadFile`:
@@ -409,8 +410,8 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 - `[hidden] { display: none !important; }` in both CSS files (author display
   rules would otherwise override UA hiding and leak wizard rows).
 - Confirm texts: unlink and delete come from `src/popup/texts.ts` (inline
-  `confirmInline`, see `docs/WORKFLOWS.md`); undo (`Undo the last link operation? Changes made since will
-  be discarded.`). Password fields cleared per-flow (confirm always; current
+  `confirmInline`, see `docs/WORKFLOWS.md`), as do undo (`undoConfirm`) and
+  the conflict choices (`directionConfirm`). Password fields cleared per-flow (confirm always; current
   on failure; new kept only to retype the proof).
 - English-only strings; no wired telemetry prompts; dynamic list buttons get
   `aria-label`s; clipboard falls back to `prompt` when denied.

@@ -3,6 +3,7 @@
 
 import browser from 'webextension-polyfill';
 import { DefaultServiceUrl, MinNewPasswordLength, PasswordTooShort } from '../shared/constants.js';
+import { undoWhat } from './texts.js';
 import {
   fromWireError,
   type MessagePayload,
@@ -176,30 +177,7 @@ export { describeMoveResult } from '../shared/sync.js';
 
 /** Human-readable undo slot description for banners. */
 export function describeUndo(kind: string, count: number | undefined, when: number): string {
-  const what =
-    kind === 'connect-new'
-      ? 'created a new sync'
-      : kind === 'connect-pull'
-        ? 'downloaded the server copy'
-        : kind === 'connect-push'
-          ? 'uploaded over the server copy'
-          : kind === 'connect-merge'
-            ? 'merged local and server bookmarks'
-            : kind === 'switch-new'
-              ? 'moved to a new sync'
-            : kind === 'switch-pull'
-              ? 'moved and downloaded the server copy'
-              : kind === 'switch-push'
-                ? 'moved and uploaded over the server copy'
-                : kind === 'switch-merge'
-                  ? 'moved and merged with the server copy'
-                  : kind === 'change-password'
-                  ? 'changed the sync password'
-                  : kind === 'restore'
-                    ? 'restored bookmarks'
-                    : kind === 'duplicates'
-                      ? 'deleted duplicates'
-                      : 'imported a backup';
+  const what = undoWhat(kind);
   const n = count !== undefined ? ` (${count} bookmarks)` : '';
   return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
 }

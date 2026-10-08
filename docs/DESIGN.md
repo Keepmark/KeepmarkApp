@@ -87,9 +87,12 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
    preview-then-confirm. Pin `previewFor` inputs; submit refuses stale
    inputs (`Inputs changed since the check`); success consumes the preview
    (`updateMoveForm()` after `withBusy`, never before).
-6. **Confirms**: `window.confirm` for unlink (1×), server delete (2×),
-   undo, per-group and bulk duplicate deletes, import, merge. No `confirm`
-   inside background/shared code (DOM only in popup/manager).
+6. **Confirms**: inline `confirmInline` (`src/popup/flow.ts`, texts in
+   `src/popup/texts.ts`) for every action that replaces or removes data:
+   unlink (1×), server delete (2×), undo, connect, move, conflict, import,
+   safety restore/delete. `window.confirm` remains only for duplicate
+   deletes (pending migration). No confirm inside background/shared code
+   (DOM only in popup/manager).
 7. **Validation pure first**: `validateServiceUrl` (https, http loopback
    only), `validateConnect` (no direction tick: the inline confirm asks),
    `validateSwitch` (confirm field exists only in `new` mode — existing
@@ -134,8 +137,7 @@ Gates: `npm test` 268 pass / 4 skip (live e2e) · `npm run lint` clean
 4. **SPEC drift** — fixed: `docs/SPEC.md §7` now says `validateSwitch`
    asks confirm only in `new` mode, matching code + `tests/ui.test.ts`.
    Rule: spec sentences about validators must match `ui.ts` + tests.
-5. **Asymmetric result boxes** (no code change, rule only): `.result`/
-   `.preview` exist only in manager; popup merge preview uses
-   `window.confirm` text (popup must stay small). Any new popup outcome
-   needing persistent evidence must port `.result` over, not invent a new
-   style.
+5. **Result boxes**: `.result` exists in both CSS files (popup:
+   `main-result`, undo outcome); `.preview` only in manager. The popup merge
+   preview counts go into the inline confirm (popup must stay small). Any
+   new popup outcome reuses `.result`, never a new style.

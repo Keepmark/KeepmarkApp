@@ -404,6 +404,13 @@ button.mini {
   white-space: pre-wrap;
 }
 
+.result {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ok) 13%, transparent);
+  color: var(--ok);
+}
+
 /* ---- Status card (rendered by ui.ts renderStatusCard) ---- */
 .card {
   background: var(--surface);

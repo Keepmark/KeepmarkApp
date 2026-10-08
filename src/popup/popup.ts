@@ -24,24 +24,15 @@ import {
   type StatusResponse,
   type UndoState,
 } from '../shared/messages.js';
-import { cancelConfirm, confirmInline } from './flow.js';
-import { type Direction, RemovedSyncDismissImplication, directionConfirm, removedSyncText } from './texts.js';
-
-function showError(where: 'connect' | 'main', message: string): void {
-  const el = $(`${where}-error`);
-  el.textContent = message;
-  el.hidden = false;
-}
-
-function clearErrors(): void {
-  for (const id of ['connect-error', 'main-error']) {
-    const el = $(id);
-    el.hidden = true;
-    // Empty the text: a hidden-but-stale alert is re-read by screen readers
-    // when unhidden with a new message.
-    el.textContent = '';
-  }
-}
+import { cancelConfirm, clearMessages, confirmInline, showError } from './flow.js';
+import {
+  type Direction,
+  RemovedSyncDismissImplication,
+  directionConfirm,
+  removedSyncText,
+  undoConfirm,
+  undoneText,
+} from './texts.js';
 
 function showView(name: 'connect' | 'main'): void {
   ($('view-connect') as HTMLElement).hidden = name !== 'connect';
@@ -86,8 +77,8 @@ async function refreshAll(): Promise<void> {
   renderStatusCard('p', view);
   // A GetStatus throw always means the background is unreachable (unlinked
   // links resolve fine), so report it instead of showing a bare "Not synced".
-  if (statusErr) showError('main', `Background error: ${statusErr}`);
-  else if (pingErr && status?.syncEnabled) showError('main', `Service probe failed: ${pingErr}`);
+  if (statusErr) showError('main-error', `Background error: ${statusErr}`);
+  else if (pingErr && status?.syncEnabled) showError('main-error', `Service probe failed: ${pingErr}`);
   else ($('main-error') as HTMLElement).hidden = true;
   const state = $('sync-state');
   if (!status?.syncEnabled) {
@@ -175,6 +166,9 @@ function initRemovedCard(): void {
   );
 }
 
+/** Kind of the undo slot the banner shows (its confirm names it). */
+let undoKind = '';
+
 async function refreshUndoBanner(): Promise<void> {
   const banner = $('p-undo') as HTMLElement;
   let undo: UndoState | null = null;
@@ -187,6 +181,7 @@ async function refreshUndoBanner(): Promise<void> {
     banner.hidden = true;
     return;
   }
+  undoKind = undo.kind;
   $('p-undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
   banner.hidden = false;
 }
@@ -238,7 +233,7 @@ async function initConnect(): Promise<void> {
  * button while open).
  */
 async function submitConnect(): Promise<void> {
-  clearErrors();
+  clearMessages();
   const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
     | 'new'
     | 'existing';
@@ -256,7 +251,7 @@ async function submitConnect(): Promise<void> {
     confirm: input('confirm-password').value,
   });
   if (invalid) {
-    showError('connect', invalid);
+    showError('connect-error', invalid);
     return;
   }
   if (mode === 'existing') {
@@ -269,7 +264,7 @@ async function submitConnect(): Promise<void> {
         try {
           preview = await send<MergePreview>({ command: MessageCommand.PreviewMerge, serviceUrl, syncId, password });
         } catch (err) {
-          showError('connect', (err as Error).message);
+          showError('connect-error', (err as Error).message);
         }
       });
       if (!preview) return;
@@ -300,14 +295,14 @@ async function submitConnect(): Promise<void> {
       // Never leave the confirmation in the DOM; the main password stays so
       // a transient failure doesn't force a full retype from the vault.
       input('confirm-password').value = '';
-      showError('connect', (err as Error).message);
+      showError('connect-error', (err as Error).message);
     }
   });
 }
 
 function initMain(): void {
   $('btn-sync-now').addEventListener('click', async () => {
-    clearErrors();
+    clearMessages();
     await withBusy('btn-sync-now', 'Syncing…', async () => {
       try {
         const result = await send<{ queued: boolean; conflict?: boolean }>({
@@ -319,7 +314,7 @@ function initMain(): void {
           return;
         }
       } catch (err) {
-        showError('main', (err as Error).message);
+        showError('main-error', (err as Error).message);
       }
       await refreshAll();
     });
@@ -344,14 +339,18 @@ function initMain(): void {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
   });
   $('btn-undo').addEventListener('click', async () => {
-    clearErrors();
-    if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
+    clearMessages();
+    // Asked BEFORE withBusy (confirmInline owns the button while open).
+    if (!(await confirmInline('btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
     await withBusy('btn-undo', 'Undoing…', async () => {
       try {
-        await send({ command: MessageCommand.UndoLastLink });
+        const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
         await refreshAll();
+        const done = $('main-result');
+        done.textContent = undoneText(res.undone);
+        done.hidden = false;
       } catch (err) {
-        showError('main', (err as Error).message);
+        showError('main-error', (err as Error).message);
       }
     });
   });

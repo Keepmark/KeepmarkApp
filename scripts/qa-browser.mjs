@@ -131,10 +131,6 @@ const setVal = (p, sel, v) => p.evaluate((s, val) => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }, sel, v);
-/** Record + accept window.confirm in-page (Firefox BiDi does not surface
- *  prompts of privileged pages; same path in both browsers for parity). */
-const armConfirm = (p) => p.evaluate(() => { window.__dialogs = []; window.confirm = (m) => { window.__dialogs.push(String(m)); return true; }; });
-const confirms = (p) => p.evaluate(() => window.__dialogs ?? []);
 const click = (p, sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
 /** Answer an inline confirmInline block (`<anchor>-confirm`) with Yes;
  *  returns its text (question + implication), or null when none opened. */
@@ -288,16 +284,15 @@ async function conflictPanel(ctx, m) {
 }
 
 async function resolve(ctx, m, direction) {
-  await armConfirm(m);
   await click(m, `#conflict-btn-${direction}`);
+  const asked = await confirmYes(m, `conflict-btn-${direction}`);
+  check(`${ctx.kind}: ${direction} asked for confirmation inline`, !!asked, asked?.slice(0, 70));
   const res = await waitFor(async () => {
     if (await visible(m, '#conflict-result') && /Conflict resolved/.test((await text(m, '#conflict-result')) ?? '')) return 'ok';
     if (await visible(m, '#conflict-error')) return `error: ${await text(m, '#conflict-error')}`;
     return undefined;
   }, 30000);
   check(`${ctx.kind}: resolve conflict via ${direction}`, res === 'ok', res === 'ok' ? await text(m, '#conflict-result') : res);
-  const asked = await confirms(m);
-  check(`${ctx.kind}: ${direction} asked for confirmation`, asked.length === 1, asked[0]?.slice(0, 70));
   const gone = await waitFor(async () => !(await visible(m, '#m-conflict-section')), 10000);
   check(`${ctx.kind}: conflict panel cleared after ${direction}`, gone);
   await sleep(1500);
