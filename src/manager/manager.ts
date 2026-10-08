@@ -931,8 +931,7 @@ function updateMoveForm(): void {
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
-  $('m-btn-switch').toggleAttribute('disabled', true);
-  ($('move-gate-hint') as HTMLElement).hidden = false;
+  setMoveGate(false);
   $('move-error').hidden = true;
   $('move-error-2').hidden = true;
   $('move-preview').hidden = true;
@@ -1002,8 +1001,7 @@ async function previewTarget(): Promise<void> {
         if (!mergePassword) {
           box.textContent = lines.join('\n') + '\nEnter the target password above, then Check target again for the merge preview.';
           box.hidden = false;
-          ($('m-btn-switch') as HTMLButtonElement).disabled = true;
-          ($('move-gate-hint') as HTMLElement).hidden = false;
+          setMoveGate(false);
           return;
         }
         try {
@@ -1032,11 +1030,16 @@ async function previewTarget(): Promise<void> {
       preview.reachable &&
       preview.versionCompatible !== false &&
       (mode === 'new' || preview.remoteExists === true);
-    ($('m-btn-switch') as HTMLButtonElement).disabled = !ok;
-    // The gate hint doubles as the enable signal: hidden only when the
-    // button actually unlocked.
-    ($('move-gate-hint') as HTMLElement).hidden = ok;
+    setMoveGate(ok);
   });
+}
+
+/** The Move button exists only after a passing check: shown + enabled
+ *  together, with the gate hint standing in for it while locked. */
+function setMoveGate(ok: boolean): void {
+  ($('m-btn-switch') as HTMLButtonElement).disabled = !ok;
+  ($('move-go-row') as HTMLElement).hidden = !ok;
+  ($('move-gate-hint') as HTMLElement).hidden = ok;
 }
 
 async function submitMove(): Promise<void> {

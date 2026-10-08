@@ -155,10 +155,10 @@
         <label><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
         <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
         <div id="move-summary" class="hint"></div>
-        <div class="row"><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
+        <p id="move-gate-hint" class="hint">Press “Check target” above first: the Move button appears here once
+          the check passes, and only for those exact inputs — change anything and check again.</p>
+        <div class="row" id="move-go-row" hidden><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
         <div id="move-error-2" class="error" role="alert" hidden></div>
-        <p id="move-gate-hint" class="hint">“Move now” unlocks only after a successful “Check target”,
-          and stays locked to those exact inputs — change anything and check again.</p>
         <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
       </section>
 

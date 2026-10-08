@@ -126,6 +126,16 @@ async function initConnect(): Promise<void> {
   const updateDirection = (): void => {
     const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value;
     ($('conn-push-warn') as HTMLElement).hidden = direction !== 'push';
+    // Say what the click does: "Connect" alone hid create vs link-and-overwrite.
+    const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+    $('btn-connect').textContent =
+      mode === 'new'
+        ? 'Create sync'
+        : direction === 'push'
+          ? 'Link and upload'
+          : direction === 'merge'
+            ? 'Link and preview merge'
+            : 'Link and download';
   };
   document.querySelectorAll('input[name="conn-mode"], input[name="conn-direction"]').forEach((el) => {
     el.addEventListener('change', updateMode);
