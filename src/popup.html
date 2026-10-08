@@ -12,29 +12,31 @@
     <div id="sync-state" class="state">…</div>
   </header>
 
+  <main>
   <section id="view-connect">
-    <h2>Connect</h2>
-    <div role="radiogroup" aria-label="Sync mode">
-    <label class="check"><input type="radio" name="conn-mode" value="new" checked />
-      <span><b>New sync</b> — create a sync on the service and upload this browser's bookmarks.</span></label>
-    <label class="check"><input type="radio" name="conn-mode" value="existing" />
-      <span><b>Use existing</b> — link this browser to a sync ID; remote bookmarks will replace the local ones.</span></label>
+    <h2>Connect this browser</h2>
+    <div class="seg" role="radiogroup" aria-label="Sync mode">
+      <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span>New sync</span></label>
+      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span>Use existing</span></label>
     </div>
+    <p class="hint mode-hint mode-new">Create a sync on the service and upload this browser's bookmarks.</p>
+    <p class="hint mode-hint mode-existing">Link this browser to a sync ID from your other device.</p>
     <label>Service URL
       <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
     </label>
     <div id="conn-existing-only" hidden>
       <label>Sync ID
-        <input id="sync-id" type="text" placeholder="sync id from your other device" />
+        <input id="sync-id" type="text" class="mono" placeholder="sync id from your other device" />
       </label>
-      <div role="radiogroup" aria-label="Link direction">
-      <label class="check"><input type="radio" name="conn-direction" value="pull" checked />
-        <span>⬇ <b>Download</b> — replace local bookmarks with the server copy (safe, recommended).</span></label>
-      <label class="check"><input type="radio" name="conn-direction" value="push" />
-        <span>⬆ <b>Upload</b> — overwrite the server copy with my local bookmarks (deletes server data!).</span></label>
-      <label class="check"><input type="radio" name="conn-direction" value="merge" />
-        <span>⇄ <b>Merge</b> — keep everything from both sides (never deletes; shows a preview first).</span></label>
-      </div>
+      <fieldset class="options" role="radiogroup" aria-label="Link direction">
+        <legend>First sync</legend>
+        <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
+          <span><b>Download <span class="tag ok">Recommended</span></b><small>Replace this browser's bookmarks with the server copy.</small></span></label>
+        <label class="check option"><input type="radio" name="conn-direction" value="merge" />
+          <span><b>Merge</b><small>Keep everything from both sides. Never deletes; shows a preview first.</small></span></label>
+        <label class="check option"><input type="radio" name="conn-direction" value="push" />
+          <span><b class="danger-text">Upload</b><small>Overwrite the server copy with this browser's bookmarks (deletes server data!).</small></span></label>
+      </fieldset>
       <div id="conn-push-warn" hidden>
         <p class="warning">This replaces the server copy. A backup of it is downloaded first, and you can undo afterwards — but be sure.</p>
         <label class="check"><input id="conn-push-confirm" type="checkbox" />
@@ -50,9 +52,11 @@
       </label>
     </div>
     <div id="connect-error" class="error" role="alert" hidden></div>
-    <div class="row">
-      <button id="btn-connect">Connect</button>
-      <button id="btn-open-tab" title="Open in a full tab (stays open while you copy from your vault)">⧉ Tab</button>
+    <div class="row actions">
+      <button id="btn-connect" class="primary">Connect</button>
+      <button id="btn-open-tab" class="icon" title="Open in a full tab (stays open while you copy from your vault)" aria-label="Open in a full tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 5H5v14h14v-5" /></svg>
+      </button>
     </div>
   </section>
 
@@ -68,7 +72,7 @@
         <dt>Service version</dt>
         <dd id="p-swversion">…</dd>
         <dt>Sync ID</dt>
-        <dd><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
+        <dd class="id-row"><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
         <dt>Last sync</dt>
         <dd id="p-last">…</dd>
         <dt>Space used</dt>
@@ -84,14 +88,15 @@
       <span class="row"><button id="btn-undo" class="mini">Undo</button>
       <button id="btn-undo-dismiss" class="mini">Dismiss</button></span>
     </div>
-    <div class="row">
-      <button id="btn-sync-now">⇅ Sync now</button>
-      <button id="btn-manage">⚙ Manage</button>
-    </div>
     <div id="p-conflict-action" class="conflict-action-row" hidden>
-      <button id="btn-resolve-conflict">⚠ Resolve conflict →</button>
+      <button id="btn-resolve-conflict">Resolve conflict →</button>
+    </div>
+    <div class="row actions">
+      <button id="btn-sync-now" class="primary">Sync now</button>
+      <button id="btn-manage">Manage</button>
     </div>
   </section>
+  </main>
 
   <script type="module" src="./popup/popup.ts"></script>
 </body>

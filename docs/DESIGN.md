@@ -7,21 +7,31 @@ Source of truth for anyone extending popup/manager UI. Extracted from
 
 ## 1. Tokens
 
+"Navy ledger" palette, shared with the Keepmark Android app (same roles and
+values; canvas: Keepmark Redesign artifact). Both pages:
+
 ```css
---bg: Canvas; --fg: CanvasText;          /* follows OS light/dark */
---accent: #2f6fed; --danger: #c0392b;
---muted: GrayText; --border: ButtonBorder;
---ok: #1e7e34; --warn: #b7791f;          /* both pages, identical values */
+--navy: #172552;                                   /* header band, undo strip, brand */
+--bg: #f5f6fa; --surface: #ffffff; --fg: #141b38; --muted: #4a5170;
+--border: #cdd2e1; --accent: #3d4fb0;              /* primary buttons, focus, meter */
+--danger: #a12626; --ok: #1f6f5c; --warn: #9a6a0a;
 ```
 
-Dark scheme (`prefers-color-scheme: dark`, both pages): `--danger: #ff8a7a;
---ok: #6fd08c; --warn: #f0b955` — the light values are unreadable on dark
-Canvas/ButtonFace (QA 2026-10-08: red-on-grey danger buttons).
+Dark scheme (`prefers-color-scheme: dark`, both pages): `--bg: #0e1226;
+--surface: #161b33; --fg: #e8eaf4; --muted: #a3a9c4; --border: #39427a;
+--accent: #8c9bf0; --danger: #ff8a7a; --ok: #6fd08c; --warn: #f0b955`.
+The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
+`--on-accent`, `--accent-hover`.
 
 - `color-scheme: light dark`, `font: system-ui`, no framework, no webfonts.
-- Brand: `.brand-chip` (`#172552` tile + `assets/brand-mark.png` white mark,
+- Brand: `.brand-chip` (white mark `assets/brand-mark.png`; on the popup's
+  navy header it is a translucent white tile, in the manager a navy tile,
   18px popup / 22px manager). Toolbar/manifest icons come from
-  `../Keepmark/brand/` (navy `#172552`); never recolor by hand.
+  `../Keepmark/brand/src/build.py --install`; never recolor by hand.
+- Popup components: navy `header` band with `#sync-state` as a pill;
+  `.seg`/`.seg-opt` segmented control over the native `conn-mode` radios;
+  `.option` selectable cards over the `conn-direction` radios; `.mode-hint`
+  text switched by CSS `:has()`; `button.primary` for the main action of a view.
 - `[hidden] { display: none !important; }` is mandatory in every page CSS:
   author `display` rules (`label`, `.row`) override UA `[hidden]` otherwise
   and wizard rows leak into view.

@@ -1,26 +1,32 @@
 :root {
   color-scheme: light dark;
-  --bg: Canvas;
-  --fg: CanvasText;
-  --accent: #2f6fed;
-  --danger: #c0392b;
-  --muted: GrayText;
-  --border: ButtonBorder;
-  --ok: #1e7e34;
-  --warn: #b7791f;
+  /* "Navy ledger" palette, same roles/values as popup.css (docs/DESIGN.md §1). */
+  --navy: #172552;
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --fg: #141b38;
+  --accent: #3d4fb0;
+  --danger: #a12626;
+  --muted: #4a5170;
+  --border: #cdd2e1;
+  --ok: #1f6f5c;
+  --warn: #9a6a0a;
 }
 
-/* Dark scheme: the light-tuned status tokens drop below readable contrast on
-   dark Canvas/ButtonFace (red-on-grey danger buttons). Same values in every
-   page stylesheet (docs/DESIGN.md §1). */
+/* Dark scheme: same roles, values tuned for contrast on the dark ground. */
 @media (prefers-color-scheme: dark) {
   :root {
+    --bg: #0e1226;
+    --surface: #161b33;
+    --fg: #e8eaf4;
+    --accent: #8c9bf0;
     --danger: #ff8a7a;
+    --muted: #a3a9c4;
+    --border: #39427a;
     --ok: #6fd08c;
     --warn: #f0b955;
   }
 }
-
 
 * {
   box-sizing: border-box;
@@ -69,7 +75,7 @@ body {
 .brand-chip {
   display: inline-flex;
   align-items: center;
-  background: #172552;
+  background: var(--navy);
   border-radius: 7px;
   padding: 3px 7px;
   line-height: 0;
