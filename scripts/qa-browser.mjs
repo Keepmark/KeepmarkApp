@@ -136,6 +136,15 @@ const setVal = (p, sel, v) => p.evaluate((s, val) => {
 const armConfirm = (p) => p.evaluate(() => { window.__dialogs = []; window.confirm = (m) => { window.__dialogs.push(String(m)); return true; }; });
 const confirms = (p) => p.evaluate(() => window.__dialogs ?? []);
 const click = (p, sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
+/** Answer an inline confirmInline block (`<anchor>-confirm`) with Yes;
+ *  returns its text (question + implication), or null when none opened. */
+async function confirmYes(p, anchorId) {
+  const shown = await waitFor(async () => (await p.evaluate((id) => !!document.getElementById(`${id}-yes`), anchorId)) || undefined, 5000);
+  if (!shown) return null;
+  const said = await text(p, `#${anchorId}-confirm`);
+  await click(p, `#${anchorId}-yes`);
+  return said;
+}
 const text = (p, sel) => p.evaluate((s) => document.querySelector(s)?.textContent?.trim() ?? null, sel);
 const visible = (p, sel) => p.evaluate((s) => { const e = document.querySelector(s); return !!e && !e.closest('[hidden]') && e.offsetParent !== null; }, sel);
 async function waitFor(fn, ms = 15000, step = 250) {
@@ -387,13 +396,15 @@ try {
 
   // 8. Cleanup: delete the QA sync from the server (v1.2) via the manager.
   await section(crM2, 'status');
-  await armConfirm(crM2);
   const delEnabled = await crM2.evaluate(() => !document.querySelector('#m-btn-delete-remote').disabled);
   check('chromium: server delete enabled on v1.2', delEnabled);
   if (delEnabled) {
     await click(crM2, '#m-btn-delete-remote');
+    const first = await confirmYes(crM2, 'm-btn-delete-remote');
+    check('chromium: server delete states the implication', /other devices/.test(first ?? ''), first?.slice(0, 90));
+    const second = await confirmYes(crM2, 'm-btn-delete-remote');
     await waitFor(async () => (await head(id)).status === 401, 15000);
-    check('chromium: server delete (double confirm) removed the QA sync', (await head(id)).status === 401, `${(await confirms(crM2)).length} confirms`);
+    check('chromium: server delete (double confirm) removed the QA sync', !!second && (await head(id)).status === 401);
   }
 } catch (e) {
   check('script', false, e.stack);

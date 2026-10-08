@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { DeleteRemoteImplication, UnlinkImplication, removedSyncText } from '../src/popup/texts';
+import {
+  DeleteRemoteImplication,
+  DirectionOrder,
+  MoveImplication,
+  UnlinkImplication,
+  directionConfirm,
+  removedSyncText,
+} from '../src/popup/texts';
 
 describe('workflow texts', () => {
   it('unlink says what is needed to link again and what is lost', () => {
@@ -23,5 +30,22 @@ describe('workflow texts', () => {
     expect(removedSyncText(3)).toContain('not encrypted');
     expect(removedSyncText(3, '2026-10-01T10:00:00Z')).toContain('(last synced');
     expect(removedSyncText(3)).not.toContain('(last synced');
+  });
+
+  it('one direction order and the shared confirm vocabulary', () => {
+    expect(DirectionOrder).toEqual(['pull', 'merge', 'push']);
+    expect(DirectionOrder.map((d) => directionConfirm[d].confirmLabel)).toEqual([
+      'Yes, download',
+      'Yes, merge',
+      'Yes, upload',
+    ]);
+    expect(directionConfirm.pull.implication).toContain('not yet synced are lost');
+    expect(directionConfirm.push.implication).toContain('other devices');
+    expect(directionConfirm.merge.implication).toContain('Nothing is deleted');
+  });
+
+  it('move says the old sync and the other devices stay', () => {
+    expect(MoveImplication).toContain('old sync stays');
+    expect(MoveImplication).toContain('other devices stay linked');
   });
 });

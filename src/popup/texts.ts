@@ -63,3 +63,36 @@ export function removedSyncText(count: number, lastUpdated?: string): string {
 }
 export const RemovedSyncDismissImplication =
   'The kept copy is deleted from this browser. It is the only copy of the removed sync, so download it first if you may need it.';
+
+// Direction choice (Connect existing sync, Move into an existing sync,
+// Conflict). One order everywhere: server copy, merge, this browser's copy.
+export type Direction = 'pull' | 'merge' | 'push';
+export const DirectionOrder: readonly Direction[] = ['pull', 'merge', 'push'];
+
+export const directionConfirm: Record<Direction, { message: string; implication: string; confirmLabel: string }> = {
+  pull: {
+    message: "Replace this browser's bookmarks with the server copy?",
+    implication: 'Edits on this browser that are not yet synced are lost. A copy is saved to Backup → Safety backups first.',
+    confirmLabel: 'Yes, download',
+  },
+  merge: {
+    message: 'Merge both copies into one and sync it everywhere?',
+    implication:
+      'Nothing is deleted, but items removed on one side while the other was offline come back. ' +
+      'Both copies are saved to Backup → Safety backups first.',
+    confirmLabel: 'Yes, merge',
+  },
+  push: {
+    message: "Replace the server copy with this browser's bookmarks?",
+    implication: 'Changes from your other devices that are only on the server are lost. A copy is saved to Backup → Safety backups first.',
+    confirmLabel: 'Yes, upload',
+  },
+};
+
+// Move service.
+export const MoveImplication =
+  'The old sync stays on the old service and is not deleted. Your other devices stay linked to the old service ' +
+  'until you move them too. Store the new sync ID and password.';
+export const moveNewConfirm = (url: string, count?: number): string =>
+  `Create a new sync on ${url} and upload ${count ?? 'your'} bookmarks?`;
+export const MoveDoneNext = 'Store the sync ID with the password, then move your other devices with it.';

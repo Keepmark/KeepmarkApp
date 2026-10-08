@@ -20,12 +20,16 @@ import {
   withBusy,
   type StatusView,
 } from '../popup/ui.js';
-import { clearMessages, confirmInline, showError } from '../popup/flow.js';
+import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
   ChangePasswordDone,
   ChangePasswordImplication,
   DeleteRemoteDone,
   DeleteRemoteImplication,
+  MoveDoneNext,
+  MoveImplication,
+  directionConfirm,
+  moveNewConfirm,
   UnlinkDone,
   UnlinkImplication,
   ImportImplication,
@@ -997,6 +1001,7 @@ function updateMoveForm(): void {
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
+  cancelConfirm('m-btn-switch');
   setMoveGate(false);
   $('move-error').hidden = true;
   $('move-error-2').hidden = true;
@@ -1134,6 +1139,38 @@ async function submitMove(): Promise<void> {
     showError('move-error-2', 'Inputs changed since the check — press “Check target” again.');
     return;
   }
+  // Merge executes on explicit per-counts confirmation: the union never
+  // deletes, but resurrects items deleted while offline — say so first.
+  const s = mergeStats;
+  if (mode === 'existing' && direction === 'merge' && !s) {
+    showError('move-error-2', 'Merge preview unavailable — press “Check target” again.');
+    return;
+  }
+  // Every move replaces or creates something: always confirm inline, with
+  // the direction's loss line plus what happens to the old sync. Asked
+  // BEFORE withBusy (confirmInline owns the button while open).
+  const counts = s
+    ? `${s.localOnly} local will upload, ${s.remoteOnly} remote will download, ` +
+      `${s.titleConflicts} title conflicts (server title kept). `
+    : '';
+  const ok = await confirmInline(
+    'm-btn-switch',
+    mode === 'new'
+      ? {
+          message: moveNewConfirm(newServiceUrl, status?.bookmarkCount),
+          implication: MoveImplication,
+          confirmLabel: 'Yes, move',
+        }
+      : {
+          message: directionConfirm[direction].message,
+          implication: `${direction === 'merge' ? counts : ''}${directionConfirm[direction].implication} ${MoveImplication}`,
+          confirmLabel: directionConfirm[direction].confirmLabel,
+          danger: direction !== 'merge',
+        },
+  );
+  // Inputs edited while the confirm was open re-run updateMoveForm(), which
+  // drops the preview: never move with what was not checked.
+  if (!ok || !preview) return;
   // Set on success so the post-busy gate below knows the preview was spent.
   let movedId: string | undefined;
   // Local count for the success line (new/push upload exactly these; capture
@@ -1142,27 +1179,6 @@ async function submitMove(): Promise<void> {
   await withBusy('m-btn-switch', 'Moving…', async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
-      if (direction === 'merge') {
-        // Merge executes on explicit per-counts confirmation: the union never
-        // deletes, but resurrects items deleted while offline — say so first.
-        const s = mergeStats;
-        const summary = s
-          ? `${s.localOnly} local will upload, ${s.remoteOnly} remote will download, ` +
-            `${s.titleConflicts} title conflicts (server title kept).`
-          : 'Merge preview unavailable — press “Check target” again.';
-        if (!s) {
-          showError('move-error-2', summary);
-          return;
-        }
-        if (
-          !window.confirm(
-            `Merge keeps everything from both sides (nothing is deleted).\n\n${summary}\n\n` +
-              `Items deleted on one side while offline will reappear. Continue?`,
-          )
-        ) {
-          return;
-        }
-      }
       const res = await send<{ id: string }>({
         command: MessageCommand.SwitchService,
         switch: { newServiceUrl, mode, syncId, newPassword, direction },
@@ -1182,7 +1198,7 @@ async function submitMove(): Promise<void> {
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
     const done = describeMoveResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
-    showResult('move-result', `${done} New sync ID: ${movedId}`);
+    showResult('move-result', `${done} ${MoveDoneNext} Sync ID: ${movedId}`);
     const copy = document.createElement('button');
     copy.textContent = 'Copy ID';
     copy.className = 'mini';

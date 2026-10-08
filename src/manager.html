@@ -171,10 +171,10 @@
             <legend>Which copy do you want to keep?</legend>
             <label class="check option"><input type="radio" name="m-switch-direction" value="pull" checked />
               <span><b>Keep the server copy</b><small>Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
-            <label class="check option"><input type="radio" name="m-switch-direction" value="push" />
-              <span><b>Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
             <label class="check option"><input type="radio" name="m-switch-direction" value="merge" />
               <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
+            <label class="check option"><input type="radio" name="m-switch-direction" value="push" />
+              <span><b>Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
           </fieldset>
         </div>
         <div class="row"><button id="m-btn-preview" class="primary" data-needs-link>Check target</button></div>
@@ -188,7 +188,7 @@
           <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
           <p id="m-switch-pw-hint" class="hint">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
           <div id="move-summary" class="hint"></div>
-          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
+          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled>Move now…</button></div>
           <div id="move-error-2" class="error" role="alert" hidden></div>
         </div>
         <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
