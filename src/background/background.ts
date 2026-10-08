@@ -70,7 +70,7 @@ function ports(): CorePorts {
     | {
         setBadgeText(details: { text: string }): Promise<void>;
         setTitle(details: { title: string }): Promise<void>;
-        setIcon(details: { path: string }): Promise<void>;
+        setIcon(details: { path: string | Record<string, string> }): Promise<void>;
       }
     | undefined;
   // onChildrenReordered exists only on Chromium (absent from the older
@@ -119,7 +119,8 @@ function ports(): CorePorts {
     chrome: {
       setBadge: async (text, title) => {
         if (!action) return;
-        const icon = text === '!' ? 'assets/notsynced32.png' : 'assets/synced32.png';
+        const state = text === '!' ? 'notsynced' : 'synced';
+        const icon = { '16': `assets/${state}16.png`, '32': `assets/${state}32.png` };
         await action.setIcon({ path: icon }).catch(() => undefined);
         await action.setBadgeText({ text }).catch(() => undefined);
         await action.setTitle({ title }).catch(() => undefined);

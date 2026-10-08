@@ -32,6 +32,7 @@ npm run build:firefox
 npm run build:chromium
 npm run package       # zips -> dist/ (needs system `zip` or python3, else fails)
 npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser)
+npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (48 checks, see SPEC §11.3)
 ```
 
 ## Layout

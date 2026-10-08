@@ -496,6 +496,19 @@ white-mark in-page chip.
   via Mongo `newsynclogs`, see `KeepmarkApi/README.md` + `scripts/e2e-*.sh`
   there). Command:
   `KEEPMARK_E2E_URL=http://localhost:8090 npm test -- tests/e2e-live.test.ts`.
+- 11.2b Automated browser QA (`npm run qa:browser`, `scripts/qa-browser.mjs`):
+  builds, then drives the real extension in Firefox (MV2, WebDriver BiDi,
+  temporary install) and Chromium (MV3, CDP) against a live KeepmarkApi v1.2
+  (`KEEPMARK_QA_URL`, default `http://localhost:8090`; needs a generous
+  `DAILY_NEW_SYNCS_LIMIT`). Covers connect new/existing, native auto-push,
+  every manager section, a real two-browser conflict (merge in Firefox), MV3
+  service-worker stop + persisted conflict + take remote, convergence, server
+  delete, log redaction (no full sync ID / password), dark-mode screenshots.
+  Throwaway profiles, generated password, the QA sync is deleted at the end;
+  screenshots + `results.json` in `build/qa/`. Exit 0 only when all checks
+  pass (2 = preflight: browsers/build/service missing). Not covered (still
+  manual, §11.3): real toolbar clicks/popup sizing, AMO-signed install,
+  multi-day MV3 sleep, 413/429 on a public service.
 - 11.3 Manual browser QA (required before release, needs a human): temp
   install both builds (README §Install), click every button (busy labels,
   confirms, per-section evidence), rendering incl. dark mode, MV3 sleep/wake
@@ -506,7 +519,7 @@ white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Manual QA on real browsers pending (see §11.3); permanent Firefox install
+Browser QA automated (§11.2b, last run 48/48 on Firefox 157 + Chromium 153); remaining manual items in §11.3; permanent Firefox install
 blocked on AMO signing; no multi-account/auto-backup/QR; toolbar toggle +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
