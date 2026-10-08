@@ -279,7 +279,6 @@ describe('validateConnect (foolproof rules)', () => {
     syncId: 'id',
     password: 'pw',
     confirm: '',
-    pushConfirmed: false,
   };
   it('pull default passes with id + password', () => {
     expect(validateConnect(base)).toBeNull();
@@ -310,11 +309,8 @@ describe('validateConnect (foolproof rules)', () => {
   it('existing requires sync id', () => {
     expect(validateConnect({ ...base, syncId: '' })).toBe('Sync ID is required for an existing sync.');
   });
-  it('push requires the explicit confirmation tick', () => {
-    expect(validateConnect({ ...base, direction: 'push' })).toBe(
-      'Tick the confirmation to overwrite the server copy.',
-    );
-    expect(validateConnect({ ...base, direction: 'push', pushConfirmed: true })).toBeNull();
+  it('push needs no form-level tick (the inline confirm asks)', () => {
+    expect(validateConnect({ ...base, direction: 'push' })).toBeNull();
   });
   it('merge needs no push confirmation (it never overwrites)', () => {
     expect(validateConnect({ ...base, direction: 'merge' })).toBeNull();

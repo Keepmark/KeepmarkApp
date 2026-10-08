@@ -24,8 +24,8 @@ import {
   type StatusResponse,
   type UndoState,
 } from '../shared/messages.js';
-import { confirmInline } from './flow.js';
-import { RemovedSyncDismissImplication, removedSyncText } from './texts.js';
+import { cancelConfirm, confirmInline } from './flow.js';
+import { type Direction, RemovedSyncDismissImplication, directionConfirm, removedSyncText } from './texts.js';
 
 function showError(where: 'connect' | 'main', message: string): void {
   const el = $(`${where}-error`);
@@ -201,7 +201,7 @@ async function initConnect(): Promise<void> {
   };
   const updateDirection = (): void => {
     const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value;
-    ($('conn-push-warn') as HTMLElement).hidden = direction !== 'push';
+    cancelConfirm('btn-connect');
     // Say what the click does: "Connect" alone hid create vs link-and-overwrite.
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
     $('btn-connect').textContent =
@@ -217,78 +217,91 @@ async function initConnect(): Promise<void> {
     el.addEventListener('change', updateMode);
   });
   updateMode();
-  $('btn-connect').addEventListener('click', () =>
-    withBusy('btn-connect', 'Connecting…', async () => {
-      clearErrors();
-      const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
-        | 'new'
-        | 'existing';
-      const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value as
-        | 'pull'
-        | 'push'
-        | 'merge';
-      const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
-      const syncId = input('sync-id').value.trim();
-      const password = input('password').value;
-      const invalid = validateConnect({
-        mode,
-        direction,
-        serviceUrl,
-        syncId,
-        password,
-        confirm: input('confirm-password').value,
-        pushConfirmed: (input('conn-push-confirm') as HTMLInputElement).checked,
-      });
-      if (invalid) {
-        showError('connect', invalid);
-        return;
-      }
-      try {
-        if (mode === 'new') {
-          await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
-        } else if (direction === 'merge') {
-          // Two-phase: preview first so the user sees exactly what the union
-          // will upload/download, then confirm before anything mutates.
-          const preview = await send<MergePreview>({
-            command: MessageCommand.PreviewMerge,
-            serviceUrl,
-            syncId,
-            password,
-          });
-          if (
-            !window.confirm(
-              `Merge keeps everything from both sides (nothing is deleted).\n\n` +
-                `• ${preview.localOnly} local bookmarks will upload (of ${preview.localCount})\n` +
-                `• ${preview.remoteOnly} server bookmarks will download (of ${preview.remoteCount})\n` +
-                `• ${preview.titleConflicts} same-address bookmarks differ in title (server title kept)\n` +
-                `• ${preview.foldersCreated} folders will be created, ${preview.separatorsAdopted} separators kept from both sides\n\n` +
-                `Items you deleted on one side while offline will reappear. Continue?`,
-            )
-          ) {
-            return;
-          }
-          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
-        } else {
-          await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
-        }
-        input('password').value = '';
-        input('confirm-password').value = '';
-        (input('conn-push-confirm') as HTMLInputElement).checked = false;
-        showView('main');
-        await refreshAll();
-      } catch (err) {
-        // Never leave the confirmation in the DOM; the main password stays so
-        // a transient failure doesn't force a full retype from the vault.
-        input('confirm-password').value = '';
-        showError('connect', (err as Error).message);
-      }
-    }),
+  // Editing the form while the confirm is open drops it: never connect with
+  // what was not confirmed.
+  ['service-url', 'sync-id', 'password', 'confirm-password'].forEach((id) =>
+    $(id).addEventListener('input', () => cancelConfirm('btn-connect')),
   );
+  $('btn-connect').addEventListener('click', () => void submitConnect());
   $('btn-open-tab').addEventListener('click', () => {
     // Popups close on focus loss (by design) — a full tab stays open while
     // copying credentials from a vault. State carries over via storage.
     const url = browser.runtime.getURL('popup.html?fullpage=1');
     void browser.tabs.create({ url }).then(() => window.close());
+  });
+}
+
+/**
+ * Connect: new creates without a confirm (nothing is replaced); existing
+ * always confirms inline with the direction's loss line, merge with its
+ * counts first. Asked BEFORE the busy wrapper (confirmInline owns the
+ * button while open).
+ */
+async function submitConnect(): Promise<void> {
+  clearErrors();
+  const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
+    | 'new'
+    | 'existing';
+  const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement)
+    .value as Direction;
+  const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
+  const syncId = input('sync-id').value.trim();
+  const password = input('password').value;
+  const invalid = validateConnect({
+    mode,
+    direction,
+    serviceUrl,
+    syncId,
+    password,
+    confirm: input('confirm-password').value,
+  });
+  if (invalid) {
+    showError('connect', invalid);
+    return;
+  }
+  if (mode === 'existing') {
+    let counts = '';
+    if (direction === 'merge') {
+      // Two-phase: preview first so the confirm shows exactly what the union
+      // will upload/download before anything mutates.
+      let preview: MergePreview | undefined;
+      await withBusy('btn-connect', 'Checking…', async () => {
+        try {
+          preview = await send<MergePreview>({ command: MessageCommand.PreviewMerge, serviceUrl, syncId, password });
+        } catch (err) {
+          showError('connect', (err as Error).message);
+        }
+      });
+      if (!preview) return;
+      counts =
+        `${preview.localOnly} local will upload, ${preview.remoteOnly} server will download, ` +
+        `${preview.titleConflicts} title conflicts (server title kept). `;
+    }
+    const ok = await confirmInline('btn-connect', {
+      message: directionConfirm[direction].message,
+      implication: `${counts}${directionConfirm[direction].implication}`,
+      confirmLabel: directionConfirm[direction].confirmLabel,
+      danger: direction !== 'merge',
+    });
+    if (!ok) return;
+  }
+  await withBusy('btn-connect', 'Connecting…', async () => {
+    try {
+      if (mode === 'new') {
+        await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
+      } else {
+        await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
+      }
+      input('password').value = '';
+      input('confirm-password').value = '';
+      showView('main');
+      await refreshAll();
+    } catch (err) {
+      // Never leave the confirmation in the DOM; the main password stays so
+      // a transient failure doesn't force a full retype from the vault.
+      input('confirm-password').value = '';
+      showError('connect', (err as Error).message);
+    }
   });
 }
 

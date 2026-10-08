@@ -223,6 +223,8 @@ async function connectExisting(ctx, id) {
   await click(p, 'input[name="conn-direction"][value="pull"]');
   await setVal(p, '#password', PASSWORD);
   await click(p, '#btn-connect');
+  const asked = await confirmYes(p, 'btn-connect');
+  check(`${ctx.kind}: connect existing asks inline first`, (asked ?? '').includes('Yes, download'), asked ?? 'no confirm');
   const ok = await waitFor(() => visible(p, '#view-main'), 30000);
   check(`${ctx.kind}: connect existing (download)`, ok, ok ? '' : `error box: ${await text(p, '#connect-error')}`);
   return p;

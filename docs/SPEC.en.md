@@ -285,8 +285,9 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   version gate → password verified by decrypting the remote → plaintext safety
   download of the server copy → PUT local tree (revision CAS iff v1.2 + meta)
   → `connect-push` undo (slot persisted only after the PUT lands) → relink.
-  The UI must show an explicit overwrite confirmation for push (popup
-  `conn-push-confirm`; `validateConnect` enforces it).
+  The popup confirms every existing-sync link inline before connecting
+  (`confirmInline` on `btn-connect`, texts `directionConfirm`; merge shows
+  its preview counts first).
 - `SyncBookmarks {type:'remote', runSync:true}`: pull-if-newer then push.
 - `AddBookmark {container, parentId?, title, url?}` / `RemoveBookmark {id}`:
   native write by stable synced id via mappings, then push-now (errors thrown

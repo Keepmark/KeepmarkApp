@@ -227,7 +227,6 @@ export function validateConnect(input: {
   syncId: string;
   password: string;
   confirm: string;
-  pushConfirmed: boolean;
 }): string | null {
   const urlErr = validateServiceUrl(input.serviceUrl);
   if (urlErr) return urlErr;
@@ -238,9 +237,6 @@ export function validateConnect(input: {
     return null;
   }
   if (!input.syncId.trim()) return 'Sync ID is required for an existing sync.';
-  if (input.direction === 'push' && !input.pushConfirmed) {
-    return 'Tick the confirmation to overwrite the server copy.';
-  }
   return null;
 }
 

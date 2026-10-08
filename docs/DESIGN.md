@@ -91,7 +91,7 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
    undo, per-group and bulk duplicate deletes, import, merge. No `confirm`
    inside background/shared code (DOM only in popup/manager).
 7. **Validation pure first**: `validateServiceUrl` (https, http loopback
-   only), `validateConnect` (push needs explicit tick; merge never does),
+   only), `validateConnect` (no direction tick: the inline confirm asks),
    `validateSwitch` (confirm field exists only in `new` mode — existing
    verifies by decrypting), `validatePasswordChange`. Null = valid.
 8. **Passwords**: clear `confirm` always after run; clear `current` on

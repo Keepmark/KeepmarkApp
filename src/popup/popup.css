@@ -194,8 +194,7 @@ code {
 #view-connect:has(input[name="conn-mode"][value="existing"]:checked) .mode-existing { display: block; }
 
 #conn-existing-only,
-#conn-new-only,
-#conn-push-warn {
+#conn-new-only {
   display: flex;
   flex-direction: column;
   gap: 10px;
