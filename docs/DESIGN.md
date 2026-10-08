@@ -14,6 +14,10 @@ Source of truth for anyone extending popup/manager UI. Extracted from
 --ok: #1e7e34; --warn: #b7791f;          /* both pages, identical values */
 ```
 
+Dark scheme (`prefers-color-scheme: dark`, both pages): `--danger: #ff8a7a;
+--ok: #6fd08c; --warn: #f0b955` — the light values are unreadable on dark
+Canvas/ButtonFace (QA 2026-10-08: red-on-grey danger buttons).
+
 - `color-scheme: light dark`, `font: system-ui`, no framework, no webfonts.
 - Brand: `.brand-chip` (`#172552` tile + `assets/brand-mark.png` white mark,
   18px popup / 22px manager). Toolbar/manifest icons come from

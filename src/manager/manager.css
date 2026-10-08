@@ -10,6 +10,18 @@
   --warn: #b7791f;
 }
 
+/* Dark scheme: the light-tuned status tokens drop below readable contrast on
+   dark Canvas/ButtonFace (red-on-grey danger buttons). Same values in every
+   page stylesheet (docs/DESIGN.md §1). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --danger: #ff8a7a;
+    --ok: #6fd08c;
+    --warn: #f0b955;
+  }
+}
+
+
 * {
   box-sizing: border-box;
 }

@@ -111,9 +111,20 @@ function showSection(name: string, moveFocus = false): void {
   if (name === 'about') renderAbout();
 }
 
+/** Status refresh clears stale ERROR boxes only: it runs right after every
+ *  successful action (and on storage changes), so hiding result boxes here
+ *  would erase the success evidence the action just showed. */
+function hideStatusErrors(): void {
+  for (const id of ['status-error', 'status-error-2', 'conflict-error']) {
+    const el = $(id);
+    el.hidden = true;
+    el.textContent = '';
+  }
+}
+
 async function refreshStatus(): Promise<void> {
   const my = ++statusSeq;
-  hideErrors();
+  hideStatusErrors();
   try {
     status = await send<StatusResponse>({ command: MessageCommand.GetStatus });
   } catch (err) {
@@ -255,7 +266,9 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
     await withBusy(`conflict-btn-${direction}`, busy[direction], async () => {
       try {
         await send({ command: MessageCommand.ResolveConflict, direction });
-        showResult('conflict-result', conflictDone[direction]);
+        // The conflict section hides as soon as the conflict clears: the
+        // success evidence (naming the safety backups) must live outside it.
+        showResult('status-result', conflictDone[direction]);
         await refreshStatus();
       } catch (err) {
         sectionError('conflict-error', (err as Error).message);
