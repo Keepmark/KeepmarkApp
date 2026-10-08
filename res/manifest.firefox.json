@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Keepmark",
   "description": "Keepmark bookmark sync (xBrowserSync-compatible).",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "homepage_url": "https://github.com/Keepmark",
   "icons": {
     "16": "assets/icon16.png",
