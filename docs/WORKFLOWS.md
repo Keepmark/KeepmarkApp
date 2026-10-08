@@ -63,8 +63,9 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   field is empty. Validation messages appear after pressing it.
 - Busy labels: `Checking…`, `Connecting…`, `Downloading…`, `Uploading…`,
   `Merging…`, `Moving…`, `Changing…`, `Exporting…`, `Importing…`.
-- A wizard that resumes after an app restart never resumes past a step that needs
-  a password; it restarts at the step where the password is asked.
+- A wizard that resumes (after leaving the page or an app restart) never resumes
+  on its final review: it restarts at the step that asks the password, and the
+  service check and merge preview run again.
 - Undo: the last overwrite offers `Undo` for its kind (named in words, not by
   key). Result text: `Undone: <what was undone>.`
 
