@@ -28,7 +28,7 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 - Brand: `.brand-chip` (white mark `assets/brand-mark.png`; on the popup's
   `--brand` header it is a translucent white tile, in the manager a `--brand` tile,
   18px popup / 22px manager). Toolbar/manifest icons come from
-  `../Keepmark/brand/src/build.py --install`; never recolor by hand.
+  `../KeepmarkMobile/brand/src/build.py --install`; never recolor by hand.
 - Popup components: navy `header` band with `#sync-state` as a pill;
   `.seg`/`.seg-opt` segmented control over the native `conn-mode` radios;
   `.option` selectable cards over the `conn-direction` radios; `.mode-hint`

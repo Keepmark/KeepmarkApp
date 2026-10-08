@@ -1,7 +1,7 @@
 # KeepmarkApp — browser extension (Firefox MV2 + Chromium MV3)
 
 xBrowserSync-compatible bookmark sync. New codebase, inspired by `../app`
-(browser-extension logic) with the robustness rules of `../Keepmark`
+(browser-extension logic) with the robustness rules of `../KeepmarkMobile`
 (whole-blob sync, merge only as an explicit previewed direction — never
 silent, crypto interop).
 

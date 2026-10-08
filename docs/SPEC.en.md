@@ -430,7 +430,7 @@ implement `NativeAdapter` (`src/background/adapter.ts`).
 | CSP | `connect-src https: http://localhost:* http://127.0.0.1:*; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'` | same connect-src |
 | Background | persistent page | service worker: alarm-driven (no `setTimeout`), single bundle, no local chunk imports, no dynamic `import()` |
 
-Icons come from the official Keepmark brand (`../Keepmark/brand/`): navy-tile
+Icons come from the official Keepmark brand (`../KeepmarkMobile/brand/`): navy-tile
 manifest icons (48/128) + toolbar icons (16/32, grayscale
 notsynced), white-mark in-page chip.
 

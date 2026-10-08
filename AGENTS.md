@@ -8,7 +8,7 @@ Read this first when resuming work here. Companion docs: `README.md`
 New xBrowserSync-compatible bookmark-sync browser extension, rewritten from
 scratch. Firefox MV2 first, Chromium MV3 second. Inspired by `../app`
 (AngularJS 1.x client — logic reference only, stack NOT reused) and hardened
-with the rules of `../Keepmark` (whole-blob sync, no silent merge, crypto
+with the rules of `../KeepmarkMobile` (whole-blob sync, no silent merge, crypto
 interop, English-only).
 
 - Own git repo, branch `master`, remote
@@ -103,7 +103,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `vite.shared.ts` (`platformAlias` + `copyStatic` manifest+assets plugin).
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;
   `res/assets/` → output `assets/`. Icons rebuilt from the official Keepmark
-  brand (`../Keepmark/brand/10-favicon.png`: navy `#172552`,
+  brand (`../KeepmarkMobile/brand/10-favicon.png`: navy `#172552`,
   keyhole x0.362–0.630/y0.300–0.611): navy-tile manifest icons (48/128) +
   toolbar icons (16/32, grayscale notsynced), white mark chip in pages
   (from `03-standalone.png`).
@@ -174,7 +174,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 **Icons/assets from Keepmark brand/ — DONE (see res/assets, git history):**
 toolbar + manifest + notification icons rescaled from `10-favicon.png`
 (plus grayscale notsynced); in-page brand chip uses the white mark. Source of
-truth for future sizes: `../Keepmark/brand/`.
+truth for future sizes: `../KeepmarkMobile/brand/`.
 
 **Known limitations / next features (not started):** manual browser QA
 (see README install section); QR connect (only `QrDelimiter` constant exists);
