@@ -18,7 +18,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
 | Move service / Move to another service | Wizard that moves the sync to another service (button: Move now, result: Move complete) | Switch service |
-| Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Replace local with backup) | |
+| Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 

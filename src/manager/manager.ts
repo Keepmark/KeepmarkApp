@@ -3,7 +3,7 @@
 // popup via ../popup/ui.js. Display only; mutations go through background.
 
 import browser from 'webextension-polyfill';
-import { ApiVersion, ApiVersion12, MinApiVersion, SyncClientVersion } from '../shared/constants.js';
+import { ApiVersion, ApiVersion12, MinApiVersion, PasswordTooShort, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
   contractGate,
@@ -20,8 +20,18 @@ import {
   withBusy,
   type StatusView,
 } from '../popup/ui.js';
-import { confirmInline } from '../popup/flow.js';
-import { ChangePasswordDone, ChangePasswordImplication } from '../popup/texts.js';
+import { clearMessages, confirmInline, showError } from '../popup/flow.js';
+import {
+  ChangePasswordDone,
+  ChangePasswordImplication,
+  ImportImplication,
+  SafetyDeleteImplication,
+  exportDone,
+  importChecked,
+  importDone,
+  safetyRestoreDone,
+  safetyRestoreImplication,
+} from '../popup/texts.js';
 import {
   MessageCommand,
   type DuplicateGroup,
@@ -66,24 +76,6 @@ function prefillMoveUrl(): void {
 let statusSeq = 0;
 /** Inputs the current preview was made for — submit requires an exact match. */
 let previewFor: { newServiceUrl: string; mode: string; syncId?: string; direction: 'push' | 'pull' | 'merge' } | undefined;
-
-function sectionError(id: string, message: string): void {
-  const el = $(id);
-  el.textContent = message;
-  el.hidden = false;
-}
-
-function hideErrors(): void {
-  for (const id of ['conflict-error', 'status-error', 'status-error-2', 'backup-error', 'backup-error-2', 'dup-error', 'dup-error-2', 'move-error', 'move-error-2', 'logs-error', 'settings-error', 'pw-error']) {
-    const el = $(id);
-    el.hidden = true;
-    el.textContent = '';
-  }
-  // Stale success/result boxes must not survive next to a new error.
-  for (const id of ['status-result', 'conflict-result', 'backup-result', 'move-result', 'pw-result', 'settings-result']) {
-    $(id).hidden = true;
-  }
-}
 
 function showSection(name: string, moveFocus = false): void {
   document.querySelectorAll('#sidebar button').forEach((b) => {
@@ -141,7 +133,7 @@ async function refreshStatus(): Promise<void> {
     updateLinkGates();
     renderConflictSection();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
-    sectionError('status-error', (err as Error).message);
+    showError('status-error', (err as Error).message);
     return;
   }
   if (my !== statusSeq) return;
@@ -200,7 +192,7 @@ async function loadConflictPreview(): Promise<void> {
     }
   } catch (err) {
     conflictPreview = undefined;
-    sectionError('conflict-error', (err as Error).message);
+    showError('conflict-error', (err as Error).message);
   }
   renderConflictSection();
 }
@@ -292,7 +284,7 @@ const conflictDone: Record<ConflictResolutionDirection, string> = {
 
 /** Execute the chosen conflict resolution (confirmed, busy-guarded). */
 async function resolveConflict(direction: ConflictResolutionDirection): Promise<void> {
-  hideErrors();
+  clearMessages();
   if (!window.confirm(conflictConfirm[direction])) return;
   // Not withBusy(): it swaps textContent and would flatten the <b>/<small>
   // markup. Lock all three, retitle only the chosen one's label.
@@ -314,7 +306,7 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
     showResult('conflict-result', conflictDone[direction]);
     await refreshStatus();
   } catch (err) {
-    sectionError('conflict-error', (err as Error).message);
+    showError('conflict-error', (err as Error).message);
   } finally {
     label.replaceChildren(...original);
     buttons.forEach((b, i) => (b.disabled = prev[i]));
@@ -329,7 +321,7 @@ function initConflictSection(): void {
 
 function initUndoBanner(): void {
   $('m-btn-undo').addEventListener('click', async () => {
-    hideErrors();
+    clearMessages();
     if (!window.confirm('Undo the last link operation? Changes made since will be discarded.')) return;
     await withBusy('m-btn-undo', 'Undoing…', async () => {
       try {
@@ -338,7 +330,7 @@ function initUndoBanner(): void {
         await refreshStatus();
         await refreshUndoBanner();
       } catch (err) {
-        sectionError('status-error-2', (err as Error).message);
+        showError('status-error-2', (err as Error).message);
       }
     });
   });
@@ -367,7 +359,7 @@ function initStatusSection(): void {
   $('m-btn-sync-now').addEventListener('click', () => {
     if (($('m-btn-sync-now') as HTMLButtonElement).disabled) return;
     void withBusy('m-btn-sync-now', 'Syncing…', async () => {
-      hideErrors();
+      clearMessages();
       try {
         const result = await send<{ queued: boolean; conflict?: boolean }>({
           command: MessageCommand.SyncBookmarks,
@@ -378,7 +370,7 @@ function initStatusSection(): void {
           return;
         }
       } catch (err) {
-        sectionError('status-error-2', (err as Error).message);
+        showError('status-error-2', (err as Error).message);
       }
       await refreshStatus();
     });
@@ -397,7 +389,7 @@ function initStatusSection(): void {
     // check inside would always self-trigger).
     if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
     void withBusy('m-btn-unlink', 'Unlinking…', async () => {
-      hideErrors();
+      clearMessages();
       if (!window.confirm('Unlink this device? Syncing stops; the bookmarks on this device stay untouched.')) return;
       try {
         await send({ command: MessageCommand.DisableSync });
@@ -406,7 +398,7 @@ function initStatusSection(): void {
         ping = undefined;
         await refreshStatus();
       } catch (err) {
-        sectionError('status-error-2', (err as Error).message);
+        showError('status-error-2', (err as Error).message);
       }
     });
   });
@@ -417,7 +409,7 @@ function initStatusSection(): void {
       // Disabled buttons don't fire clicks anyway; the background re-gates.
       if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
       await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
-        hideErrors();
+        clearMessages();
         // No undo exists for this (the server has no undelete): two explicit
         // confirms plus the automatic backup download in the background.
         if (
@@ -434,7 +426,7 @@ function initStatusSection(): void {
           ping = undefined;
           await refreshStatus();
         } catch (err) {
-          sectionError('status-error-2', (err as Error).message);
+          showError('status-error-2', (err as Error).message);
         }
       });
       // withBusy restores the pre-click disabled state last: re-assert the
@@ -517,146 +509,147 @@ function showResult(id: string, text: string): void {
 }
 
 function initBackupSection(): void {
-  $('m-btn-export').addEventListener('click', () =>
-    withBusy('m-btn-export', 'Exporting…', async () => {
-      hideErrors();
-      const password = input('m-backup-password').value;
-      if (password.length < MinBackupPasswordLength) {
-        sectionError('backup-error', `Enter a backup password first (at least ${MinBackupPasswordLength} characters).`);
-        return;
-      }
-      try {
-        const json = await send<string>({ command: MessageCommand.ExportBackup, password });
-        await send({
-          command: MessageCommand.DownloadFile,
-          filename: `keepmark-backup-${new Date().toISOString().slice(0, 10)}.xbs.json`,
-          text: json,
-        });
-        input('m-backup-password').value = '';
-        showResult('backup-result', 'Backup exported to your downloads.');
-      } catch (err) {
-        sectionError('backup-error', (err as Error).message);
-      }
-    }),
-  );
-  // Import is verify-then-confirm: once a file is read with a password, both
-  // are pinned (the field locks) and Confirm uses exactly that pair. Pressing
-  // Import again starts over with an editable field.
+  $('m-btn-export').addEventListener('click', () => void exportBackup());
+  // Restore is three visible steps: choose file → type its password and Check
+  // (dry-run, nothing changes) → Replace (inline confirm). Choosing a file
+  // again always starts over.
   $('m-btn-import').addEventListener('click', () => {
-    // Starting over from a pending read: unlock and clear, then the picker's
-    // change handler asks for the password again. A fresh import keeps the
-    // password just typed (it must be entered before choosing the file).
-    if (importPreview) resetImport();
+    resetImport();
+    clearMessages();
     ($('m-import-file') as HTMLInputElement).click();
   });
-  ($('m-import-file') as HTMLInputElement).addEventListener('change', async (e) => {
-    hideErrors();
-    ($('m-import-preview') as HTMLElement).hidden = true;
-    ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
-    importPreview = undefined;
+  ($('m-import-file') as HTMLInputElement).addEventListener('change', (e) => {
+    clearMessages();
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    const password = input('m-backup-password').value;
-    if (password.length < MinBackupPasswordLength) {
-      sectionError('backup-error', `Enter the backup password first (at least ${MinBackupPasswordLength} characters), then choose the file again.`);
-      (e.target as HTMLInputElement).value = '';
-      return;
-    }
     if (file.size > MaxBackupBytes) {
-      sectionError('backup-error', 'Backup file too large (over 50 MB).');
-      (e.target as HTMLInputElement).value = '';
+      resetImport();
+      showError('backup-error-2', 'Backup file too large (over 50 MB).');
       return;
     }
-    // Step 1: preview (count) — nothing mutates. Step 2 arms Confirm import.
-    await withBusy('m-btn-import', 'Reading…', async () => {
-      try {
-        const json = await file.text();
-        const preview = await send<{ count: number }>({
-          command: MessageCommand.PreviewBackup,
-          json,
-          password,
-        });
-        importPreview = { name: file.name, size: file.size, lastModified: file.lastModified, password };
-        lockImportPassword(true);
-        const box = $('m-import-preview');
-        box.textContent =
-          `${file.name}: ${preview.count} item(s) — “Replace local with backup” replaces your local ` +
-          `bookmarks and uploads them to the service (a safety backup is saved first). ` +
-          `Password verified and locked — press “Import backup” again to start over.`;
-        box.hidden = false;
-        ($('m-btn-import-confirm') as HTMLButtonElement).disabled = false;
-      } catch (err) {
-        input('m-backup-password').value = '';
-        (e.target as HTMLInputElement).value = '';
-        sectionError('backup-error', (err as Error).message);
-      }
-    });
+    $('m-import-file-name').textContent = file.name;
+    ($('m-import-step') as HTMLElement).hidden = false;
+    input('m-import-password').focus();
   });
-  $('m-btn-import-confirm').addEventListener('click', () =>
-    withBusy('m-btn-import-confirm', 'Importing…', async () => {
-      hideErrors();
-      const fileEl = $('m-import-file') as HTMLInputElement;
-      const file = fileEl.files?.[0];
-      if (
-        !file ||
-        !importPreview ||
-        importPreview.name !== file.name ||
-        importPreview.size !== file.size ||
-        importPreview.lastModified !== file.lastModified
-      ) {
-        sectionError('backup-error', 'File changed since the preview — choose it again.');
-        return;
-      }
-      if (
-        !window.confirm(
-          `Replace your local bookmarks with the backup and upload it to the service? (Undo is in Status.)`,
-        )
-      ) {
-        return;
-      }
-      try {
-        const json = await file.text();
-        const res = await send<{ count: number; safety: string }>({
-          command: MessageCommand.ImportBackup,
-          json,
-          password: importPreview.password,
-        });
-        resetImport();
-        showResult(
-          'backup-result',
-          `Restored ${res.count} item(s) and uploaded them to the service (safety backup: ${res.safety} — see Safety backups below).`,
-        );
-        await refreshSafety();
-      } catch (err) {
-        // Never leave a failed password in the DOM (or pinned in memory).
-        resetImport();
-        sectionError('backup-error', (err as Error).message);
-      }
-    }),
-  );
+  $('m-btn-import-check').addEventListener('click', () => void checkImport());
+  input('m-import-password').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void checkImport();
+  });
+  $('m-btn-import-confirm').addEventListener('click', () => void confirmImport());
   $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', 'Loading…', () => refreshSafety()));
 }
 
-/** Lock the shared backup password while a read preview is pending: export
- * and the pending import would otherwise silently use different values. */
-function lockImportPassword(locked: boolean): void {
-  (input('m-backup-password') as HTMLInputElement).disabled = locked;
-  ($('m-btn-export') as HTMLButtonElement).disabled = locked;
+/** Export: a new backup password typed twice (docs/WORKFLOWS.md rule 4). The
+ * fields survive a failure so the user can retry. */
+async function exportBackup(): Promise<void> {
+  clearMessages();
+  const password = input('m-backup-password').value;
+  const confirm = input('m-backup-confirm').value;
+  if (password.length < MinBackupPasswordLength) return showError('backup-error', PasswordTooShort);
+  if (password !== confirm) return showError('backup-error', 'Passwords do not match.');
+  await withBusy('m-btn-export', 'Exporting…', async () => {
+    try {
+      const json = await send<string>({ command: MessageCommand.ExportBackup, password });
+      const filename = `keepmark-backup-${new Date().toISOString().slice(0, 10)}.xbs.json`;
+      await send({ command: MessageCommand.DownloadFile, filename, text: json });
+      input('m-backup-password').value = '';
+      input('m-backup-confirm').value = '';
+      showResult('backup-result', exportDone(filename));
+    } catch (err) {
+      showError('backup-error', (err as Error).message);
+    }
+  });
 }
 
-/** Drop any pending import: unlock + clear the password, forget the file. */
+/** Step 2: decrypt + count without touching anything. On success the
+ * password locks and Replace appears; on a wrong password only the password
+ * is cleared (the file stays chosen for the retry). */
+async function checkImport(): Promise<void> {
+  clearMessages();
+  const file = ($('m-import-file') as HTMLInputElement).files?.[0];
+  if (!file) return showError('backup-error-2', 'Choose the backup file first.');
+  const password = input('m-import-password').value;
+  if (!password) return showError('backup-error-2', 'Enter the password of this backup.');
+  await withBusy('m-btn-import-check', 'Checking…', async () => {
+    try {
+      const preview = await send<{ count: number }>({
+        command: MessageCommand.PreviewBackup,
+        json: await file.text(),
+        password,
+      });
+      importPreview = { name: file.name, size: file.size, lastModified: file.lastModified, password, count: preview.count };
+      input('m-import-password').disabled = true;
+      ($('m-btn-import-check') as HTMLElement).hidden = true;
+      const box = $('m-import-preview');
+      box.textContent = importChecked(file.name, preview.count);
+      box.hidden = false;
+      ($('m-import-confirm-row') as HTMLElement).hidden = false;
+    } catch (err) {
+      input('m-import-password').value = '';
+      showError('backup-error-2', (err as Error).message);
+    }
+  });
+}
+
+/** Step 3: inline confirm, then replace local + server with the checked file. */
+async function confirmImport(): Promise<void> {
+  clearMessages();
+  const file = ($('m-import-file') as HTMLInputElement).files?.[0];
+  const pending = importPreview;
+  if (
+    !file ||
+    !pending ||
+    pending.name !== file.name ||
+    pending.size !== file.size ||
+    pending.lastModified !== file.lastModified
+  ) {
+    resetImport();
+    return showError('backup-error-2', 'The file changed since the check. Choose it again.');
+  }
+  const ok = await confirmInline('m-btn-import-confirm', {
+    message: `Replace your bookmarks with this backup (${pending.count} items)?`,
+    implication: ImportImplication,
+    confirmLabel: 'Yes, restore',
+    danger: true,
+  });
+  if (!ok) return;
+  await withBusy('m-btn-import-confirm', 'Restoring…', async () => {
+    try {
+      const res = await send<{ count: number; safety: string }>({
+        command: MessageCommand.ImportBackup,
+        json: await file.text(),
+        password: pending.password,
+      });
+      resetImport();
+      showResult('backup-result-2', importDone(res.count));
+      await refreshSafety();
+    } catch (err) {
+      // Never leave a used password pinned; the next try starts from the file.
+      resetImport();
+      showError('backup-error-2', (err as Error).message);
+    }
+  });
+}
+
+/** Back to step 1: forget file, password and check. */
 function resetImport(): void {
   importPreview = undefined;
-  lockImportPassword(false);
-  input('m-backup-password').value = '';
   ($('m-import-file') as HTMLInputElement).value = '';
+  $('m-import-file-name').textContent = '';
+  const pw = input('m-import-password');
+  pw.value = '';
+  pw.disabled = false;
+  ($('m-import-step') as HTMLElement).hidden = true;
+  ($('m-btn-import-check') as HTMLElement).hidden = false;
   ($('m-import-preview') as HTMLElement).hidden = true;
-  ($('m-btn-import-confirm') as HTMLButtonElement).disabled = true;
+  ($('m-import-confirm-row') as HTMLElement).hidden = true;
 }
 
-/** File (and verified password) the current import preview was made for —
- * confirm requires the same file and reuses that password. */
-let importPreview: { name: string; size: number; lastModified: number; password: string } | undefined;
+/** File (and verified password) the check was made for — Replace requires
+ * the same file and reuses that password. */
+let importPreview:
+  | { name: string; size: number; lastModified: number; password: string; count: number }
+  | undefined;
 
 const SafetyOperations: Record<string, string> = {
   'take-remote': 'Downloaded server copy — Connect',
@@ -681,7 +674,7 @@ async function refreshSafety(): Promise<void> {
   try {
     entries = await send<SafetyEntry[]>({ command: MessageCommand.GetSafetyList });
   } catch (err) {
-    sectionError('backup-error-2', (err as Error).message);
+    showError('backup-error-3', (err as Error).message);
     return;
   }
   if (entries.length === 0) {
@@ -692,58 +685,71 @@ async function refreshSafety(): Promise<void> {
     return;
   }
   const ul = document.createElement('ul');
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     const li = document.createElement('li');
     const when = new Date(entry.createdAtUtc).toLocaleString();
     const what = SafetyOperations[entry.operation] ?? entry.operation;
-    const side = entry.side === 'local' ? 'local tree' : 'server copy';
+    const side = entry.side === 'local' ? 'local bookmarks' : 'server copy';
     li.textContent =
       `${when} · ${what} · ${side} · ${entry.items} items · ${formatBytes(entry.sizeBytes)} · ` +
       `sync ${entry.syncId} · ${entry.enc ? 'encrypted' : 'not encrypted'} `;
     const restore = document.createElement('button');
-    restore.textContent = 'Restore';
+    restore.textContent = 'Restore…';
     restore.className = 'mini';
     restore.setAttribute('aria-label', `Restore safety backup ${entry.fileName}`);
-    restore.addEventListener('click', () => {
-      hideErrors();
-      if (!window.confirm(`Restore ${entry.fileName}? A safety backup of the current state is saved first.`)) return;
-      restore.disabled = true;
-      send<{ count: number; safety: string }>({ command: MessageCommand.RestoreSafety, fileName: entry.fileName })
-        .then((res) => {
-          showResult(
-            'backup-result',
-            `Restored ${res.count} item(s). A pre-restore backup was saved first (${res.safety}).`,
-          );
-          void refreshSafety();
-          void refreshStatus();
-        })
-        .catch((err: Error) => sectionError('backup-error-2', err.message))
-        .finally(() => {
-          restore.disabled = false;
-        });
-    });
+    restore.id = `safety-restore-${index}`;
+    restore.addEventListener('click', () => void restoreSafety(entry, restore.id));
     const del = document.createElement('button');
     del.textContent = 'Delete';
     del.className = 'mini danger';
     del.setAttribute('aria-label', `Delete safety backup ${entry.fileName}`);
-    del.addEventListener('click', () => {
-      hideErrors();
-      if (!window.confirm(`Delete safety backup ${entry.fileName}? This cannot be undone.`)) return;
-      del.disabled = true;
-      send({ command: MessageCommand.DeleteSafety, fileName: entry.fileName })
-        .then(() => {
-          showResult('backup-result', `Deleted ${entry.fileName}.`);
-          void refreshSafety();
-        })
-        .catch((err: Error) => sectionError('backup-error-2', err.message))
-        .finally(() => {
-          del.disabled = false;
-        });
-    });
+    del.id = `safety-delete-${index}`;
+    del.addEventListener('click', () => void deleteSafety(entry, del.id));
     li.append(restore, ' ', del);
     ul.append(li);
   }
   box.append(ul);
+}
+
+async function restoreSafety(entry: SafetyEntry, anchorId: string): Promise<void> {
+  clearMessages();
+  const ok = await confirmInline(anchorId, {
+    message: `Restore the safety backup from ${new Date(entry.createdAtUtc).toLocaleString()}?`,
+    implication: safetyRestoreImplication(entry.side, entry.items),
+    confirmLabel: 'Yes, restore',
+    danger: true,
+  });
+  if (!ok) return;
+  await withBusy(anchorId, 'Restoring…', async () => {
+    try {
+      const res = await send<{ count: number; safety: string }>({ command: MessageCommand.RestoreSafety, fileName: entry.fileName });
+      await refreshSafety();
+      showResult('backup-result-3', safetyRestoreDone(res.count, res.safety));
+      void refreshStatus();
+    } catch (err) {
+      showError('backup-error-3', (err as Error).message);
+    }
+  });
+}
+
+async function deleteSafety(entry: SafetyEntry, anchorId: string): Promise<void> {
+  clearMessages();
+  const ok = await confirmInline(anchorId, {
+    message: `Delete the safety backup from ${new Date(entry.createdAtUtc).toLocaleString()}?`,
+    implication: SafetyDeleteImplication,
+    confirmLabel: 'Yes, delete',
+    danger: true,
+  });
+  if (!ok) return;
+  await withBusy(anchorId, 'Deleting…', async () => {
+    try {
+      await send({ command: MessageCommand.DeleteSafety, fileName: entry.fileName });
+      await refreshSafety();
+      showResult('backup-result-3', 'Safety backup deleted.');
+    } catch (err) {
+      showError('backup-error-3', (err as Error).message);
+    }
+  });
 }
 
 let dupSeq = 0;
@@ -768,7 +774,7 @@ async function scanDuplicates(): Promise<void> {
     lastDupGroups = [];
     dupMarked = new Set();
     updateDupBar();
-    sectionError('dup-error', (err as Error).message);
+    showError('dup-error', (err as Error).message);
     return;
   }
   if (my !== dupSeq) return;
@@ -831,7 +837,7 @@ function renderDuplicates(): void {
       glyph.textContent = marked ? '✕' : locked ? '🔒' : '';
       toggle.append(glyph);
       toggle.addEventListener('click', () => {
-        hideErrors();
+        clearMessages();
         if (dupMarked.has(entry.id)) dupMarked.delete(entry.id);
         else if (!isSelectionLocked(lastDupGroups, dupMarked, entry.id)) dupMarked.add(entry.id);
         renderDuplicates();
@@ -864,7 +870,7 @@ function renderDuplicates(): void {
     del.textContent = markedHere.length > 0 ? `Delete ${markedHere.length} marked` : 'Delete marked';
     del.disabled = markedHere.length === 0;
     del.addEventListener('click', () => {
-      hideErrors();
+      clearMessages();
       if (
         !window.confirm(
           `Delete ${markedHere.length} marked cop${markedHere.length === 1 ? 'y' : 'ies'} from this address? One copy always stays. A safety snapshot is taken first.`,
@@ -885,7 +891,7 @@ function renderDuplicates(): void {
           void scanDuplicates();
         })
         .catch((err: Error) => {
-          sectionError('dup-error-2', err.message);
+          showError('dup-error-2', err.message);
           del.disabled = false;
         });
     });
@@ -900,7 +906,7 @@ function initDuplicatesSection(): void {
   );
   $('m-btn-duplicates-delete-all').addEventListener('click', () =>
     withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
-      hideErrors();
+      clearMessages();
       const ids = [...dupMarked];
       if (ids.length === 0) return;
       if (
@@ -921,7 +927,7 @@ function initDuplicatesSection(): void {
         );
         await scanDuplicates();
       } catch (err) {
-        sectionError('dup-error', (err as Error).message);
+        showError('dup-error', (err as Error).message);
       }
     }),
   );
@@ -987,21 +993,21 @@ function updateMoveForm(): void {
 }
 
 async function previewTarget(): Promise<void> {
-  hideErrors();
+  clearMessages();
   const newServiceUrl = input('m-switch-url').value.trim();
   if (!newServiceUrl) {
-    sectionError('move-error', 'New service URL is required.');
+    showError('move-error', 'New service URL is required.');
     return;
   }
   const mode = switchMode();
   const syncId = input('m-switch-id').value.trim() || undefined;
   if (mode === 'existing' && !syncId) {
-    sectionError('move-error', 'Sync ID is required for an existing sync.');
+    showError('move-error', 'Sync ID is required for an existing sync.');
     return;
   }
   const urlErr = validateServiceUrl(newServiceUrl);
   if (urlErr) {
-    sectionError('move-error', urlErr);
+    showError('move-error', urlErr);
     return;
   }
   await withBusy('m-btn-preview', 'Checking…', async () => {
@@ -1015,7 +1021,7 @@ async function previewTarget(): Promise<void> {
       // Pin what the preview was made for; submitMove() refuses stale previews.
       previewFor = { newServiceUrl, mode, syncId, direction: switchDirection() };
     } catch (err) {
-      sectionError('move-error', (err as Error).message);
+      showError('move-error', (err as Error).message);
       return;
     }
     const box = $('move-preview');
@@ -1054,7 +1060,7 @@ async function previewTarget(): Promise<void> {
               `Items deleted on one side while offline will reappear.`,
           );
         } catch (err) {
-          sectionError('move-error', (err as Error).message);
+          showError('move-error', (err as Error).message);
           return;
         }
       }
@@ -1080,7 +1086,7 @@ function setMoveGate(ok: boolean): void {
 }
 
 async function submitMove(): Promise<void> {
-  hideErrors();
+  clearMessages();
   const newServiceUrl = input('m-switch-url').value.trim();
   const mode = switchMode();
   const direction = switchDirection();
@@ -1089,7 +1095,7 @@ async function submitMove(): Promise<void> {
   const confirm = input('m-switch-confirm').value;
   const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm });
   if (invalid) {
-    sectionError('move-error-2', invalid);
+    showError('move-error-2', invalid);
     return;
   }
   if (
@@ -1100,7 +1106,7 @@ async function submitMove(): Promise<void> {
     previewFor.syncId !== syncId ||
     previewFor.direction !== direction
   ) {
-    sectionError('move-error-2', 'Inputs changed since the check — press “Check target” again.');
+    showError('move-error-2', 'Inputs changed since the check — press “Check target” again.');
     return;
   }
   // Set on success so the post-busy gate below knows the preview was spent.
@@ -1120,7 +1126,7 @@ async function submitMove(): Promise<void> {
             `${s.titleConflicts} title conflicts (server title kept).`
           : 'Merge preview unavailable — press “Check target” again.';
         if (!s) {
-          sectionError('move-error-2', summary);
+          showError('move-error-2', summary);
           return;
         }
         if (
@@ -1141,7 +1147,7 @@ async function submitMove(): Promise<void> {
       movedId = res.id;
     } catch (err) {
       input('m-switch-confirm').value = '';
-      sectionError('move-error-2', (err as Error).message);
+      showError('move-error-2', (err as Error).message);
     }
   });
   if (movedId) {
@@ -1185,7 +1191,7 @@ function initMoveSection(): void {
 }
 
 async function refreshLogs(): Promise<void> {
-  hideErrors();
+  clearMessages();
   try {
     const entries = await send<{ timestamp: string; level: number; tag: string; message: string }[]>({
       command: MessageCommand.GetLogs,
@@ -1195,7 +1201,7 @@ async function refreshLogs(): Promise<void> {
       .map((e) => `${e.timestamp} [${names[e.level] ?? e.level}] ${e.tag}: ${e.message}`)
       .join('\n');
   } catch (err) {
-    sectionError('logs-error', (err as Error).message);
+    showError('logs-error', (err as Error).message);
   }
 }
 
@@ -1206,14 +1212,14 @@ function initLogsSection(): void {
 }
 
 async function renderSettings(): Promise<void> {
-  hideErrors();
+  clearMessages();
   const info = $('m-service-info');
   info.textContent = '';
   let st: StatusResponse | undefined;
   try {
     st = await send<StatusResponse>({ command: MessageCommand.GetStatus });
   } catch (err) {
-    sectionError('settings-error', (err as Error).message);
+    showError('settings-error', (err as Error).message);
     return;
   }
   let pg: PingResponse | undefined;
@@ -1247,17 +1253,17 @@ async function renderSettings(): Promise<void> {
 function initSettingsSection(): void {
   (input('m-opt-toolbar') as HTMLInputElement).addEventListener('change', (e) => {
     void send({ command: MessageCommand.SetToolbarSync, enabled: (e.target as HTMLInputElement).checked }).catch(
-      (err: Error) => sectionError('settings-error', err.message),
+      (err: Error) => showError('settings-error', err.message),
     );
   });
   ($('m-opt-verbosity') as HTMLSelectElement).addEventListener('change', async (e) => {
-    hideErrors();
+    clearMessages();
     const level = Number((e.target as HTMLSelectElement).value);
     try {
       await send({ command: MessageCommand.SetVerbosity, level });
       showResult('settings-result', `Log verbosity set to ${['Error', 'Warning', 'Info', 'Debug', 'Verbose'][level]}.`);
     } catch (err) {
-      sectionError('settings-error', (err as Error).message);
+      showError('settings-error', (err as Error).message);
     }
   });
   $('m-btn-password').addEventListener('click', () => void changePassword());
@@ -1273,11 +1279,11 @@ function readPasswordChange(): { current: string; next: string; confirm: string 
 
 /** Change password: validate → inline confirm with the implications → run. */
 async function changePassword(): Promise<void> {
-  hideErrors();
+  clearMessages();
   ($('pw-result') as HTMLElement).hidden = true;
   const invalid = validatePasswordChange(readPasswordChange());
   if (invalid) {
-    sectionError('pw-error', invalid);
+    showError('pw-error', invalid);
     return;
   }
   const ok = await confirmInline('m-btn-password', {
@@ -1292,7 +1298,7 @@ async function changePassword(): Promise<void> {
   const fields = readPasswordChange();
   const stillInvalid = validatePasswordChange(fields);
   if (stillInvalid) {
-    sectionError('pw-error', stillInvalid);
+    showError('pw-error', stillInvalid);
     return;
   }
   await withBusy('m-btn-password', 'Changing…', async () => {
@@ -1308,7 +1314,7 @@ async function changePassword(): Promise<void> {
       // the new password stays so only the proof has to be retyped.
       input('m-current-password').value = '';
       input('m-new-password-confirm').value = '';
-      sectionError('pw-error', (err as Error).message);
+      showError('pw-error', (err as Error).message);
     }
   });
 }

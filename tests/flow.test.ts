@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('webextension-polyfill', () => ({ default: { runtime: { sendMessage: async () => ({ ok: true }) } } }));
 
-import { cancelConfirm, confirmInline } from '../src/popup/flow';
+import { cancelConfirm, clearMessages, confirmInline, showError } from '../src/popup/flow';
 
 function click(id: string): void {
   (document.getElementById(id) as HTMLButtonElement).click();
@@ -60,5 +60,38 @@ describe('confirmInline', () => {
     expect(document.querySelectorAll('.confirm')).toHaveLength(1);
     click('act-yes');
     await expect(second).resolves.toBe(true);
+  });
+});
+
+describe('confirmInline in a list', () => {
+  it('opens under the list item, not inside it after the button', () => {
+    document.body.innerHTML = '<ul><li>entry <button id="r0">Restore</button> <button id="d0">Delete</button></li></ul>';
+    void confirmInline('r0', { message: 'Restore?', confirmLabel: 'Yes, restore', danger: true });
+    const box = document.getElementById('r0-confirm')!;
+    expect(box.previousElementSibling?.tagName).toBe('LI');
+    cancelConfirm('r0');
+  });
+});
+
+describe('showError / clearMessages', () => {
+  beforeEach(() => {
+    document.body.innerHTML =
+      '<div id="a-error" class="error" role="alert" hidden></div><div id="a-result" class="result">Done.</div>';
+  });
+
+  it('shows the message in the named box', () => {
+    showError('a-error', 'Broken.');
+    const el = document.getElementById('a-error')!;
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toBe('Broken.');
+  });
+
+  it('empties and hides every error box and hides results', () => {
+    showError('a-error', 'Broken.');
+    clearMessages();
+    const el = document.getElementById('a-error')!;
+    expect(el.hidden).toBe(true);
+    expect(el.textContent).toBe('');
+    expect(document.getElementById('a-result')!.hidden).toBe(true);
   });
 });

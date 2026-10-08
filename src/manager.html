@@ -103,24 +103,41 @@
 
       <section id="sec-backup" hidden>
         <h2>Backup</h2>
-        <p class="hint">Save your local bookmarks to an encrypted file (password of your choice, at least 8 characters), or restore from one. The file opens only with that password.</p>
+        <h3>Export</h3>
+        <p class="hint">Save this browser's bookmarks to an encrypted file in your downloads. Choose a backup
+          password of at least 8 characters. It is not your sync password and cannot be recovered: without it the
+          file cannot be opened.</p>
         <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
+        <label>Confirm backup password <input id="m-backup-confirm" type="password" autocomplete="new-password" /></label>
+        <div class="row"><button id="m-btn-export">Export encrypted backup</button></div>
+        <div id="backup-error" class="error" role="alert" hidden></div>
+        <div id="backup-result" class="result" hidden></div>
+
+        <h3>Restore from a backup file</h3>
+        <p class="hint">Replaces this browser's bookmarks and the server copy; your other devices get the backup at
+          their next sync. The current bookmarks are saved to Safety backups first.</p>
+        <p class="notice needs-link-notice" hidden>Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
         <div class="row">
-          <button id="m-btn-export">Export encrypted backup</button>
           <button id="m-btn-import" data-needs-link>Choose backup file…</button>
+          <span id="m-import-file-name" class="hint"></span>
           <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
-        <p class="notice needs-link-notice" hidden>Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
-        <div id="backup-error" class="error" role="alert" hidden></div>
+        <div id="m-import-step" hidden>
+          <label>Password of this backup <input id="m-import-password" type="password" autocomplete="off" /></label>
+          <div class="row"><button id="m-btn-import-check" class="primary">Check backup</button></div>
+        </div>
         <div id="m-import-preview" class="preview" hidden></div>
-        <div class="row"><button id="m-btn-import-confirm" class="primary" disabled>Replace local with backup</button></div>
-        <div id="backup-result" class="result" hidden></div>
+        <div id="m-import-confirm-row" class="row" hidden><button id="m-btn-import-confirm" class="danger">Replace with this backup…</button></div>
+        <div id="backup-error-2" class="error" role="alert" hidden></div>
+        <div id="backup-result-2" class="result" hidden></div>
+
         <h3>Safety backups</h3>
         <p class="hint">Automatic snapshots taken before every overwrite or deletion (newest 5 kept).
           Encrypted entries need the current sync link to restore.</p>
         <div class="row"><button id="m-btn-safety">Refresh list</button></div>
         <div id="m-safety-list"></div>
-        <div id="backup-error-2" class="error" role="alert" hidden></div>
+        <div id="backup-error-3" class="error" role="alert" hidden></div>
+        <div id="backup-result-3" class="result" hidden></div>
       </section>
 
       <section id="sec-duplicates" hidden>

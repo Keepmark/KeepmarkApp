@@ -19,13 +19,13 @@ export interface ConfirmOptions {
 const pending = new Map<string, (ok: boolean) => void>();
 
 /** Show an inline confirmation under the action button `anchorId` (under its
- * `.row` when it sits in one). Resolves true on confirm, false on cancel or
+ * `.row` or list item when it sits in one). Resolves true on confirm, false on cancel or
  * when another confirmation for the same anchor replaces it. While open the
  * anchor is disabled, so the action cannot be armed twice. */
 export function confirmInline(anchorId: string, opts: ConfirmOptions): Promise<boolean> {
   cancelConfirm(anchorId);
   const anchor = $(anchorId) as HTMLButtonElement;
-  const after = anchor.closest('.row') ?? anchor;
+  const after = anchor.closest('.row, li') ?? anchor;
   const wasDisabled = anchor.disabled;
 
   const box = document.createElement('div');
@@ -72,4 +72,22 @@ export function confirmInline(anchorId: string, opts: ConfirmOptions): Promise<b
 /** Close an open confirmation for `anchorId` as cancelled (no-op if none). */
 export function cancelConfirm(anchorId: string): void {
   pending.get(anchorId)?.(false);
+}
+
+/** Show `message` in the error box `id` (`<base>-error[-n]`, next to the
+ * action that failed). */
+export function showError(id: string, message: string): void {
+  const el = $(id);
+  el.textContent = message;
+  el.hidden = false;
+}
+
+/** Hide every error box (emptied, so a screen reader never re-reads a stale
+ * alert) and every result box under `root`: a new action starts clean. */
+export function clearMessages(root: ParentNode = document): void {
+  for (const el of root.querySelectorAll<HTMLElement>('.error[role="alert"]')) {
+    el.hidden = true;
+    el.textContent = '';
+  }
+  for (const el of root.querySelectorAll<HTMLElement>('.result')) el.hidden = true;
 }

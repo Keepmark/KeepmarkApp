@@ -154,10 +154,15 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   and multi-action sections, each action cluster gets its own adjacent error
   box (`<base>-error`, `<base>-error-2`, …) instead of one top-of-section box
   the user must scroll to find. E.g. move wizard step 1 → `move-error`,
-  step 2 submit → `move-error-2`; safety list actions → `backup-error-2`;
+  step 2 submit → `move-error-2`; backup export → `backup-error`, restore
+  from file → `backup-error-2`, safety list actions → `backup-error-3`;
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`.
-  Every box needs `role="alert"`, starts `hidden`, and is emptied (not just
-  hidden) when cleared; `hideErrors()` must cover all of them.
+  Every box has class `error`, `role="alert"`, starts `hidden`, and is
+  emptied (not just hidden) when cleared. `showError(id, msg)` and
+  `clearMessages()` in `src/popup/flow.ts` handle all of them by selector (no
+  ID list to maintain). Confirmations use `confirmInline` from the same file,
+  never `window.confirm`; workflow texts live in `src/popup/texts.ts`. The
+  per-step contract is `docs/WORKFLOWS.md`.
 - Success evidence mirrors it: multi-outcome operations restate WHAT ran
   (mode + direction + target), not just "Done". Build the message in a pure
   shared helper (e.g. `describeMoveResult` in `ui.ts`) with a unit test per
