@@ -90,8 +90,8 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 6. **Confirms**: inline `confirmInline` (`src/popup/flow.ts`, texts in
    `src/popup/texts.ts`) for every action that replaces or removes data:
    unlink (1×), server delete (2×), undo, connect, move, conflict, import,
-   safety restore/delete. `window.confirm` remains only for duplicate
-   deletes (pending migration). No confirm inside background/shared code
+   safety restore/delete, duplicate deletes (per group and all marked).
+   No `window.confirm` anywhere. No confirm inside background/shared code
    (DOM only in popup/manager).
 7. **Validation pure first**: `validateServiceUrl` (https, http loopback
    only), `validateConnect` (no direction tick: the inline confirm asks),

@@ -37,6 +37,17 @@ export const safetyRestoreDone = (count: number, preFile: string): string =>
   `Restored ${count} item(s). The state before the restore is saved as ${preFile}.`;
 export const SafetyDeleteImplication = 'This safety backup is gone for good.';
 
+// Duplicates.
+export const dupDeleteConfirm = (count: number): { message: string; implication: string; confirmLabel: string } => ({
+  message: `Delete ${count} marked duplicate(s)?`,
+  implication:
+    'One copy of each URL always stays; while linked the deletion is uploaded and your other devices get it at their next sync. ' +
+    'A safety backup is saved first.',
+  confirmLabel: 'Yes, delete',
+});
+export const dupDeleteDone = (count: number): string =>
+  `Deleted ${count} duplicate(s). Safety backup saved — see Backup → Safety backups.`;
+
 // Status → Danger zone.
 export const UnlinkImplication =
   'Syncing stops; the bookmarks on this browser stay. To link again you need the sync ID and its password, ' +

@@ -6,6 +6,8 @@ import {
   MoveImplication,
   UnlinkImplication,
   directionConfirm,
+  dupDeleteConfirm,
+  dupDeleteDone,
   removedSyncText,
   undoConfirm,
   undoneText,
@@ -58,5 +60,13 @@ describe('workflow texts', () => {
     expect(c.implication).toContain('downloaded the server copy');
     expect(c.implication).toContain('Changes made since then are discarded');
     expect(c.implication).not.toContain('connect-pull');
+  });
+
+  it('duplicate deletes say one copy stays and where the safety backup is', () => {
+    const c = dupDeleteConfirm(3);
+    expect(c.message).toBe('Delete 3 marked duplicate(s)?');
+    expect(c.implication).toContain('One copy of each URL always stays');
+    expect(c.implication).toContain('safety backup');
+    expect(dupDeleteDone(3)).toContain('Backup → Safety backups');
   });
 });

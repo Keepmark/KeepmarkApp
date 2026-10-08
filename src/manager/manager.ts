@@ -30,6 +30,8 @@ import {
   MoveImplication,
   DirectionOrder,
   directionConfirm,
+  dupDeleteConfirm,
+  dupDeleteDone,
   moveNewConfirm,
   UnlinkDone,
   UnlinkImplication,
@@ -798,6 +800,9 @@ let lastDupGroups: DuplicateGroup[] = [];
 /** Copies marked for deletion in the current scan (default: all but newest). */
 let dupMarked: Set<number> = new Set();
 
+/** Per-group delete buttons of the current render (their confirms close on re-render). */
+let dupDeleteIds: string[] = [];
+
 async function scanDuplicates(): Promise<void> {
   const my = ++dupSeq;
   const box = $('m-dup-list');
@@ -838,8 +843,13 @@ function updateDupBar(): void {
 
 function renderDuplicates(): void {
   const box = $('m-dup-list');
+  // A re-render replaces the per-group buttons: close their open confirms first.
+  for (const id of dupDeleteIds) cancelConfirm(id);
+  // Marks changed: a pending Delete-all confirm names a stale count.
+  cancelConfirm('m-btn-duplicates-delete-all');
+  dupDeleteIds = [];
   box.textContent = '';
-  for (const group of lastDupGroups) {
+  for (const [gi, group] of lastDupGroups.entries()) {
     const div = document.createElement('div');
     div.className = 'dup-group';
     const head = document.createElement('div');
@@ -901,32 +911,25 @@ function renderDuplicates(): void {
       row.append(toggle, text);
       div.append(row);
     }
-    // Per-group armed delete (two-step, like the Android client).
+    // Per-group delete with inline confirm (like the Android client).
     const footer = document.createElement('div');
     footer.className = 'row';
     const del = document.createElement('button');
+    del.id = `dup-del-${gi}`;
+    dupDeleteIds.push(del.id);
     del.className = 'mini danger';
     del.textContent = markedHere.length > 0 ? `Delete ${markedHere.length} marked` : 'Delete marked';
     del.disabled = markedHere.length === 0;
-    del.addEventListener('click', () => {
+    del.addEventListener('click', async () => {
       clearMessages();
-      if (
-        !window.confirm(
-          `Delete ${markedHere.length} marked cop${markedHere.length === 1 ? 'y' : 'ies'} from this address? One copy always stays. A safety snapshot is taken first.`,
-        )
-      ) {
-        return;
-      }
+      if (!(await confirmInline(del.id, { ...dupDeleteConfirm(markedHere.length), danger: true }))) return;
       del.disabled = true;
       send<{ deleted: number; safety: string }>({
         command: MessageCommand.RemoveDuplicates,
         ids: markedHere.map((e) => e.id),
       })
         .then((res) => {
-          showResult(
-            'dup-result',
-            `Deleted ${res.deleted} duplicates (safety backup: ${res.safety} — see Backup → Safety backups).`,
-          );
+          showResult('dup-result', dupDeleteDone(res.deleted));
           void scanDuplicates();
         })
         .catch((err: Error) => {
@@ -943,33 +946,25 @@ function initDuplicatesSection(): void {
   $('m-btn-duplicates').addEventListener('click', () =>
     withBusy('m-btn-duplicates', 'Scanning…', () => scanDuplicates()),
   );
-  $('m-btn-duplicates-delete-all').addEventListener('click', () =>
-    withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
-      clearMessages();
-      const ids = [...dupMarked];
-      if (ids.length === 0) return;
-      if (
-        !window.confirm(
-          `Delete ${ids.length} marked duplicates in one push? One copy of each URL stays. A safety backup is saved first — see Backup → Safety backups.`,
-        )
-      ) {
-        return;
-      }
+  $('m-btn-duplicates-delete-all').addEventListener('click', async () => {
+    clearMessages();
+    const ids = [...dupMarked];
+    if (ids.length === 0) return;
+    // Confirm before withBusy (it disables the anchor while running).
+    if (!(await confirmInline('m-btn-duplicates-delete-all', { ...dupDeleteConfirm(ids.length), danger: true }))) return;
+    await withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
       try {
         const res = await send<{ deleted: number; safety: string }>({
           command: MessageCommand.RemoveDuplicates,
           ids,
         });
-        showResult(
-          'dup-result',
-          `Deleted ${res.deleted} duplicates (safety backup: ${res.safety} — see Backup → Safety backups).`,
-        );
+        showResult('dup-result', dupDeleteDone(res.deleted));
         await scanDuplicates();
       } catch (err) {
         showError('dup-error', (err as Error).message);
       }
-    }),
-  );
+    });
+  });
 }
 
 function switchMode(): 'new' | 'existing' {
