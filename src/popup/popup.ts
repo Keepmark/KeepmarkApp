@@ -44,6 +44,16 @@ function showView(name: 'connect' | 'main'): void {
   ($('view-main') as HTMLElement).hidden = name !== 'main';
 }
 
+/** Header pill text: time only for today, short date otherwise (the full
+ * timestamp is in the card's "Last sync" row). */
+function shortWhen(iso: string | number): string {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
@@ -81,7 +91,7 @@ async function refreshAll(): Promise<void> {
   } else if (status.syncing || status.queueLength > 0) {
     state.textContent = 'Syncing…';
   } else {
-    state.textContent = status.lastUpdated ? `Synced ${new Date(status.lastUpdated).toLocaleString()}` : 'Synced';
+    state.textContent = status.lastUpdated ? `Synced ${shortWhen(status.lastUpdated)}` : 'Synced';
   }
   // Show/hide conflict resolution button
   const conflictAction = $('p-conflict-action') as HTMLElement;

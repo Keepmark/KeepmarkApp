@@ -39,31 +39,9 @@
             </dd>
           </dl>
         </div>
-        <div id="status-error" class="error" role="alert" hidden></div>
-        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the extension popup to connect a sync first.
-          (“Move service” needs an existing link to move from.)</p>
-        <div class="row">
-          <button id="m-btn-sync-now">⇅ Sync now</button>
-          <button id="m-btn-refresh">Refresh status</button>
-        </div>
-        <div id="undo-banner" class="undo" hidden>
-          <span id="undo-text"></span>
-          <span class="row"><button id="m-btn-undo" class="mini">Undo</button>
-          <button id="m-btn-undo-dismiss" class="mini">Dismiss</button></span>
-        </div>
-        <h3>Danger zone</h3>
-        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
-        <div class="row">
-          <button id="m-btn-delete-remote" class="danger" disabled title="Not supported (requires service v1.2)">Delete sync from server…</button>
-          <span id="m-api-contract" class="badge"></span>
-        </div>
-        <p id="m-delete-v12-hint" class="hint" hidden>Server delete needs API v1.2 — this service speaks v1.1, so the sync
-          cannot be deleted from here (Unlink above only removes this device; the sync on the server stays).</p>
-        <div id="status-error-2" class="error" role="alert" hidden></div>
-        <div id="status-result" class="result" hidden></div>
         <!-- Conflict resolution section (shown when status.conflict === true) -->
         <div id="m-conflict-section" class="conflict-section" hidden>
-          <h3>⚠️ Sync conflict</h3>
+          <h3>Sync conflict</h3>
           <p class="hint">The server has newer changes (<span id="m-conflict-remote-time"></span>). Your local changes (<span id="m-conflict-local-count"></span> items) could not be pushed.</p>
           <dl class="conflict-stats">
             <dt>Local only (will upload)</dt><dd id="conflict-stat-local"></dd>
@@ -98,20 +76,42 @@
           </details>
           <div id="conflict-error" class="error" role="alert" hidden></div>
         </div>
+        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the extension popup to connect a sync first.
+          (“Move service” needs an existing link to move from.)</p>
+        <div class="row">
+          <button id="m-btn-sync-now" class="primary">Sync now</button>
+          <button id="m-btn-refresh">Refresh status</button>
+        </div>
+        <div id="status-error" class="error" role="alert" hidden></div>
+        <div id="undo-banner" class="undo" hidden>
+          <span id="undo-text"></span>
+          <span class="row"><button id="m-btn-undo" class="mini">Undo</button>
+          <button id="m-btn-undo-dismiss" class="mini">Dismiss</button></span>
+        </div>
+        <h3>Danger zone</h3>
+        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this device</button></div>
+        <div class="row">
+          <button id="m-btn-delete-remote" class="danger" disabled title="Not supported (requires service v1.2)">Delete sync from server…</button>
+          <span id="m-api-contract" class="badge"></span>
+        </div>
+        <p id="m-delete-v12-hint" class="hint" hidden>Server delete needs API v1.2 — this service speaks v1.1, so the sync
+          cannot be deleted from here (Unlink above only removes this device; the sync on the server stays).</p>
+        <div id="status-error-2" class="error" role="alert" hidden></div>
+        <div id="status-result" class="result" hidden></div>
       </section>
 
       <section id="sec-backup" hidden>
         <h2>Backup</h2>
         <p class="hint">Encrypted backups protected by their own password (min 8 chars).</p>
-        <div id="backup-error" class="error" role="alert" hidden></div>
         <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
         <div class="row">
           <button id="m-btn-export">Export backup</button>
           <button id="m-btn-import">Import backup</button>
           <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
+        <div id="backup-error" class="error" role="alert" hidden></div>
         <div id="m-import-preview" class="preview" hidden></div>
-        <div class="row"><button id="m-btn-import-confirm" disabled>Confirm import</button></div>
+        <div class="row"><button id="m-btn-import-confirm" class="primary" disabled>Confirm import</button></div>
         <div id="backup-result" class="result" hidden></div>
         <h3>Safety backups</h3>
         <p class="hint">Automatic snapshots taken before every destructive step (newest 5 kept).
@@ -124,8 +124,8 @@
       <section id="sec-duplicates" hidden>
         <h2>Duplicates</h2>
         <p class="hint">Same address saved more than once. Tick copies to delete — one copy of each address always stays. Click a title to open it.</p>
-        <div id="dup-error" class="error" role="alert" hidden></div>
         <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete all listed</button></div>
+        <div id="dup-error" class="error" role="alert" hidden></div>
         <div id="dup-result" class="result" hidden></div>
         <div id="m-dup-list"></div>
         <div id="dup-error-2" class="error" role="alert" hidden></div>
@@ -134,7 +134,6 @@
       <section id="sec-move" hidden>
         <h2>Move to another service</h2>
         <p class="hint">Nothing syncs until you confirm at step 2. A safety backup of the current side is downloaded first.</p>
-        <div id="move-error" class="error" role="alert" hidden></div>
         <h3>1. Target</h3>
         <label>New service URL <input id="m-switch-url" type="url" /></label>
         <div role="radiogroup" aria-label="Move mode">
@@ -150,12 +149,13 @@
           </div>
         </div>
         <div class="row"><button id="m-btn-preview">Check target</button></div>
+        <div id="move-error" class="error" role="alert" hidden></div>
         <div id="move-preview" class="preview" hidden></div>
         <h3>2. Confirm</h3>
         <label><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
         <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
         <div id="move-summary" class="hint"></div>
-        <div class="row"><button id="m-btn-switch" disabled>Move sync</button></div>
+        <div class="row"><button id="m-btn-switch" class="primary" disabled>Move sync</button></div>
         <div id="move-error-2" class="error" role="alert" hidden></div>
         <p id="move-gate-hint" class="hint">“Move sync” unlocks only after a successful “Check target”,
           and stays locked to those exact inputs — change anything and check again.</p>
@@ -164,14 +164,13 @@
 
       <section id="sec-logs" hidden>
         <h2>Logs</h2>
-        <div id="logs-error" class="error" role="alert" hidden></div>
         <div class="row"><button id="m-btn-logs">Refresh logs</button></div>
+        <div id="logs-error" class="error" role="alert" hidden></div>
         <pre id="m-log-list"></pre>
       </section>
 
       <section id="sec-settings" hidden>
         <h2>Settings</h2>
-        <div id="settings-error" class="error" role="alert" hidden></div>
         <dl id="m-service-info"></dl>
         <label class="check"><input id="m-opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
         <label>Log verbosity
@@ -183,13 +182,14 @@
             <option value="4">Verbose</option>
           </select>
         </label>
+        <div id="settings-error" class="error" role="alert" hidden></div>
         <h3>Change password</h3>
         <p class="hint">Re-encrypts the sync with a new password. Your current password is verified first and never leaves this device. The old password stops working on all devices immediately — update your vault and other devices.</p>
-        <div id="pw-error" class="error" role="alert" hidden></div>
         <label>Current password <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label>New password <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label>Confirm new password <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
-        <div class="row"><button id="m-btn-password">Change password</button></div>
+        <div class="row"><button id="m-btn-password" class="primary">Change password</button></div>
+        <div id="pw-error" class="error" role="alert" hidden></div>
         <div id="pw-result" class="result" hidden></div>
         <div id="settings-result" class="result" hidden></div>
       </section>

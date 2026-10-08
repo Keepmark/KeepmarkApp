@@ -481,7 +481,7 @@ button.mini {
 dl {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0 12px;
+  gap: 0;
   margin: 0;
   font-size: 12px;
 }
@@ -496,6 +496,7 @@ dd {
 
 dt {
   color: var(--muted);
+  padding-right: 12px;
 }
 
 dd {
