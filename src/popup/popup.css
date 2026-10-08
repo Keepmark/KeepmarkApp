@@ -4,8 +4,8 @@
   color-scheme: light dark;
   --navy: #172552;
   /* Brand band (header, toolbar icons): lighter than navy so it reads on
-     dark browser chrome; white text on it is 5.3:1. */
-  --brand: #4a5fc1;
+     dark browser chrome; white text on it is 11:1. */
+  --brand: #243878;
   --bg: #f5f6fa;
   --surface: #ffffff;
   --surface-2: #e6e9f3;

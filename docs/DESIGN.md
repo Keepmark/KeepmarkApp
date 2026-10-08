@@ -11,7 +11,7 @@ Source of truth for anyone extending popup/manager UI. Extracted from
 values; canvas: Keepmark Redesign artifact). Both pages:
 
 ```css
---brand: #4a5fc1;                                  /* popup header band, brand chip, extension icons */
+--brand: #243878;                                  /* popup header band, brand chip, extension icons */
 --navy: #172552;                                   /* undo strip */
 --bg: #f5f6fa; --surface: #ffffff; --fg: #141b38; --muted: #4a5170;
 --border: #cdd2e1; --accent: #3d4fb0;              /* primary buttons, focus, meter */
