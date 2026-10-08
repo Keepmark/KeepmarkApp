@@ -28,6 +28,7 @@ import { BookmarkContainer } from '../shared/bookmarks.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
 import { deleteByIds, getDuplicateGroups } from '../shared/duplicates.js';
 import { mergeTrees, type MergeStats } from '../shared/merge.js';
+import { diffTrees, sameContent } from '../shared/tree-diff.js';
 import {
   deleteSafety,
   listSafety,
@@ -374,11 +375,18 @@ export class BackgroundCore {
     // be wiped by clearAndPopulate. Surface them as a conflict instead.
     if (await this.store.get<string>(StoreKey.Bookmarks)) {
       const pending = await this.reconcileNatives(info, syncToolbar);
-      if (pending.changed) {
+      const local = ensureContainersExist(pending.next);
+      // Only REAL unpushed content counts: a reconcile that flags a change
+      // but yields the cached content (id/mapping noise) is not an edit, and
+      // a local side the server already holds loses nothing by pulling.
+      if (pending.changed && !sameContent(local, ensureContainersExist(await this.cachedTree(info)))) {
         const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
-        const remote = await api.getLastUpdated(info.id!).catch(() => undefined);
-        await this.captureConflict(info, pending.next, remote?.lastUpdated ?? '');
-        throw new ConflictCapturedException();
+        const { res, tree: remoteTree } = await this.fetchRemote(api, info);
+        if (!sameContent(local, ensureContainersExist(remoteTree))) {
+          await this.captureConflict(info, local, res.lastUpdated ?? '');
+          throw new ConflictCapturedException();
+        }
+        this.log.log(XbsLogLevel.Info, 'sync', 'Unpushed local edits already on the server: pulling, no conflict');
       }
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
@@ -526,9 +534,15 @@ export class BackgroundCore {
       return { pushed: true };
     } catch (err) {
       if (err instanceof DataOutOfSyncException) {
-        // Remote moved under us: persist the conflict for user resolution.
-        const remote = await api.getLastUpdated(info.id!).catch(() => undefined);
-        await this.captureConflict(info, next, remote?.lastUpdated ?? '');
+        // Remote moved under us. If it already holds exactly our content
+        // (another device made the same change, or merged us in), adopt it:
+        // that is not a conflict. Otherwise persist it for the user.
+        const fresh = await this.fetchRemote(api, info).catch(() => undefined);
+        if (fresh && sameContent(next, ensureContainersExist(fresh.tree))) {
+          await this.adoptRemote(api, info, syncToolbar, fresh.res);
+          return { pushed: false };
+        }
+        await this.captureConflict(info, next, fresh?.res.lastUpdated ?? '');
         return { pushed: false, conflict: true };
       }
       throw err;
@@ -647,6 +661,43 @@ export class BackgroundCore {
     return { res, tree };
   }
 
+  /** Pull a remote that was just downloaded (natives, cache, meta, mappings). */
+  private async adoptRemote(
+    api: XSyncApiClient,
+    info: SyncInfo,
+    syncToolbar: boolean,
+    res: import('../shared/api.js').GetBookmarksResponse,
+  ): Promise<void> {
+    await this.withSuspended(() =>
+      pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+        syncId: info.id!,
+        derivedKey: info.password!,
+        blob: res.bookmarks ?? '',
+        lastUpdated: res.lastUpdated!,
+        remoteVersion: res.version ?? info.version,
+        meta: res.meta,
+        supportsV12: v12Usable(info),
+      }, info.serviceUrl),
+    );
+  }
+
+  /**
+   * A stored conflict whose local side equals the server copy (e.g. the
+   * other device merged us in meanwhile) has nothing to resolve: adopt the
+   * remote and clear it. Returns true when it was dropped.
+   */
+  private async dropPhantomConflict(info: SyncInfo, syncToolbar: boolean): Promise<boolean> {
+    const conflict = await this.loadConflict(info);
+    if (!conflict) return false;
+    const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+    const { res, tree } = await this.fetchRemote(api, info);
+    if (!sameContent(ensureContainersExist(conflict.localTree), ensureContainersExist(tree))) return false;
+    await this.adoptRemote(api, info, syncToolbar, res);
+    await this.store.remove(StoreKey.ConflictState);
+    this.log.log(XbsLogLevel.Info, 'sync', 'Conflict cleared: both sides already hold the same bookmarks');
+    return true;
+  }
+
   /**
    * PUT `tree` on the base of the remote just read (`res`) — never on the
    * stored base, which is exactly what caused the conflict.
@@ -722,7 +773,11 @@ export class BackgroundCore {
     if (!enabled) return;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (!info?.id) return;
-    if (await this.hasConflict()) return; // the user resolves it, no auto-pull
+    if (await this.hasConflict()) {
+      // Phantom conflicts clear themselves; real ones wait for the user.
+      const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+      if (!(await this.dropPhantomConflict(info, syncToolbar).catch(() => false))) return;
+    }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const remote = await api.getLastUpdated(info.id);
     const local = await this.store.get<string>(StoreKey.LastUpdated);
@@ -1957,16 +2012,25 @@ export class BackgroundCore {
 
   /** Detailed merge preview for the conflict resolution UI (fresh remote). */
   private async getConflictPreview(): Promise<ConflictPreviewResponse> {
-    const { info } = await this.requireCreds();
+    const { info, syncToolbar } = await this.requireCreds();
     const conflict = await this.loadConflict(info);
     if (!conflict) {
       throw new UnexpectedResponseException('No active conflict to preview.');
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
-    const { tree: remoteTree } = await this.fetchRemote(api, info);
-    const local = conflict.localTree;
-    const { stats } = mergeTrees(local, remoteTree);
+    const { res, tree: remoteTree } = await this.fetchRemote(api, info);
+    const local = ensureContainersExist(conflict.localTree);
+    const remote = ensureContainersExist(remoteTree);
+    const diff = diffTrees(local, remote);
+    if (diff.identical) {
+      // Nothing to resolve: adopt the server copy and clear the conflict.
+      await this.adoptRemote(api, info, syncToolbar, res);
+      await this.store.remove(StoreKey.ConflictState);
+      this.log.log(XbsLogLevel.Info, 'sync', 'Conflict cleared on preview: both sides identical');
+    }
+    const { stats } = mergeTrees(local, remote);
     return {
+      diff,
       mergeStats: stats,
       localCount: stats.localCount,
       remoteCount: stats.remoteCount,

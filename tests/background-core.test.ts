@@ -1692,3 +1692,66 @@ describe('conflict resolution (review regressions)', () => {
     expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
   });
 });
+
+describe('phantom conflicts (review follow-up)', () => {
+  const sameAsLocal = async (core: BackgroundCore, store: Store, derived: string): Promise<BookmarkNode[]> => {
+    void core;
+    const { decryptData } = await import('../src/shared/crypto');
+    return JSON.parse(await decryptData((await store.get<string>(StoreKey.Bookmarks))!, derived)) as BookmarkNode[];
+  };
+
+  it('409 where the server already holds our exact content is adopted, not a conflict', async () => {
+    const state = baseState();
+    const { core, store, derived, mockApi } = await linkedCore(state);
+    // Another device already pushed exactly what we are about to push.
+    await mockApi.create({ parentId: 'unfiled_____', title: 'Same', url: 'https://same.test/' });
+    const tree = await sameAsLocal(core, store, derived);
+    const other = tree.map((c) => (c.title === BookmarkContainer.Other
+      ? { ...c, children: [...(c.children ?? []), { id: 999, title: 'Same', url: 'https://same.test/' }] } : c));
+    state.remoteBlob = await encryptData(JSON.stringify(other), derived);
+    state.remoteLastUpdated = 't-other-device';
+    await core.pushAfterNativeChange();
+    const st = (await core.handleMessage({ command: MessageCommand.GetConflictState })) as { hasConflict: boolean };
+    expect(st.hasConflict).toBe(false);
+    expect(await store.get(StoreKey.LastUpdated)).toBe('t-other-device');
+  });
+
+  it('a stored conflict whose sides became identical clears itself on the next check', async () => {
+    const state = baseState();
+    const { core, store, derived, mockApi } = await linkedCore(state);
+    state.remoteBlob = await encryptData(JSON.stringify([{ id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'X', url: 'https://x.test/' }] }]), derived);
+    state.remoteLastUpdated = 't-moved';
+    await mockApi.create({ parentId: 'unfiled_____', title: 'Mine', url: 'https://mine.test/' });
+    await core.pushAfterNativeChange();
+    expect(await store.get(StoreKey.ConflictState)).toBeDefined();
+    // The other device merges us in: the server now holds exactly our side.
+    const { decryptData } = await import('../src/shared/crypto');
+    const stored = await store.get<{ localEnc: string }>(StoreKey.ConflictState);
+    state.remoteBlob = await encryptData(await decryptData(stored!.localEnc, derived), derived);
+    state.remoteLastUpdated = 't-merged-elsewhere';
+    await core.checkForUpdates();
+    expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+    expect(await store.get(StoreKey.LastUpdated)).toBe('t-merged-elsewhere');
+  });
+
+  it('preview explains moves when every URL exists on both sides', async () => {
+    const state = baseState();
+    const { core, derived, mockApi, store } = await linkedCore(state);
+    // Local: new folder "Sub" holding C. Remote moved on and holds the same
+    // C directly under Other: same URLs both sides, different placement.
+    const sub = await mockApi.create({ parentId: 'unfiled_____', title: 'Sub' });
+    await mockApi.create({ parentId: sub.id, title: 'C', url: 'https://c.test/' });
+    const cached = await sameAsLocal(core, store, derived);
+    const remoteSide = cached.map((c) => (c.title === BookmarkContainer.Other
+      ? { ...c, children: [...(c.children ?? []), { id: 500, title: 'C', url: 'https://c.test/' }, { id: 501, title: 'Sub', children: [] }] } : c));
+    state.remoteBlob = await encryptData(JSON.stringify(remoteSide), derived);
+    state.remoteLastUpdated = 't-touched';
+    await core.pushAfterNativeChange();
+    const p = (await core.handleMessage({ command: MessageCommand.GetConflictPreview })) as {
+      mergeStats: { localOnly: number; remoteOnly: number }; diff: { moved: number; movedSample: string[] };
+    };
+    expect(p.mergeStats.localOnly + p.mergeStats.remoteOnly).toBe(0);
+    expect(p.diff.moved).toBe(1);
+    expect(p.diff.movedSample[0]).toContain('Sub');
+  });
+});

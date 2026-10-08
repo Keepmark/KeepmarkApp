@@ -71,7 +71,10 @@
             <dt>Title conflicts (server wins)</dt><dd id="conflict-stat-titles"></dd>
             <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
             <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
+            <dt>Moved to another folder</dt><dd id="conflict-stat-moved"></dd>
+            <dt>Description/tags differ</dt><dd id="conflict-stat-meta"></dd>
           </dl>
+          <p id="conflict-explain" class="hint" hidden></p>
           <div class="row conflict-actions">
             <button id="conflict-btn-pull">Take remote</button>
             <button id="conflict-btn-push">Upload local</button>
@@ -89,6 +92,8 @@
               <div><h4>Remote only → will download</h4><ul id="conflict-list-remote"></ul></div>
               <div><h4>Title conflicts (local → remote)</h4><ul id="conflict-list-titles"></ul></div>
               <div><h4>Folders created</h4><ul id="conflict-list-folders"></ul></div>
+              <div><h4>Moved (local → remote folder)</h4><ul id="conflict-list-moved"></ul></div>
+              <div><h4>Description/tags differ</h4><ul id="conflict-list-meta"></ul></div>
             </div>
           </details>
           <div id="conflict-error" class="error" role="alert" hidden></div>

@@ -228,6 +228,14 @@ The popup never touches the queue. `drain()` executes up to 10 steps.
   cached tree: unpushed native edits (offline push whose in-memory queue died
   with the worker/browser) become a conflict instead of being wiped by
   `clearAndPopulate`.
+- Phantom conflicts never reach the user: a 409 whose fresh remote already
+  holds exactly the local content (`sameContent`, ids ignored) is adopted;
+  the pre-pull check ignores reconcile noise that yields the cached content;
+  a stored conflict whose sides became identical clears itself on the next
+  check or when previewed. The preview carries a content diff
+  (`tree-diff.ts`: moved between folders, description/tags, folder set,
+  order-only) and the panel explains it in one sentence, so all-zero URL
+  counters never leave the user guessing.
 - `ResolveConflict`: the destroyed side is snapshotted first (fail closed);
   every PUT is based on the `lastUpdated` / `meta.revision` of the remote just
   downloaded (`pushOnBase`), never on the stored base that caused the 409.

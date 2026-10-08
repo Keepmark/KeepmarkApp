@@ -2,6 +2,7 @@
 // the error rehydration in WebExtPlatformService.sendMessage: background
 // serializes thrown errors as {name, message}, popup rebuilds them by name.
 
+import type { TreeDiff } from './tree-diff.js';
 import {
   DailyNewSyncLimitException,
   DataOutOfSyncException,
@@ -154,6 +155,9 @@ export interface ConflictStateResponse {
 
 /** Detailed merge preview for the conflict resolution UI. */
 export interface ConflictPreviewResponse {
+  /** Content diff beyond URLs (moves, metadata, order, identical). When
+   *  `diff.identical`, the background already cleared the conflict. */
+  diff: TreeDiff;
   /** Counts from mergeTrees dry-run. */
   mergeStats: MergePreview;
   /** Local tree node count (denominator). */
@@ -253,6 +257,7 @@ export type MessagePayload =
 
 /** Merge dry-run result: preview counts only, no trees (message size limits). */
 export type MergePreview = MergeStats;
+export type { TreeDiff };
 
 /** Safety list rows cross the wire as-is (manifest rows, no secrets). */
 export type { SafetyEntry };

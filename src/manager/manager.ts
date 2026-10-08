@@ -186,6 +186,14 @@ async function refreshUndoBanner(): Promise<void> {
 async function loadConflictPreview(): Promise<void> {
   try {
     conflictPreview = await send<ConflictPreviewResponse>({ command: MessageCommand.GetConflictPreview });
+    if (conflictPreview.diff.identical) {
+      // The background already adopted the server copy and cleared it.
+      conflictPreview = undefined;
+      showResult('status-result',
+        'Nothing to resolve: the server and this browser already hold exactly the same bookmarks. Conflict cleared.');
+      await refreshStatus();
+      return;
+    }
   } catch (err) {
     conflictPreview = undefined;
     sectionError('conflict-error', (err as Error).message);
@@ -235,6 +243,35 @@ function renderConflictSection(): void {
   fillList('conflict-list-remote', conflictPreview.remoteOnlySample, mergeStats.remoteOnly);
   fillList('conflict-list-titles', conflictPreview.titleConflictsSample, mergeStats.titleConflicts);
   fillList('conflict-list-folders', conflictPreview.foldersCreatedSample, mergeStats.foldersCreated);
+  const { diff } = conflictPreview;
+  $('conflict-stat-moved').textContent = String(diff.moved);
+  $('conflict-stat-meta').textContent = String(diff.metadataChanged);
+  fillList('conflict-list-moved', diff.movedSample, diff.moved);
+  fillList('conflict-list-meta', diff.metadataSample, diff.metadataChanged);
+  $('conflict-explain').textContent = explainConflict(conflictPreview);
+  $('conflict-explain').hidden = false;
+}
+
+/** One plain sentence on what actually differs, so all-zero URL counters
+ *  never leave the user guessing. */
+function explainConflict(p: ConflictPreviewResponse): string {
+  const { mergeStats: m, diff: d } = p;
+  const urlLevel = m.localOnly + m.remoteOnly + m.titleConflicts;
+  if (d.orderOnly) {
+    return 'Both sides hold the same bookmarks in the same folders — only the order differs. ' +
+      'Take remote loses nothing but your local ordering.';
+  }
+  if (urlLevel === 0 && d.moved === 0 && d.metadataChanged === 0 && d.foldersDiffer) {
+    return 'Same bookmarks on both sides; the folder structure differs (e.g. an empty folder exists on one side only).';
+  }
+  if (urlLevel === 0) {
+    const parts = [];
+    if (d.moved > 0) parts.push(`${d.moved} moved to another folder`);
+    if (d.metadataChanged > 0) parts.push(`${d.metadataChanged} with different description/tags`);
+    return `Same set of links on both sides; they differ in placement or details: ${parts.join(', ')}. See the details below.`;
+  }
+  return `${m.localOnly} only here, ${m.remoteOnly} only on the server, ${m.titleConflicts} renamed` +
+    (d.moved > 0 ? `, ${d.moved} moved` : '') + (d.metadataChanged > 0 ? `, ${d.metadataChanged} with different description/tags` : '') + '.';
 }
 
 const conflictConfirm: Record<ConflictResolutionDirection, string> = {
