@@ -1,9 +1,12 @@
 {
   "name": "keepmark-app",
   "description": "Keepmark browser extension (Firefox first, then Chromium MV3). xBrowserSync-compatible bookmark sync.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "license": "GPL-3.0-only",
+  "author": "Keepmark <keepmark@proton.me>",
+  "homepage": "https://github.com/Keepmark",
+  "bugs": { "url": "https://github.com/Keepmark", "email": "keepmark@proton.me" },
   "type": "module",
   "scripts": {
     "test": "vitest run",
