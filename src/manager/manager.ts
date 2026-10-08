@@ -624,8 +624,9 @@ async function confirmImport(): Promise<void> {
       showResult('backup-result-2', importDone(res.count));
       await refreshSafety();
     } catch (err) {
-      // Never leave a used password pinned; the next try starts from the file.
-      resetImport();
+      // Never leave a used password pinned: back to the password step, the
+      // file stays chosen for the retry.
+      backToPasswordStep();
       showError('backup-error-2', (err as Error).message);
     }
   });
@@ -633,13 +634,18 @@ async function confirmImport(): Promise<void> {
 
 /** Back to step 1: forget file, password and check. */
 function resetImport(): void {
-  importPreview = undefined;
+  backToPasswordStep();
   ($('m-import-file') as HTMLInputElement).value = '';
   $('m-import-file-name').textContent = '';
+  ($('m-import-step') as HTMLElement).hidden = true;
+}
+
+/** Back to step 2: the file stays, the password and the check are dropped. */
+function backToPasswordStep(): void {
+  importPreview = undefined;
   const pw = input('m-import-password');
   pw.value = '';
   pw.disabled = false;
-  ($('m-import-step') as HTMLElement).hidden = true;
   ($('m-btn-import-check') as HTMLElement).hidden = false;
   ($('m-import-preview') as HTMLElement).hidden = true;
   ($('m-import-confirm-row') as HTMLElement).hidden = true;
