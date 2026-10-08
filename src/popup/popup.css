@@ -3,6 +3,9 @@
 :root {
   color-scheme: light dark;
   --navy: #172552;
+  /* Brand band (header, toolbar icons): lighter than navy so it reads on
+     dark browser chrome; white text on it is 5.3:1. */
+  --brand: #4a5fc1;
   --bg: #f5f6fa;
   --surface: #ffffff;
   --surface-2: #e6e9f3;
@@ -81,7 +84,7 @@ header {
   gap: 8px;
   height: 52px;
   padding: 0 12px 0 14px;
-  background: var(--navy);
+  background: var(--brand);
   color: #fff;
 }
 
@@ -100,7 +103,7 @@ h1 {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   line-height: 0;
 }

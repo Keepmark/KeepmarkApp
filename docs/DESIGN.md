@@ -11,7 +11,8 @@ Source of truth for anyone extending popup/manager UI. Extracted from
 values; canvas: Keepmark Redesign artifact). Both pages:
 
 ```css
---navy: #172552;                                   /* header band, undo strip, brand */
+--brand: #4a5fc1;                                  /* popup header band, brand chip, extension icons */
+--navy: #172552;                                   /* undo strip */
 --bg: #f5f6fa; --surface: #ffffff; --fg: #141b38; --muted: #4a5170;
 --border: #cdd2e1; --accent: #3d4fb0;              /* primary buttons, focus, meter */
 --danger: #a12626; --ok: #1f6f5c; --warn: #9a6a0a;
@@ -25,7 +26,7 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 
 - `color-scheme: light dark`, `font: system-ui`, no framework, no webfonts.
 - Brand: `.brand-chip` (white mark `assets/brand-mark.png`; on the popup's
-  navy header it is a translucent white tile, in the manager a navy tile,
+  `--brand` header it is a translucent white tile, in the manager a `--brand` tile,
   18px popup / 22px manager). Toolbar/manifest icons come from
   `../Keepmark/brand/src/build.py --install`; never recolor by hand.
 - Popup components: navy `header` band with `#sync-state` as a pill;

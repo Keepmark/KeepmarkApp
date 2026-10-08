@@ -2,6 +2,7 @@
   color-scheme: light dark;
   /* "Navy ledger" palette, same roles/values as popup.css (docs/DESIGN.md §1). */
   --navy: #172552;
+  --brand: #4a5fc1;
   --bg: #f5f6fa;
   --surface: #ffffff;
   --fg: #141b38;
@@ -75,7 +76,7 @@ body {
 .brand-chip {
   display: inline-flex;
   align-items: center;
-  background: var(--navy);
+  background: var(--brand);
   border-radius: 7px;
   padding: 3px 7px;
   line-height: 0;
