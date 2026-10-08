@@ -22,7 +22,8 @@ Both apps use the same words for the same things. Keep this file identical in
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
-Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge`.
+Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete`, always with `Cancel`.
+Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in both repos).
 Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
