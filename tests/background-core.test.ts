@@ -1178,6 +1178,17 @@ describe('background core', () => {
     expect(infoBack!.password).toBe(derived);
   });
 
+  it('password change rejects a new password under 8 characters before touching anything', async () => {
+    const state = baseState();
+    const { core, store, derived } = await linkedCore(state);
+    const before = await store.get<string>(StoreKey.Bookmarks);
+    await expect(
+      core.handleMessage({ command: MessageCommand.ChangePassword, currentPassword: PASSWORD, newPassword: 'short' }),
+    ).rejects.toThrow('at least 8 characters');
+    expect(await store.get<string>(StoreKey.Bookmarks)).toBe(before);
+    expect((await store.get<{ password: string }>(StoreKey.SyncInfo))!.password).toBe(derived);
+  });
+
   it('password change requires current and new passwords', async () => {
     const state = baseState();
     const { core } = await linkedCore(state);

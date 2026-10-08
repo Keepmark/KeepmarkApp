@@ -2,7 +2,7 @@
 // and the status-card renderer (single source of truth for both surfaces).
 
 import browser from 'webextension-polyfill';
-import { DefaultServiceUrl } from '../shared/constants.js';
+import { DefaultServiceUrl, MinNewPasswordLength, PasswordTooShort } from '../shared/constants.js';
 import {
   fromWireError,
   type MessagePayload,
@@ -233,6 +233,7 @@ export function validateConnect(input: {
   if (urlErr) return urlErr;
   if (!input.password) return 'Password is required.';
   if (input.mode === 'new') {
+    if (input.password.length < MinNewPasswordLength) return PasswordTooShort;
     if (input.password !== input.confirm) return 'Passwords do not match.';
     return null;
   }
@@ -248,6 +249,7 @@ export function validatePasswordChange(input: { current: string; next: string; c
   if (!input.current) return 'Current password is required.';
   if (!input.next) return 'A new password is required.';
   if (input.next === input.current) return 'The new password must be different from the current one.';
+  if (input.next.length < MinNewPasswordLength) return PasswordTooShort;
   if (input.next !== input.confirm) return 'New passwords do not match.';
   return null;
 }
@@ -269,6 +271,7 @@ export function validateSwitch(input: {
   // you out of the fresh sync. In existing mode the password is verified by
   // decrypting the target BEFORE anything mutates — a typo fails safely as
   // InvalidCredentials with zero side effects, so no confirmation needed.
+  if (input.mode === 'new' && input.newPassword.length < MinNewPasswordLength) return PasswordTooShort;
   if (input.mode === 'new' && input.newPassword !== input.confirm) return 'Passwords do not match.';
   if (input.mode === 'existing' && !input.syncId?.trim()) {
     return 'Sync ID is required for an existing sync.';

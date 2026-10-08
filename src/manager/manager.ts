@@ -20,6 +20,8 @@ import {
   withBusy,
   type StatusView,
 } from '../popup/ui.js';
+import { confirmInline } from '../popup/flow.js';
+import { ChangePasswordDone, ChangePasswordImplication } from '../popup/texts.js';
 import {
   MessageCommand,
   type DuplicateGroup,
@@ -136,6 +138,7 @@ async function refreshStatus(): Promise<void> {
     renderStatusCard('m', { status, ping });
     updateStatusActions();
     updateDangerZone();
+    updateLinkGates();
     renderConflictSection();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
     sectionError('status-error', (err as Error).message);
@@ -154,6 +157,7 @@ async function refreshStatus(): Promise<void> {
   renderStatusCard('m', { status, ping });
   updateStatusActions();
   updateDangerZone();
+  updateLinkGates();
   ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
   await refreshUndoBanner();
 
@@ -481,6 +485,29 @@ function updateDangerZone(): void {
   btn.title = gate.title;
   hint.hidden = gate.hintHidden;
   contract.textContent = gate.badge;
+}
+
+/**
+ * Up-front link gating (docs/WORKFLOWS.md rule 1): every action marked
+ * `data-needs-link` is disabled while unlinked and its section shows a
+ * `.needs-link-notice`, so nobody learns about a missing link from an error
+ * after submit. Only buttons disabled HERE are re-enabled on link, so other
+ * gates (preview locks, busy state) survive.
+ */
+function updateLinkGates(): void {
+  const linked = !!status?.syncEnabled;
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('button[data-needs-link]')) {
+    if (!linked && !btn.disabled) {
+      btn.disabled = true;
+      btn.dataset.linkGated = '1';
+      btn.title = 'Needs a linked sync — connect from the Keepmark popup first.';
+    } else if (linked && btn.dataset.linkGated) {
+      btn.disabled = false;
+      delete btn.dataset.linkGated;
+      btn.title = '';
+    }
+  }
+  for (const notice of document.querySelectorAll<HTMLElement>('.needs-link-notice')) notice.hidden = linked;
 }
 
 function showResult(id: string, text: string): void {
@@ -929,6 +956,7 @@ function updateMoveForm(): void {
   // mode the password is verify-before-mutate: a typo fails safely as
   // InvalidCredentials, so no confirmation is asked.
   ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
+  ($('m-switch-pw-hint') as HTMLElement).hidden = mode !== 'new';
   // Existing sync: its password is part of the target (the check needs it
   // for the merge counts), so the field sits in step 1; a new sync invents
   // its password at confirm time, in step 2.
@@ -1232,33 +1260,57 @@ function initSettingsSection(): void {
       sectionError('settings-error', (err as Error).message);
     }
   });
-  $('m-btn-password').addEventListener('click', () =>
-    withBusy('m-btn-password', 'Changing…', async () => {
-      hideErrors();
-      ($('pw-result') as HTMLElement).hidden = true;
-      const current = input('m-current-password').value;
-      const next = input('m-new-password').value;
-      const invalid = validatePasswordChange({ current, next, confirm: input('m-new-password-confirm').value });
-      if (invalid) {
-        sectionError('pw-error', invalid);
-        return;
-      }
-      try {
-        await send({ command: MessageCommand.ChangePassword, currentPassword: current, newPassword: next });
-        input('m-current-password').value = '';
-        input('m-new-password').value = '';
-        input('m-new-password-confirm').value = '';
-        showResult('pw-result', 'Password changed. Update your other devices and vault now.');
-        await refreshStatus();
-      } catch (err) {
-        // Never leave the current password or its confirmation in the DOM;
-        // the new password stays so only the proof has to be retyped.
-        input('m-current-password').value = '';
-        input('m-new-password-confirm').value = '';
-        sectionError('pw-error', (err as Error).message);
-      }
-    }),
-  );
+  $('m-btn-password').addEventListener('click', () => void changePassword());
+}
+
+function readPasswordChange(): { current: string; next: string; confirm: string } {
+  return {
+    current: input('m-current-password').value,
+    next: input('m-new-password').value,
+    confirm: input('m-new-password-confirm').value,
+  };
+}
+
+/** Change password: validate → inline confirm with the implications → run. */
+async function changePassword(): Promise<void> {
+  hideErrors();
+  ($('pw-result') as HTMLElement).hidden = true;
+  const invalid = validatePasswordChange(readPasswordChange());
+  if (invalid) {
+    sectionError('pw-error', invalid);
+    return;
+  }
+  const ok = await confirmInline('m-btn-password', {
+    message: 'Change the sync password?',
+    implication: ChangePasswordImplication,
+    confirmLabel: 'Yes, change password',
+    danger: true,
+  });
+  if (!ok) return;
+  // Fields stay editable while the confirmation is open: validate what is
+  // there now, not what was there when the button was pressed.
+  const fields = readPasswordChange();
+  const stillInvalid = validatePasswordChange(fields);
+  if (stillInvalid) {
+    sectionError('pw-error', stillInvalid);
+    return;
+  }
+  await withBusy('m-btn-password', 'Changing…', async () => {
+    try {
+      await send({ command: MessageCommand.ChangePassword, currentPassword: fields.current, newPassword: fields.next });
+      input('m-current-password').value = '';
+      input('m-new-password').value = '';
+      input('m-new-password-confirm').value = '';
+      showResult('pw-result', ChangePasswordDone);
+      await refreshStatus();
+    } catch (err) {
+      // Never leave the current password or its confirmation in the DOM;
+      // the new password stays so only the proof has to be retyped.
+      input('m-current-password').value = '';
+      input('m-new-password-confirm').value = '';
+      sectionError('pw-error', (err as Error).message);
+    }
+  });
 }
 
 function renderAbout(): void {

@@ -298,8 +298,14 @@ describe('validateConnect (foolproof rules)', () => {
     expect(validateConnect({ ...base, password: '' })).toBe('Password is required.');
   });
   it('new mode requires matching confirmation', () => {
-    expect(validateConnect({ ...base, mode: 'new', confirm: 'x' })).toBe('Passwords do not match.');
-    expect(validateConnect({ ...base, mode: 'new', confirm: 'pw' })).toBeNull();
+    expect(validateConnect({ ...base, mode: 'new', password: 'long-enough', confirm: 'x' })).toBe('Passwords do not match.');
+    expect(validateConnect({ ...base, mode: 'new', password: 'long-enough', confirm: 'long-enough' })).toBeNull();
+  });
+  it('new mode requires at least 8 characters; existing does not', () => {
+    expect(validateConnect({ ...base, mode: 'new', password: 'short', confirm: 'short' })).toBe(
+      'Use a password of at least 8 characters.',
+    );
+    expect(validateConnect({ ...base, password: 'pw' })).toBeNull();
   });
   it('existing requires sync id', () => {
     expect(validateConnect({ ...base, syncId: '' })).toBe('Sync ID is required for an existing sync.');
@@ -327,8 +333,11 @@ describe('validateSwitch', () => {
       'Service URL must use https (http is allowed only for localhost).',
     );
     expect(
-      validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'b' }),
+      validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'abcdefgh', confirm: 'b' }),
     ).toBe('Passwords do not match.');
+    expect(
+      validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'a' }),
+    ).toBe('Use a password of at least 8 characters.');
     expect(
       validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: '  ', newPassword: 'a', confirm: 'a' }),
     ).toBe('Sync ID is required for an existing sync.');
@@ -339,13 +348,13 @@ describe('validateSwitch', () => {
       validateSwitch({ mode: 'existing', newServiceUrl: 'https://x/', syncId: 'id', newPassword: '', confirm: '' }),
     ).toBe('The target sync password is required.');
     expect(
-      validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'a', confirm: 'a' }),
+      validateSwitch({ mode: 'new', newServiceUrl: 'https://x/', syncId: '', newPassword: 'abcdefgh', confirm: 'abcdefgh' }),
     ).toBeNull();
   });
 });
 
 describe('validatePasswordChange', () => {
-  const base = { current: 'old-pw', next: 'new-pw', confirm: 'new-pw' };
+  const base = { current: 'old-pw', next: 'new-password', confirm: 'new-password' };
   it('passes when everything lines up', () => {
     expect(validatePasswordChange(base)).toBeNull();
   });
@@ -358,6 +367,11 @@ describe('validatePasswordChange', () => {
   it('rejects reusing the current password', () => {
     expect(validatePasswordChange({ current: 'same', next: 'same', confirm: 'same' })).toBe(
       'The new password must be different from the current one.',
+    );
+  });
+  it('requires at least 8 characters', () => {
+    expect(validatePasswordChange({ current: 'old', next: 'short', confirm: 'short' })).toBe(
+      'Use a password of at least 8 characters.',
     );
   });
   it('requires the confirmation to match', () => {

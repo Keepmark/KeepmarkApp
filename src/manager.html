@@ -107,9 +107,10 @@
         <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
         <div class="row">
           <button id="m-btn-export">Export encrypted backup</button>
-          <button id="m-btn-import">Choose backup file…</button>
+          <button id="m-btn-import" data-needs-link>Choose backup file…</button>
           <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
         </div>
+        <p class="notice needs-link-notice" hidden>Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
         <div id="backup-error" class="error" role="alert" hidden></div>
         <div id="m-import-preview" class="preview" hidden></div>
         <div class="row"><button id="m-btn-import-confirm" class="primary" disabled>Replace local with backup</button></div>
@@ -136,6 +137,7 @@
         <h2>Move to another service</h2>
         <p class="hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
           is saved to Backup → Safety backups first.</p>
+        <p class="notice needs-link-notice" hidden>Moving needs a linked sync. Connect from the Keepmark popup first.</p>
         <h3>1. Target</h3>
         <label>Target service URL <input id="m-switch-url" type="url" /></label>
         <fieldset class="options" role="radiogroup" aria-label="Move mode">
@@ -158,7 +160,7 @@
               <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
           </fieldset>
         </div>
-        <div class="row"><button id="m-btn-preview" class="primary">Check target</button></div>
+        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link>Check target</button></div>
         <div id="move-error" class="error" role="alert" hidden></div>
         <div id="move-preview" class="preview" hidden></div>
         <p id="move-gate-hint" class="hint">Step 2 opens once the check passes, and only for these exact inputs —
@@ -167,6 +169,7 @@
           <h3>2. Confirm</h3>
           <label id="m-switch-password-row"><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
           <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
+          <p id="m-switch-pw-hint" class="hint">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
           <div id="move-summary" class="hint"></div>
           <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled>Move now</button></div>
           <div id="move-error-2" class="error" role="alert" hidden></div>
@@ -197,11 +200,12 @@
         <div id="settings-error" class="error" role="alert" hidden></div>
         <div id="settings-result" class="result" hidden></div>
         <h3>Change password</h3>
-        <p class="hint">Re-encrypts the sync with a new password. Your current password is verified first and never leaves this device. The old password stops working on all devices immediately — update your vault and other devices.</p>
+        <p class="hint">Re-encrypts the sync with a new password (at least 8 characters). Your current password is verified first and never leaves this device. The old password stops working on every device at once.</p>
+        <p class="notice needs-link-notice" hidden>Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
         <label>Current password <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label>New password <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label>Confirm new password <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
-        <div class="row"><button id="m-btn-password" class="primary">Change password</button></div>
+        <div class="row"><button id="m-btn-password" class="primary" data-needs-link>Change password…</button></div>
         <div id="pw-error" class="error" role="alert" hidden></div>
         <div id="pw-result" class="result" hidden></div>
       </section>

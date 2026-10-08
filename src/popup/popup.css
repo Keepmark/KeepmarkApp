@@ -581,3 +581,21 @@ dd:last-of-type { align-items: flex-end; }
 #btn-resolve-conflict:hover {
   filter: brightness(1.08);
 }
+
+/* ---- Inline confirmation (flow.ts confirmInline, docs/WORKFLOWS.md rule 2) ---- */
+.confirm {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  max-width: 560px;
+}
+
+.confirm.danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.confirm p { margin: 0; }
+.confirm .row { margin-top: 8px; }

@@ -69,3 +69,7 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
   }
   return 0;
 }
+
+/** Any password the user invents (new sync, move to a new sync, change) needs this many characters. */
+export const MinNewPasswordLength = 8;
+export const PasswordTooShort = `Use a password of at least ${MinNewPasswordLength} characters.`;
