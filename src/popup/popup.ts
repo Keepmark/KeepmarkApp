@@ -4,6 +4,7 @@
 
 import browser from 'webextension-polyfill';
 import { DefaultServiceUrl } from '../shared/constants.js';
+import type { BookmarkNode } from '../shared/models.js';
 import {
   $,
   copyText,
@@ -19,9 +20,12 @@ import {
   MessageCommand,
   type MergePreview,
   type PingResponse,
+  type RemovedSyncSnapshot,
   type StatusResponse,
   type UndoState,
 } from '../shared/messages.js';
+import { confirmInline } from './flow.js';
+import { RemovedSyncDismissImplication, removedSyncText } from './texts.js';
 
 function showError(where: 'connect' | 'main', message: string): void {
   const el = $(`${where}-error`);
@@ -97,6 +101,78 @@ async function refreshAll(): Promise<void> {
   const conflictAction = $('p-conflict-action') as HTMLElement;
   conflictAction.hidden = !status?.conflict;
   await refreshUndoBanner();
+  await refreshRemovedCard();
+}
+
+/** Folders + bookmarks in a tree; callers skip the root containers. Kept
+ * local: backup.js would pull crypto into the popup bundle. */
+function countItems(nodes: BookmarkNode[]): number {
+  return nodes.reduce((n, node) => n + 1 + countItems(node.children ?? []), 0);
+}
+
+/** Server-removed sync: offer the plaintext copy the background kept. */
+async function refreshRemovedCard(): Promise<void> {
+  const card = $('p-removed') as HTMLElement;
+  let removed: RemovedSyncSnapshot | null = null;
+  if (status?.removedSync && !status.syncEnabled) {
+    try {
+      removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
+    } catch {
+      removed = null;
+    }
+  }
+  if (!removed) {
+    card.hidden = true;
+    return;
+  }
+  $('p-removed-text').textContent = removedSyncText(
+    removed.bookmarks.reduce((n, root) => n + countItems(root.children ?? []), 0),
+    removed.lastUpdated,
+  );
+  card.hidden = false;
+}
+
+function initRemovedCard(): void {
+  const error = $('removed-error');
+  const fail = (err: unknown): void => {
+    error.textContent = (err as Error)?.message ?? String(err);
+    error.hidden = false;
+  };
+  $('btn-removed-download').addEventListener('click', () =>
+    void withBusy('btn-removed-download', 'Downloading…', async () => {
+      error.hidden = true;
+      try {
+        const removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
+        if (!removed) return refreshRemovedCard();
+        const day = removed.savedAt.slice(0, 10);
+        await send({
+          command: MessageCommand.DownloadFile,
+          filename: `keepmark-removed-sync-${day}.json`,
+          text: JSON.stringify(removed, null, 2),
+        });
+      } catch (err) {
+        fail(err);
+      }
+    }),
+  );
+  $('btn-removed-dismiss').addEventListener('click', () =>
+    void (async () => {
+      error.hidden = true;
+      const ok = await confirmInline('btn-removed-dismiss', {
+        message: 'Delete the kept copy?',
+        implication: RemovedSyncDismissImplication,
+        confirmLabel: 'Yes, delete',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await send({ command: MessageCommand.ClearRemovedSync });
+        ($('p-removed') as HTMLElement).hidden = true;
+      } catch (err) {
+        fail(err);
+      }
+    })(),
+  );
 }
 
 async function refreshUndoBanner(): Promise<void> {
@@ -279,6 +355,7 @@ async function init(): Promise<void> {
   }
   await initConnect();
   initMain();
+  initRemovedCard();
   await refreshAll();
   showView(status?.syncEnabled ? 'main' : 'connect');
 }

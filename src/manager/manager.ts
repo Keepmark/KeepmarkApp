@@ -24,6 +24,10 @@ import { clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
   ChangePasswordDone,
   ChangePasswordImplication,
+  DeleteRemoteDone,
+  DeleteRemoteImplication,
+  UnlinkDone,
+  UnlinkImplication,
   ImportImplication,
   SafetyDeleteImplication,
   exportDone,
@@ -382,59 +386,74 @@ function initStatusSection(): void {
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
   });
-  $('m-btn-unlink').addEventListener('click', () => {
-    // Disabled buttons don't fire clicks anyway; deleting the server sync
-    // already unlinks, so there is nothing left to unlink afterwards.
-    // Checked BEFORE withBusy (it disables the button while running, so a
-    // check inside would always self-trigger).
-    if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
-    void withBusy('m-btn-unlink', 'Unlinking…', async () => {
-      clearMessages();
-      if (!window.confirm('Unlink this device? Syncing stops; the bookmarks on this device stay untouched.')) return;
-      try {
-        await send({ command: MessageCommand.DisableSync });
-        showResult('status-result', 'Device unlinked. The bookmarks on this device stay untouched; link again to resume syncing.');
-        status = undefined;
-        ping = undefined;
-        await refreshStatus();
-      } catch (err) {
-        showError('status-error-2', (err as Error).message);
-      }
-    });
+  $('m-btn-unlink').addEventListener('click', () => void unlink());
+  $('m-btn-delete-remote').addEventListener('click', () => void deleteRemote());
+}
+
+async function unlink(): Promise<void> {
+  // Disabled buttons don't fire clicks anyway; deleting the server sync
+  // already unlinks, so there is nothing left to unlink afterwards.
+  // Checked BEFORE withBusy (it disables the button while running, so a
+  // check inside would always self-trigger).
+  if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
+  clearMessages();
+  const ok = await confirmInline('m-btn-unlink', {
+    message: 'Unlink this browser?',
+    implication: UnlinkImplication,
+    confirmLabel: 'Yes, unlink',
+    danger: true,
   });
-  $('m-btn-delete-remote').addEventListener('click', () =>
-    void (async () => {
-      // Defense in depth (checked BEFORE withBusy: the wrapper disables the
-      // button while running, so a check inside would always self-trigger).
-      // Disabled buttons don't fire clicks anyway; the background re-gates.
-      if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
-      await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
-        clearMessages();
-        // No undo exists for this (the server has no undelete): two explicit
-        // confirms plus the automatic backup download in the background.
-        if (
-          !window.confirm(
-            'Permanently delete your sync from the server? Local bookmarks stay, but the server data is gone forever. A backup file is downloaded first.',
-          )
-        )
-          return;
-        if (!window.confirm('Last chance: confirm deletion of the sync on the server.')) return;
-        try {
-          await send({ command: MessageCommand.DeleteRemoteSync });
-          showResult('status-result', 'Sync deleted from server. This device is now unlinked; local bookmarks are untouched.');
-          status = undefined;
-          ping = undefined;
-          await refreshStatus();
-        } catch (err) {
-          showError('status-error-2', (err as Error).message);
-        }
-      });
-      // withBusy restores the pre-click disabled state last: re-assert the
-      // v1.2 gate after it, so neither success (now unlinked) nor failure
-      // (legacy service) leaves a stale enabled button behind.
-      updateDangerZone();
-    })(),
-  );
+  if (!ok) return;
+  await withBusy('m-btn-unlink', 'Unlinking…', async () => {
+    try {
+      await send({ command: MessageCommand.DisableSync });
+      showResult('status-result', UnlinkDone);
+      status = undefined;
+      ping = undefined;
+      await refreshStatus();
+    } catch (err) {
+      showError('status-error-2', (err as Error).message);
+    }
+  });
+}
+
+async function deleteRemote(): Promise<void> {
+  // Defense in depth (checked BEFORE withBusy: the wrapper disables the
+  // button while running, so a check inside would always self-trigger).
+  // Disabled buttons don't fire clicks anyway; the background re-gates.
+  if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
+  clearMessages();
+  // No undo exists for this (the server has no undelete): two explicit
+  // confirms plus the fail-closed safety backup of the server copy in the
+  // background.
+  const first = await confirmInline('m-btn-delete-remote', {
+    message: 'Delete your sync from the server for good?',
+    implication: DeleteRemoteImplication,
+    confirmLabel: 'Yes, delete',
+    danger: true,
+  });
+  if (!first) return;
+  const second = await confirmInline('m-btn-delete-remote', {
+    message: 'Last chance: delete the sync from the server?',
+    confirmLabel: 'Yes, delete for good',
+    danger: true,
+  });
+  if (!second) return;
+  await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
+    try {
+      await send({ command: MessageCommand.DeleteRemoteSync });
+      showResult('status-result', DeleteRemoteDone);
+      status = undefined;
+      ping = undefined;
+      await refreshStatus();
+    } catch (err) {
+      showError('status-error-2', (err as Error).message);
+    }
+  });
+  // withBusy restores the pre-click disabled state last: re-assert the
+  // v1.2 gate after it, so neither success (now unlinked) nor failure
+  // (legacy service) leaves a stale enabled button behind.
+  updateDangerZone();
 }
 
 /**

@@ -12,7 +12,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Item(s) | Bookmarks + folders + separators (counts) | nodes |
 | Connect | Link this device to a new or existing sync | |
 | New sync / Existing sync | The two connect modes | Use existing, … here |
-| Unlink this device | Forget the credentials; local bookmarks stay | |
+| Unlink this device | Forget the credentials; local bookmarks stay | extension: "Unlink this browser" |
 | **Download** | Replace the bookmarks on this device with the server copy | Take remote, Pull |
 | **Upload** | Replace the server copy with the bookmarks on this device | Upload local, Upload mine, Overwrite remote, Push |
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
@@ -22,7 +22,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
-Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete`, always with `Cancel`.
+Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete` (second step of a server delete: `Yes, delete for good`), always with `Cancel`.
 Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in both repos).
 Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."

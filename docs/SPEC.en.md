@@ -333,9 +333,10 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   DELETE, then unlink (natives untouched) + notification + result text.
   No undo slot by design (no server undelete). UI: disabled with reason +
   hint on v1.1 (`Server delete needs API v1.2 … Unlink only removes this
-  device`); double `window.confirm` when enabled.
-- `DisableSync` (Unlink): single confirm (`Unlink this device? … natives
-  untouched`), clears state per §4.3, result text, status redrawn cleared.
+  device`); two inline confirms (`Yes, delete` → `Yes, delete for
+  good`, `DeleteRemoteImplication` in `texts.ts`) when enabled.
+- `DisableSync` (Unlink): single inline confirm (`Yes, unlink`,
+  `UnlinkImplication`: ID + password needed, unsynced edits, Undo cleared), clears state per §4.3, result text, status redrawn cleared.
 - `UndoLastLink` / `DismissUndo` / `GetUndoState`: one encrypted slot;
   unlink invalidates it; undo restores previous link state; the banner
   describes kind + count + time with confirm (`Undo the last link
@@ -406,9 +407,8 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
   result cleared on input change, new-ID + Copy on success.
 - `[hidden] { display: none !important; }` in both CSS files (author display
   rules would otherwise override UA hiding and leak wizard rows).
-- `window.confirm` texts: unlink (`Unlink this device? Sync stops; native
-  bookmarks are untouched.`), delete (two-step, server-gone-forever +
-  backup-first), undo (`Undo the last link operation? Changes made since will
+- Confirm texts: unlink and delete come from `src/popup/texts.ts` (inline
+  `confirmInline`, see `docs/WORKFLOWS.md`); undo (`Undo the last link operation? Changes made since will
   be discarded.`). Password fields cleared per-flow (confirm always; current
   on failure; new kept only to retype the proof).
 - English-only strings; no wired telemetry prompts; dynamic list buttons get

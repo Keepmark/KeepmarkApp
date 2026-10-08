@@ -14,6 +14,15 @@
 
   <main>
   <section id="view-connect">
+    <div id="p-removed" class="warning removed" hidden>
+      <p><strong>Your sync is gone from the service.</strong></p>
+      <p id="p-removed-text"></p>
+      <div class="row">
+        <button id="btn-removed-download" type="button" class="mini">Download copy</button>
+        <button id="btn-removed-dismiss" type="button" class="mini danger">Dismiss…</button>
+      </div>
+      <div id="removed-error" class="error" role="alert" hidden></div>
+    </div>
     <h2>Connect this browser</h2>
     <div class="seg" role="radiogroup" aria-label="Sync mode">
       <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span>New sync</span></label>

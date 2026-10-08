@@ -543,6 +543,10 @@ dd:last-of-type { align-items: flex-end; }
 }
 
 /* Undo banner: navy strip with inline actions. */
+/* Server-removed sync: the last synced copy, offered from the Connect view. */
+.removed { display: grid; gap: 6px; margin-bottom: 12px; }
+.removed p { margin: 0; }
+
 .undo {
   display: flex;
   align-items: center;

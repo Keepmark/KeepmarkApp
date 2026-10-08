@@ -48,8 +48,9 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Backup: import | yes | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → `Replace with this backup…` | always | Replaces local bookmarks and the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local or server copy) and that a pre-restore backup is taken. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
-| Unlink this device | yes | `Unlink this device` | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. |
-| Delete sync from server (extension, service v1.2) | yes | `Delete sync from server` | always, twice | The server copy is gone for every device; they are unlinked on their next sync. A safety backup is saved on this device. |
+| Unlink this device | yes | `Unlink this device…` (extension: `Unlink this browser…`) | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
+| Delete sync from server (extension, service v1.2) | yes | `Delete sync from server…` | always, twice (`Yes, delete` → `Yes, delete for good`) | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
+| Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | `Download copy` / `Dismiss…` | Dismiss only | The kept copy is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
 | Sync conflict | conflict | direction → apply | always | Same direction text as Connect. |
 | Duplicates | no | mark → `Delete marked` | always | One copy of each URL stays; a safety backup is saved first. |
 
@@ -75,3 +76,6 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   reports v1.2.
 - The extension says "this browser's copy"; the mobile app says "this device's
   copy".
+- Backup restore: the extension needs a linked sync (the restored tree is
+  uploaded right away). The mobile app also restores while unlinked, on this
+  device only; its implication line says which case applies.

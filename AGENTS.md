@@ -156,7 +156,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   the user must scroll to find. E.g. move wizard step 1 → `move-error`,
   step 2 submit → `move-error-2`; backup export → `backup-error`, restore
   from file → `backup-error-2`, safety list actions → `backup-error-3`;
-  in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`.
+  in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`;
+  popup removed-sync card → `removed-error`.
   Every box has class `error`, `role="alert"`, starts `hidden`, and is
   emptied (not just hidden) when cleared. `showError(id, msg)` and
   `clearMessages()` in `src/popup/flow.ts` handle all of them by selector (no

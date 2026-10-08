@@ -36,3 +36,30 @@ export const safetyRestoreImplication = (side: 'local' | 'remote', items: number
 export const safetyRestoreDone = (count: number, preFile: string): string =>
   `Restored ${count} item(s). The state before the restore is saved as ${preFile}.`;
 export const SafetyDeleteImplication = 'This safety backup is gone for good.';
+
+// Status → Danger zone.
+export const UnlinkImplication =
+  'Syncing stops; the bookmarks on this browser stay. To link again you need the sync ID and its password, ' +
+  'so copy the sync ID first if you have not saved it. Edits not yet synced stay on this browser only, ' +
+  'and Undo is cleared.';
+export const UnlinkDone =
+  'Browser unlinked. Its bookmarks are untouched; link again from the Keepmark popup with the sync ID and password.';
+export const DeleteRemoteImplication =
+  'The sync is erased from the service for every device: your other devices stop syncing and find it gone at ' +
+  'their next sync. The service has no undelete. The bookmarks on this browser stay, and a copy of the server ' +
+  'data is kept: download it from the Keepmark popup.';
+export const DeleteRemoteDone =
+  'Sync deleted from the server and this browser unlinked; its bookmarks are untouched. ' +
+  'Download the kept copy of the server data from the Keepmark popup.';
+
+// Popup → server-removed sync card.
+export function removedSyncText(count: number, lastUpdated?: string): string {
+  const when = lastUpdated ? ` (last synced ${new Date(lastUpdated).toLocaleString()})` : '';
+  return (
+    `This browser is unlinked. The bookmarks on this browser stay. The last synced copy${when}, ` +
+    `${count} item${count === 1 ? '' : 's'}, is kept here: download it as a plain JSON file ` +
+    '(not encrypted), or dismiss it.'
+  );
+}
+export const RemovedSyncDismissImplication =
+  'The kept copy is deleted from this browser. It is the only copy of the removed sync, so download it first if you may need it.';

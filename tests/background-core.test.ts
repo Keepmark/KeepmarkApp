@@ -1339,6 +1339,12 @@ describe('background core v1.2', () => {
       core.handleMessage({ command: MessageCommand.RestoreSafety, fileName: safeties[0].fileName }),
     ).rejects.toThrow(/Link the sync/);
     expect(state.deleted).toEqual([SYNC_ID]);
+    // ...so the last server copy is kept in plaintext for download instead.
+    const removed = (await core.handleMessage({ command: MessageCommand.GetRemovedSync })) as {
+      bookmarks: BookmarkNode[];
+    } | null;
+    expect(JSON.stringify(removed?.bookmarks)).toContain('"A"');
+    expect(((await core.handleMessage({ command: MessageCommand.GetStatus })) as { removedSync?: boolean }).removedSync).toBe(true);
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
     expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();

@@ -1770,7 +1770,22 @@ export class BackgroundCore {
       throw err;
     }
     this.log.log(XbsLogLevel.Info, 'sync', `Sync ${sanitizeSyncId(info.id)} deleted from server, unlinking device`);
+    const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     await this.disableSync();
+    // The safety entry above stays locked to the deleted sync's key, so it
+    // can never be opened again: keep the same plaintext RemovedSync copy a
+    // server-side removal leaves, which the popup offers for download. Set
+    // AFTER disableSync (a manual unlink retires RemovedSync).
+    await this.store
+      .set(StoreKey.RemovedSync, {
+        bookmarks: tree,
+        lastUpdated,
+        serviceUrl: info.serviceUrl,
+        savedAt: new Date().toISOString(),
+      } satisfies RemovedSyncSnapshot)
+      .catch((e: unknown) =>
+        this.log.log(XbsLogLevel.Warning, 'sync', `RemovedSync snapshot failed: ${(e as Error)?.message}`),
+      );
     await this.ports.chrome
       .notify('Sync deleted from server', 'The sync was deleted from the service. This device is now unlinked; local bookmarks are untouched.')
       .catch(() => undefined);
