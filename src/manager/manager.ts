@@ -1237,11 +1237,10 @@ function renderAbout(): void {
     bug.dataset.bound = '1';
     bug.addEventListener('click', () => {
       const version = browser.runtime.getManifest().version;
-      const subject = encodeURIComponent(`[Keepmark ${version}] Bug report`);
-      const body = encodeURIComponent(
-        `App version: ${version}\nAPI version: ${ApiVersion} / ${ApiVersion12}\nSync format: ${SyncClientVersion}\n\nDescribe the issue:\n`,
-      );
-      location.href = `mailto:keepmark@proton.me?subject=${subject}&body=${body}`;
+      const details = `App version: ${version}\nAPI version: ${ApiVersion} / ${ApiVersion12}\nSync format: ${SyncClientVersion}\nBrowser: ${navigator.userAgent}\n`;
+      // Clipboard may be denied; the issue page opens regardless.
+      void navigator.clipboard?.writeText(details).catch(() => undefined);
+      window.open('https://github.com/Keepmark', '_blank', 'noreferrer');
     });
   }
 }
