@@ -1,6 +1,7 @@
 // Zip the built extensions into dist/. Uses the system `zip` when present,
 // otherwise the python3 fallback. Refuses to package a build whose manifest
-// is missing from the root or points at absent files.
+// is missing from the root or points at absent files, or whose manifest
+// version differs from package.json (a stale build zipped under a new name).
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
@@ -40,6 +41,13 @@ for (const platform of ['firefox', 'chromium']) {
     continue;
   }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (manifest.version !== version) {
+    console.error(
+      `${platform} build is version ${manifest.version}, package.json is ${version} — run npm run build first`,
+    );
+    process.exitCode = 1;
+    continue;
+  }
   const bg = manifest.background?.page ?? manifest.background?.service_worker;
   const popup = manifest.action?.default_popup ?? manifest.browser_action?.default_popup;
   const referenced = [
@@ -81,5 +89,21 @@ for (const platform of ['firefox', 'chromium']) {
     process.exitCode = 1;
     continue;
   }
-  console.log(`wrote ${out}`);
+  // Read the manifest back from the zip: the file name must not lie.
+  if (!havePython) {
+    console.log(`wrote ${out} (manifest version not re-read: no python3)`);
+    continue;
+  }
+  const zipped = execFileSync(
+    'python3',
+    ['-c', 'import sys, zipfile, json; ' +
+      'print(json.loads(zipfile.ZipFile(sys.argv[1]).read("manifest.json"))["version"])', out],
+    { encoding: 'utf8' },
+  ).trim();
+  if (zipped !== version) {
+    console.error(`${out} contains manifest version ${zipped}, expected ${version}`);
+    process.exitCode = 1;
+    continue;
+  }
+  console.log(`wrote ${out} (manifest version ${zipped})`);
 }
