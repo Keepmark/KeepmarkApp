@@ -27,8 +27,8 @@ KeepmarkApp (Keepmark for browsers) is a bookmark-sync browser extension:
 an independent alternative compatible with xBrowserSync, written from scratch,
 **Firefox MV2 first, Chromium MV3 second**. Not affiliated with or endorsed by
 xBrowserSync. It interoperates with the official xBrowserSync apps and services
-and with Keepmark Server (KeepmarkApi, extended contract v1.2). Proprietary
-license (`LICENSE.md`).
+and with Keepmark Server (KeepmarkApi, extended contract v1.2). License GPL-3.0-only
+(`LICENSE.md`).
 
 Goals:
 
@@ -49,7 +49,7 @@ Non-goals (explicitly out of scope, must NOT be reported as missing):
 
 - Stack: strict TypeScript, `webextension-polyfill`, `lzutf8@0.6.0` (pinned),
   Vitest, Vite, vanilla-TS UI (no framework). Node v22, TS ~5.6.
-- License proprietary (`UNLICENSED`). Name/version `keepmark-app@0.1.0` in `package.json`
+- License GPL-3.0-only. Name/version `keepmark-app@0.1.0` in `package.json`
   and in both manifests (must match on release).
 - Layout: `src/shared/` (platform-agnostic core — cross-platform logic lives
   here), `src/firefox/` + `src/chromium/` (thin platform layers),

@@ -201,12 +201,16 @@ Android requires) and legacy `"KeepmarkApp"` files still import here.
 
 ## License
 
-Proprietary — © 2026 Yari Melzani, all rights reserved. See `LICENSE.md`.
+Copyright (C) 2026 Yari Melzani. Free software: you can redistribute it
+and/or modify it under the terms of the **GNU General Public License,
+version 3 only** (GPL-3.0-only) — see `LICENSE.md`. Distributed without any
+warranty.
+
 Independent implementation, written from scratch; compatible with the
 xBrowserSync protocol. Not affiliated with or endorsed by xBrowserSync. Third-party notices: `lzutf8` (MIT, © Rotem Dan),
 `webextension-polyfill` (MPL-2.0).
 
-Project home (releases, issues, documentation): <https://github.com/Keepmark>.
+Project home (source, releases, issues, documentation): <https://github.com/Keepmark>.
 
 ## Disclaimer
 
@@ -214,4 +218,4 @@ Keepmark is provided "as is", without warranty of any kind, express or
 implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
-from its use. See `LICENSE.md`. Keep your own backups.
+from its use. See sections 15–17 of the GPL v3. Keep your own backups.
