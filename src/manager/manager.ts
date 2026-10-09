@@ -1006,8 +1006,8 @@ function updateMoveForm(): void {
   // Password labels follow the mode: in existing mode it is the target
   // sync's CURRENT password, not a new one. The confirmation stays in both
   // modes — a typo in existing mode locks you out with no recovery.
-  $('m-switch-password-label').textContent = mode === 'new' ? 'New password' : 'Sync password';
-  $('m-switch-confirm-label').textContent = mode === 'new' ? 'Confirm password' : 'Confirm target password';
+  $('m-switch-password-label').textContent = mode === 'new' ? t('manager.move.newPassword') : t('mgr.move.syncPassword');
+  $('m-switch-confirm-label').textContent = mode === 'new' ? t('common.confirmPassword') : t('mgr.move.confirmTargetPassword');
   // Confirm row only when inventing a password (new mode). In existing
   // mode the password is verify-before-mutate: a typo fails safely as
   // InvalidCredentials, so no confirmation is asked.
@@ -1035,25 +1035,29 @@ function updateMoveForm(): void {
   const direction = switchDirection();
   $('move-summary').textContent =
     mode === 'new'
-      ? `Will create a new sync on ${url} and upload ${n ?? 'your'} bookmarks. No sync ID needed — a new one is shown after the move.`
+      ? n === undefined
+        ? t('mgr.move.summaryNewNoCount', { url })
+        : tn('mgr.move.summaryNew', n, { url })
       : direction === 'push'
-        ? `Will replace the server copy on ${url} with ${n ?? 'your'} local bookmarks.`
+        ? n === undefined
+          ? t('mgr.move.summaryPushNoCount', { url })
+          : tn('mgr.move.summaryPush', n, { url })
         : direction === 'merge'
-          ? `Will merge your local bookmarks with the server copy on ${url} (nothing is deleted; counts above).`
-          : `Will replace your local bookmarks with the server copy from ${url}.`;
+          ? t('mgr.move.summaryMerge', { url })
+          : t('mgr.move.summaryPull', { url });
 }
 
 async function previewTarget(): Promise<void> {
   clearMessages();
   const newServiceUrl = input('m-switch-url').value.trim();
   if (!newServiceUrl) {
-    showError('move-error', 'New service URL is required.');
+    showError('move-error', t('mgr.move.urlRequired'));
     return;
   }
   const mode = switchMode();
   const syncId = input('m-switch-id').value.trim() || undefined;
   if (mode === 'existing' && !syncId) {
-    showError('move-error', 'Sync ID is required for an existing sync.');
+    showError('move-error', t('val.syncId.required'));
     return;
   }
   const urlErr = validateServiceUrl(newServiceUrl);
@@ -1061,7 +1065,7 @@ async function previewTarget(): Promise<void> {
     showError('move-error', urlErr);
     return;
   }
-  await withBusy('m-btn-preview', 'Checking…', async () => {
+  await withBusy('m-btn-preview', t('busy.checking'), async () => {
     try {
       preview = await send<SwitchPreviewResult>({
         command: MessageCommand.SwitchPreview,
@@ -1077,12 +1081,22 @@ async function previewTarget(): Promise<void> {
     }
     const box = $('move-preview');
     if (!preview.reachable) {
-      box.textContent = 'Target service is unreachable.';
+      box.textContent = t('mgr.move.unreachable');
     } else {
       const lines = [
-        `Service v${preview.serviceVersion ?? '?'} (${preview.versionCompatible ? 'compatible' : 'TOO OLD — move blocked'})`,
-        `Target sync: ${mode === 'new' ? 'n/a (will be created)' : preview.remoteExists ? `found, updated ${preview.remoteLastUpdated ?? '?'}` : 'NOT FOUND — check the ID'}`,
-        `Local bookmarks: ${preview.localCount ?? '?'}`,
+        t('mgr.move.previewVersion', {
+          version: preview.serviceVersion ?? '?',
+          state: preview.versionCompatible ? t('mgr.move.versionOk') : t('mgr.move.versionOld'),
+        }),
+        t('mgr.move.previewSync', {
+          state:
+            mode === 'new'
+              ? t('mgr.move.syncNew')
+              : preview.remoteExists
+                ? t('mgr.move.syncFound', { when: preview.remoteLastUpdated ?? '?' })
+                : t('mgr.move.syncNotFound'),
+        }),
+        t('mgr.move.previewLocal', { count: preview.localCount ?? '?' }),
       ];
       // Merge direction: dry-run the union so the user sees exactly what
       // will upload/download before the Move button unlocks. Needs the
@@ -1091,7 +1105,7 @@ async function previewTarget(): Promise<void> {
       if (mode === 'existing' && switchDirection() === 'merge' && preview.remoteExists) {
         const mergePassword = input('m-switch-password').value;
         if (!mergePassword) {
-          box.textContent = lines.join('\n') + '\nEnter the sync password above, then Check target again for the merge counts.';
+          box.textContent = lines.join('\n') + '\n' + t('mgr.move.enterPwForMerge');
           box.hidden = false;
           setMoveGate(false);
           return;
@@ -1104,11 +1118,15 @@ async function previewTarget(): Promise<void> {
             password: mergePassword,
           });
           lines.push(
-            `Merge preview (nothing is deleted): ${mergeStats.localOnly} local will upload (of ${mergeStats.localCount}), ` +
-              `${mergeStats.remoteOnly} remote will download (of ${mergeStats.remoteCount}), ` +
-              `${mergeStats.titleConflicts} title conflicts (server title kept), ` +
-              `${mergeStats.foldersCreated} folders created, ${mergeStats.separatorsAdopted} separators kept from both sides. ` +
-              `Items deleted on one side while offline will reappear.`,
+            t('mgr.move.mergePreview', {
+              local: mergeStats.localOnly,
+              localTotal: mergeStats.localCount,
+              remote: mergeStats.remoteOnly,
+              remoteTotal: mergeStats.remoteCount,
+              titles: mergeStats.titleConflicts,
+              folders: mergeStats.foldersCreated,
+              separators: mergeStats.separatorsAdopted,
+            }),
           );
         } catch (err) {
           showError('move-error', (err as Error).message);
@@ -1157,22 +1175,21 @@ async function submitMove(): Promise<void> {
     previewFor.syncId !== syncId ||
     previewFor.direction !== direction
   ) {
-    showError('move-error-2', 'Inputs changed since the check — press “Check target” again.');
+    showError('move-error-2', t('mgr.move.inputsChanged'));
     return;
   }
   // Merge executes on explicit per-counts confirmation: the union never
   // deletes, but resurrects items deleted while offline — say so first.
   const s = mergeStats;
   if (mode === 'existing' && direction === 'merge' && !s) {
-    showError('move-error-2', 'Merge preview unavailable — press “Check target” again.');
+    showError('move-error-2', t('mgr.move.mergeUnavailable'));
     return;
   }
   // Every move replaces or creates something: always confirm inline, with
   // the direction's loss line plus what happens to the old sync. Asked
   // BEFORE withBusy (confirmInline owns the button while open).
   const counts = s
-    ? `${s.localOnly} local will upload, ${s.remoteOnly} remote will download, ` +
-      `${s.titleConflicts} title conflicts (server title kept). `
+    ? t('popup.merge.counts', { local: s.localOnly, remote: s.remoteOnly, titles: s.titleConflicts })
     : '';
   const ok = await confirmInline(
     'm-btn-switch',
@@ -1180,7 +1197,7 @@ async function submitMove(): Promise<void> {
       ? {
           message: moveNewConfirm(newServiceUrl, status?.bookmarkCount),
           implication: MoveImplication(),
-          confirmLabel: 'Yes, move',
+          confirmLabel: t('common.yesMove'),
         }
       : {
           message: directionConfirm(direction).message,
@@ -1197,7 +1214,7 @@ async function submitMove(): Promise<void> {
   // Local count for the success line (new/push upload exactly these; capture
   // before the move — merge/pull rewrite the local tree).
   const localCount = status?.bookmarkCount;
-  await withBusy('m-btn-switch', 'Moving…', async () => {
+  await withBusy('m-btn-switch', t('busy.moving'), async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
       const res = await send<{ id: string }>({
@@ -1219,12 +1236,12 @@ async function submitMove(): Promise<void> {
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
     const done = describeMoveResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
-    showResult('move-result', `${done} ${MoveDoneNext()} Sync ID: ${movedId}`);
+    showResult('move-result', t('mgr.move.resultLine', { done, next: MoveDoneNext(), id: movedId }));
     const copy = document.createElement('button');
-    copy.textContent = 'Copy ID';
+    copy.textContent = t('mgr.move.copyId');
     copy.className = 'mini';
-    copy.setAttribute('aria-label', 'Copy the new sync ID');
-    copy.addEventListener('click', () => void copyText(movedId!, 'Copy sync ID:'));
+    copy.setAttribute('aria-label', t('mgr.move.copyIdAria'));
+    copy.addEventListener('click', () => void copyText(movedId!, t('popup.copyIdPrompt')));
     $('move-result').append(' ', copy);
     // updateMoveForm() above re-locked the button and reshown the gate hint:
     // the hint contradicts the result, so hide it, then bring the result
@@ -1269,7 +1286,7 @@ async function refreshLogs(): Promise<void> {
 
 function initLogsSection(): void {
   $('m-btn-logs').addEventListener('click', () =>
-    withBusy('m-btn-logs', 'Loading…', () => refreshLogs()),
+    withBusy('m-btn-logs', t('busy.loading'), () => refreshLogs()),
   );
 }
 
@@ -1291,11 +1308,11 @@ async function renderSettings(): Promise<void> {
     pg = undefined;
   }
   const rows: [string, string][] = [
-    ['Reachability', pg?.reachable ? 'Online' : 'Unreachable'],
-    ['Service', st?.serviceUrl ?? '—'],
-    ['API version', pg?.version ?? '—'],
-    ['API contract', pg?.supportsV12 ?? st?.supportsV12 ? 'v1.2 (revision sync + server delete)' : 'v1.1'],
-    ['Sync ID', st?.syncId ?? '—'],
+    [t('mgr.settings.reachability'), pg?.reachable ? t('mgr.settings.online') : t('mgr.settings.unreachable')],
+    [t('common.service'), st?.serviceUrl ?? '—'],
+    [t('mgr.settings.apiVersion'), pg?.version ?? '—'],
+    [t('mgr.settings.apiContract'), pg?.supportsV12 ?? st?.supportsV12 ? t('mgr.settings.contractV12') : 'v1.1'],
+    [t('common.syncId'), st?.syncId ?? '—'],
   ];
   for (const [k, v] of rows) {
     const dt = document.createElement('dt');
@@ -1337,7 +1354,14 @@ function initSettingsSection(): void {
     const level = Number((e.target as HTMLSelectElement).value);
     try {
       await send({ command: MessageCommand.SetVerbosity, level });
-      showResult('settings-result', `Log verbosity set to ${['Error', 'Warning', 'Info', 'Debug', 'Verbose'][level]}.`);
+      const levelNames = [
+        t('manager.settings.verbError'),
+        t('manager.settings.verbWarning'),
+        t('manager.settings.verbInfo'),
+        t('manager.settings.verbDebug'),
+        t('manager.settings.verbVerbose'),
+      ];
+      showResult('settings-result', t('mgr.settings.verbositySet', { level: levelNames[level] }));
     } catch (err) {
       showError('settings-error', (err as Error).message);
     }
@@ -1363,9 +1387,9 @@ async function changePassword(): Promise<void> {
     return;
   }
   const ok = await confirmInline('m-btn-password', {
-    message: 'Change the sync password?',
+    message: t('mgr.settings.changePwMessage'),
     implication: ChangePasswordImplication(),
-    confirmLabel: 'Yes, change password',
+    confirmLabel: t('common.yesChangePw'),
     danger: true,
   });
   if (!ok) return;
@@ -1377,7 +1401,7 @@ async function changePassword(): Promise<void> {
     showError('pw-error', stillInvalid);
     return;
   }
-  await withBusy('m-btn-password', 'Changing…', async () => {
+  await withBusy('m-btn-password', t('busy.changing'), async () => {
     try {
       await send({ command: MessageCommand.ChangePassword, currentPassword: fields.current, newPassword: fields.next });
       input('m-current-password').value = '';
