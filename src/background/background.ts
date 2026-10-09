@@ -85,6 +85,17 @@ function ports(): CorePorts {
       };
     }
   ).onChildrenReordered;
+  // Toolbar ribbon (canvas "BxRibbon"): navy on light toolbars, white on dark.
+  // Only the Firefox background page has matchMedia (it follows the browser
+  // theme); the Chromium service worker has none and keeps the navy ribbon.
+  const darkQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : undefined;
+  let iconState: 'synced' | 'notsynced' = 'notsynced';
+  const applyIcon = async (): Promise<void> => {
+    if (!action) return;
+    const name = darkQuery?.matches ? `${iconState}-dark` : iconState;
+    await action.setIcon({ path: { '16': `assets/${name}16.png`, '32': `assets/${name}32.png` } }).catch(() => undefined);
+  };
+  darkQuery?.addEventListener?.('change', () => void applyIcon());
   return {
     alarms: {
       schedule: (name, periodMinutes) => browser.alarms.create(name, { periodInMinutes: periodMinutes }).then(() => undefined),
@@ -121,9 +132,8 @@ function ports(): CorePorts {
     chrome: {
       setBadge: async (text, title) => {
         if (!action) return;
-        const state = text === '!' ? 'notsynced' : 'synced';
-        const icon = { '16': `assets/${state}16.png`, '32': `assets/${state}32.png` };
-        await action.setIcon({ path: icon }).catch(() => undefined);
+        iconState = text === '!' ? 'notsynced' : 'synced';
+        await applyIcon();
         await action.setBadgeText({ text }).catch(() => undefined);
         await action.setTitle({ title }).catch(() => undefined);
       },

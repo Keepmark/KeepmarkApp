@@ -103,11 +103,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `vite.chromium-sw.ts` (service worker, single-file ESM lib build),
   `vite.shared.ts` (`platformAlias` + `copyStatic` manifest+assets plugin).
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;
-  `res/assets/` → output `assets/`. Icons rebuilt from the official Keepmark
-  brand (`../KeepmarkMobile/brand/10-favicon.png`: navy `#172552`,
-  keyhole x0.362–0.630/y0.300–0.611): navy-tile manifest icons (48/128) +
-  toolbar icons (16/32, grayscale notsynced), white mark chip in pages
-  (from `03-standalone.png`).
+  `res/assets/` → output `assets/`. Icons follow the Android app (canvas
+  "BxRibbon", v0.1.12): manifest/notification icons 48/128 = launcher icon 5D
+  tile; manifest 16/32 + toolbar = bare ribbon (`synced*` navy, `notsynced*`
+  grey; `*-dark*` white variants picked on Firefox via `matchMedia` in
+  `background.ts` + manifest `theme_icons`; Chromium SW always navy);
+  pages use `brand-ribbon.svg` hanging from the navy header/sidebar band.
 - `scripts/package.mjs` zips `build/*` → `dist/`.
 
 ## 4. Load-bearing contracts (do NOT change lightly)
@@ -189,10 +190,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 
 ## 7. Pending work (exact resume point)
 
-**Icons/assets from Keepmark brand/ — DONE (see res/assets, git history):**
-toolbar + manifest + notification icons rescaled from `10-favicon.png`
-(plus grayscale notsynced); in-page brand chip uses the white mark. Source of
-truth for future sizes: `../KeepmarkMobile/brand/`.
+**Icons/assets — DONE (v0.1.12, canvas "BxRibbon"):** see section 3; PNGs
+are rendered from SVG (5D geometry from `../KeepmarkMobile` launcher icon).
 
 **Known limitations / next features (not started):** manual browser QA
 (see README install section); QR connect (only `QrDelimiter` constant exists);

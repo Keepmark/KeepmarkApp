@@ -82,29 +82,35 @@ a { color: var(--accent); }
   height: 100vh;
 }
 
+/* Brand band at the top of the sidebar, same as the popup header: white
+   ribbon hanging from the top edge (canvas "BxRibbon"). */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  height: 52px;
+  margin: -14px -10px 12px;
+  padding: 0 14px;
+  background: var(--brand);
+  color: #fff;
   font-weight: 700;
   font-size: 16px;
-  padding: 4px 8px 14px;
 }
 
-.brand-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: var(--brand);
-  border-radius: 9px;
-  line-height: 0;
+.brand-mark {
+  position: relative;
+  align-self: stretch;
+  width: 23px;
+  flex: none;
 }
 
-.brand-chip img {
-  height: 20px;
-  width: auto;
+.brand-mark img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 23px;
+  height: 40px;
+  filter: drop-shadow(1px 3px 3px rgba(0, 0, 0, 0.55));
 }
 
 #sidebar button {

@@ -93,24 +93,27 @@ h1 {
   font-weight: 700;
   margin: 0;
   display: flex;
+  align-self: stretch;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.brand-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  line-height: 0;
+/* Brand mark (canvas "BxRibbon"): white ribbon hanging from the header's
+   top edge, as in the Android app bar. */
+.brand-mark {
+  position: relative;
+  align-self: stretch;
+  width: 23px;
+  flex: none;
 }
 
-.brand-chip img {
-  height: 18px;
-  width: auto;
+.brand-mark img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 23px;
+  height: 40px;
+  filter: drop-shadow(1px 3px 3px rgba(0, 0, 0, 0.55));
 }
 
 .state {

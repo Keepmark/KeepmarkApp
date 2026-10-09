@@ -3,7 +3,7 @@
   "name": "__MSG_extName__",
   "default_locale": "en",
   "description": "__MSG_extDescription__",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "homepage_url": "https://github.com/Keepmark",
   "icons": {
     "16": "assets/icon16.png",
