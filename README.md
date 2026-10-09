@@ -206,6 +206,9 @@ and/or modify it under the terms of the **GNU General Public License,
 version 3 only** (GPL-3.0-only) — see `LICENSE.md`. Distributed without any
 warranty.
 
+Contributions require signing the [CLA](CLA.md) — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 Independent implementation, written from scratch; compatible with the
 xBrowserSync protocol. Not affiliated with or endorsed by xBrowserSync. Third-party notices: `lzutf8` (MIT, © Rotem Dan),
 `webextension-polyfill` (MPL-2.0).
