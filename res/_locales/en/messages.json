@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "Keepmark bookmark sync (xBrowserSync-compatible)."
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

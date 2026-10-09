@@ -7,6 +7,7 @@ import type { BookmarkNode } from '../src/shared/models';
 import { makeFirefoxAdapter } from '../src/firefox/adapter';
 import { BackgroundCore, NativeDebounceAlarmName, UpdatesAlarmName, type CorePorts } from '../src/background/core';
 import { BookmarkIdMapper } from '../src/shared/id-mapper';
+import { getLang, setLang } from '../src/shared/i18n';
 import { InMemoryLogger } from '../src/shared/logging';
 import { MessageCommand } from '../src/shared/messages';
 import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
@@ -589,6 +590,28 @@ describe('background core', () => {
     await expect(core.handleMessage({ command: MessageCommand.GetToolbarSync })).resolves.toEqual({
       enabled: false,
     });
+  });
+
+  it('ui-language preference round-trips, invalid values fall back to system, language is applied', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    try {
+      await expect(core.handleMessage({ command: MessageCommand.GetUiLanguage })).resolves.toEqual({
+        language: 'system',
+      });
+      await expect(
+        core.handleMessage({ command: MessageCommand.SetUiLanguage, language: 'de' }),
+      ).resolves.toEqual({ language: 'de' });
+      expect(getLang()).toBe('de');
+      await expect(core.handleMessage({ command: MessageCommand.GetUiLanguage })).resolves.toEqual({
+        language: 'de',
+      });
+      await expect(
+        core.handleMessage({ command: MessageCommand.SetUiLanguage, language: 'xx' as 'de' }),
+      ).resolves.toEqual({ language: 'system' });
+    } finally {
+      setLang('en');
+    }
   });
 
   it('duplicates, export/import round-trip', async () => {

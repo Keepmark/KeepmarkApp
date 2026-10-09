@@ -21,6 +21,8 @@ export function copyStatic(platform: 'firefox' | 'chromium', outDir: string): Pl
       const manifestPath = path.join(root, 'res', `manifest.${platform}.json`);
       cpSync(manifestPath, path.join(outDir, 'manifest.json'));
       cpSync(path.join(root, 'res', 'assets'), path.join(outDir, 'assets'), { recursive: true });
+      // Manifest name/description/title only; UI texts ship in the JS bundles.
+      cpSync(path.join(root, 'res', '_locales'), path.join(outDir, '_locales'), { recursive: true });
       // Fail the build (not QA, not install time) when the manifest points
       // at files that are not in the output.
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {

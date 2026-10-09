@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "Sincronizzazione dei segnalibri Keepmark (compatibile con xBrowserSync)."
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

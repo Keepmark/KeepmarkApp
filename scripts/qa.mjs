@@ -132,6 +132,33 @@ ok('background/shared/platform DOM-free (if no failure above)');
   else ok('no orphaned command handlers in core');
 }
 
+// 5b. i18n: every data-i18n* key used in the HTML exists in the English
+// catalog, and every catalog key has a text in all four other languages.
+{
+  const catalog = (lang) => {
+    const src = readFileSync(path.join(root, `src/shared/i18n/${lang}.ts`), 'utf8');
+    return new Set([...src.matchAll(/^\s*'([^']+)':/gm)].map((m) => m[1]));
+  };
+  const en = catalog('en');
+  const used = new Set();
+  for (const page of ['src/popup.html', 'src/manager.html']) {
+    const html = readFileSync(path.join(root, page), 'utf8');
+    for (const m of html.matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) used.add(m[1]);
+  }
+  const unknown = [...used].filter((k) => !en.has(k));
+  if (unknown.length > 0) fail(`HTML uses unknown i18n keys: ${unknown.join(', ')}`);
+  else ok(`all ${used.size} HTML i18n keys exist in the catalog`);
+  for (const lang of ['it', 'fr', 'es', 'de']) {
+    const keys = catalog(lang);
+    const lacking = [...en].filter((k) => !keys.has(k));
+    if (lacking.length > 0) fail(`${lang} catalog lacks: ${lacking.slice(0, 5).join(', ')}`);
+  }
+  ok('catalogs complete in it/fr/es/de');
+  for (const lang of ['en', 'it', 'fr', 'es', 'de']) {
+    if (!existsSync(path.join(root, `res/_locales/${lang}/messages.json`))) fail(`missing _locales/${lang}`);
+  }
+}
+
 // 6. StoreKey: no string-literal storage access outside store.ts.
 {
   const files = srcFiles('src');

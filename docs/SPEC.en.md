@@ -41,8 +41,7 @@ Goals:
 Non-goals (explicitly out of scope, must NOT be reported as missing):
 
 - Bookmark browsing/search UI, multi-account, auto-backup schedule,
-  QR connect (only the `QrDelimiter` constant is reserved), telemetry, i18n
-  (English-only by decision).
+  QR connect (only the `QrDelimiter` constant is reserved), telemetry.
 
 ## 2. Stack, layout, commands
 
@@ -413,7 +412,7 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
   `confirmInline`, see `docs/WORKFLOWS.md`), as do undo (`undoConfirm`) and
   the conflict choices (`directionConfirm`). Password fields cleared per-flow (confirm always; current
   on failure; new kept only to retype the proof).
-- English-only strings; no wired telemetry prompts; dynamic list buttons get
+- UI in en/it/fr/es/de (system language by default, override in Settings → Language; logs stay English); no wired telemetry prompts; dynamic list buttons get
   `aria-label`s; clipboard falls back to `prompt` when denied.
 
 ## 8. Platform matrix
