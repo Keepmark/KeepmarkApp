@@ -15,17 +15,17 @@ import {
 
 describe('workflow texts', () => {
   it('unlink says what is needed to link again and what is lost', () => {
-    expect(UnlinkImplication).toContain('sync ID and its password');
-    expect(UnlinkImplication).toContain('not yet synced');
-    expect(UnlinkImplication).toContain('Undo is cleared');
+    expect(UnlinkImplication()).toContain('sync ID and its password');
+    expect(UnlinkImplication()).toContain('not yet synced');
+    expect(UnlinkImplication()).toContain('Undo is cleared');
   });
 
   it('delete names other devices, no undelete, and where the kept copy is', () => {
-    expect(DeleteRemoteImplication).toContain('other devices');
-    expect(DeleteRemoteImplication).toContain('no undelete');
-    expect(DeleteRemoteImplication).toContain('Keepmark popup');
+    expect(DeleteRemoteImplication()).toContain('other devices');
+    expect(DeleteRemoteImplication()).toContain('no undelete');
+    expect(DeleteRemoteImplication()).toContain('Keepmark popup');
     // The safety entry is locked to the deleted sync: never point users there.
-    expect(DeleteRemoteImplication).not.toContain('Safety backups');
+    expect(DeleteRemoteImplication()).not.toContain('Safety backups');
   });
 
   it('removed-sync text counts items and warns the file is not encrypted', () => {
@@ -38,19 +38,19 @@ describe('workflow texts', () => {
 
   it('one direction order and the shared confirm vocabulary', () => {
     expect(DirectionOrder).toEqual(['pull', 'merge', 'push']);
-    expect(DirectionOrder.map((d) => directionConfirm[d].confirmLabel)).toEqual([
+    expect(DirectionOrder.map((d) => directionConfirm(d).confirmLabel)).toEqual([
       'Yes, download',
       'Yes, merge',
       'Yes, upload',
     ]);
-    expect(directionConfirm.pull.implication).toContain('not yet synced are lost');
-    expect(directionConfirm.push.implication).toContain('other devices');
-    expect(directionConfirm.merge.implication).toContain('Nothing is deleted');
+    expect(directionConfirm('pull').implication).toContain('not yet synced are lost');
+    expect(directionConfirm('push').implication).toContain('other devices');
+    expect(directionConfirm('merge').implication).toContain('Nothing is deleted');
   });
 
   it('move says the old sync and the other devices stay', () => {
-    expect(MoveImplication).toContain('old sync stays');
-    expect(MoveImplication).toContain('other devices stay linked');
+    expect(MoveImplication()).toContain('old sync stays');
+    expect(MoveImplication()).toContain('other devices stay linked');
   });
 
   it('undo names the action in words, never the raw key', () => {
@@ -64,7 +64,7 @@ describe('workflow texts', () => {
 
   it('duplicate deletes say one copy stays and where the safety backup is', () => {
     const c = dupDeleteConfirm(3);
-    expect(c.message).toBe('Delete 3 marked duplicate(s)?');
+    expect(c.message).toBe('Delete 3 marked duplicates?');
     expect(c.implication).toContain('One copy of each URL always stays');
     expect(c.implication).toContain('safety backup');
     expect(dupDeleteDone(3)).toContain('Backup → Safety backups');

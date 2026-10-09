@@ -304,7 +304,7 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
   // One open confirm at a time: picking another side replaces it.
   conflictButtons.forEach((id) => cancelConfirm(id));
   const ok = await confirmInline(`conflict-btn-${direction}`, {
-    ...directionConfirm[direction],
+    ...directionConfirm(direction),
     danger: direction !== 'merge',
   });
   if (!ok) return;
@@ -418,7 +418,7 @@ async function unlink(): Promise<void> {
   clearMessages();
   const ok = await confirmInline('m-btn-unlink', {
     message: 'Unlink this browser?',
-    implication: UnlinkImplication,
+    implication: UnlinkImplication(),
     confirmLabel: 'Yes, unlink',
     danger: true,
   });
@@ -426,7 +426,7 @@ async function unlink(): Promise<void> {
   await withBusy('m-btn-unlink', 'Unlinking…', async () => {
     try {
       await send({ command: MessageCommand.DisableSync });
-      showResult('status-result', UnlinkDone);
+      showResult('status-result', UnlinkDone());
       status = undefined;
       ping = undefined;
       await refreshStatus();
@@ -447,7 +447,7 @@ async function deleteRemote(): Promise<void> {
   // background.
   const first = await confirmInline('m-btn-delete-remote', {
     message: 'Delete your sync from the server for good?',
-    implication: DeleteRemoteImplication,
+    implication: DeleteRemoteImplication(),
     confirmLabel: 'Yes, delete',
     danger: true,
   });
@@ -461,7 +461,7 @@ async function deleteRemote(): Promise<void> {
   await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
     try {
       await send({ command: MessageCommand.DeleteRemoteSync });
-      showResult('status-result', DeleteRemoteDone);
+      showResult('status-result', DeleteRemoteDone());
       status = undefined;
       ping = undefined;
       await refreshStatus();
@@ -646,7 +646,7 @@ async function confirmImport(): Promise<void> {
   }
   const ok = await confirmInline('m-btn-import-confirm', {
     message: `Replace your bookmarks with this backup (${pending.count} items)?`,
-    implication: ImportImplication,
+    implication: ImportImplication(),
     confirmLabel: 'Yes, restore',
     danger: true,
   });
@@ -780,7 +780,7 @@ async function deleteSafety(entry: SafetyEntry, anchorId: string): Promise<void>
   clearMessages();
   const ok = await confirmInline(anchorId, {
     message: `Delete the safety backup from ${new Date(entry.createdAtUtc).toLocaleString()}?`,
-    implication: SafetyDeleteImplication,
+    implication: SafetyDeleteImplication(),
     confirmLabel: 'Yes, delete',
     danger: true,
   });
@@ -1166,13 +1166,13 @@ async function submitMove(): Promise<void> {
     mode === 'new'
       ? {
           message: moveNewConfirm(newServiceUrl, status?.bookmarkCount),
-          implication: MoveImplication,
+          implication: MoveImplication(),
           confirmLabel: 'Yes, move',
         }
       : {
-          message: directionConfirm[direction].message,
-          implication: `${direction === 'merge' ? counts : ''}${directionConfirm[direction].implication} ${MoveImplication}`,
-          confirmLabel: directionConfirm[direction].confirmLabel,
+          message: directionConfirm(direction).message,
+          implication: `${direction === 'merge' ? counts : ''}${directionConfirm(direction).implication} ${MoveImplication()}`,
+          confirmLabel: directionConfirm(direction).confirmLabel,
           danger: direction !== 'merge',
         },
   );
@@ -1206,7 +1206,7 @@ async function submitMove(): Promise<void> {
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
     const done = describeMoveResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
-    showResult('move-result', `${done} ${MoveDoneNext} Sync ID: ${movedId}`);
+    showResult('move-result', `${done} ${MoveDoneNext()} Sync ID: ${movedId}`);
     const copy = document.createElement('button');
     copy.textContent = 'Copy ID';
     copy.className = 'mini';
@@ -1351,7 +1351,7 @@ async function changePassword(): Promise<void> {
   }
   const ok = await confirmInline('m-btn-password', {
     message: 'Change the sync password?',
-    implication: ChangePasswordImplication,
+    implication: ChangePasswordImplication(),
     confirmLabel: 'Yes, change password',
     danger: true,
   });
@@ -1370,7 +1370,7 @@ async function changePassword(): Promise<void> {
       input('m-current-password').value = '';
       input('m-new-password').value = '';
       input('m-new-password-confirm').value = '';
-      showResult('pw-result', ChangePasswordDone);
+      showResult('pw-result', ChangePasswordDone());
       await refreshStatus();
     } catch (err) {
       // Never leave the current password or its confirmation in the DOM;

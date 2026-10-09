@@ -152,7 +152,7 @@ function initRemovedCard(): void {
       error.hidden = true;
       const ok = await confirmInline('btn-removed-dismiss', {
         message: 'Delete the kept copy?',
-        implication: RemovedSyncDismissImplication,
+        implication: RemovedSyncDismissImplication(),
         confirmLabel: 'Yes, delete',
         danger: true,
       });
@@ -274,9 +274,9 @@ async function submitConnect(): Promise<void> {
         `${preview.titleConflicts} title conflicts (server title kept). `;
     }
     const ok = await confirmInline('btn-connect', {
-      message: directionConfirm[direction].message,
-      implication: `${counts}${directionConfirm[direction].implication}`,
-      confirmLabel: directionConfirm[direction].confirmLabel,
+      message: directionConfirm(direction).message,
+      implication: `${counts}${directionConfirm(direction).implication}`,
+      confirmLabel: directionConfirm(direction).confirmLabel,
       danger: direction !== 'merge',
     });
     if (!ok) return;
