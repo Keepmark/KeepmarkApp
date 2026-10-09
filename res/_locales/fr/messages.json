@@ -3,7 +3,7 @@
     "message": "Keepmark"
   },
   "extDescription": {
-    "message": "Synchronisation des favoris Keepmark (compatible xBrowserSync)."
+    "message": "Synchronisation de favoris privée, chiffrée de bout en bout. Alternative indépendante compatible avec xBrowserSync."
   },
   "actionTitle": {
     "message": "Keepmark"

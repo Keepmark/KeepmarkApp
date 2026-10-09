@@ -1,9 +1,53 @@
-# KeepmarkApp — browser extension (Firefox MV2 + Chromium MV3)
+# Keepmark for browsers (KeepmarkApp)
 
-xBrowserSync-compatible bookmark sync. New codebase, inspired by `../app`
-(browser-extension logic) with the robustness rules of `../KeepmarkMobile`
-(whole-blob sync, merge only as an explicit previewed direction — never
-silent, crypto interop).
+Keepmark is private, end-to-end encrypted bookmark sync: an **independent
+alternative compatible with xBrowserSync**. It works with any xBrowserSync
+service (official, self-hosted or community) and with the official
+xBrowserSync apps: syncs created with Keepmark open there, and vice versa.
+Keepmark is not affiliated with or endorsed by xBrowserSync.
+
+The Keepmark family:
+
+- **Keepmark for browsers** — Firefox and Chromium-based browsers (`KeepmarkApp`).
+- **Keepmark for Android** — Android 10+ app (`KeepmarkMobile`).
+- **Keepmark Server** — drop-in xBrowserSync-compatible sync service with
+  opt-in extended features (`KeepmarkApi`).
+
+This repo is the browser extension: Firefox (MV2) and Chromium-based
+browsers such as Chrome, Edge and Brave (MV3).
+
+## Features
+
+- **End-to-end encryption**: bookmarks are encrypted in the browser
+  (PBKDF2-SHA256 + AES-GCM); the password never leaves the device and the
+  service operator cannot read the data.
+- **Connect**: create a new sync or link an existing one, choosing download,
+  upload or merge — merge shows a preview of the counts before anything changes.
+- **Automatic sync** of toolbar, menu and other bookmarks (Firefox: all three
+  containers; Chromium: toolbar + other, menu kept as a folder), plus "Sync now"
+  and a periodic check for remote changes.
+- **No silent data loss**: conflicts are never auto-resolved; you pick
+  take remote / upload local / merge, and the side being replaced is
+  backed up first.
+- **Safety backups**: automatic encrypted snapshot before every destructive
+  step (newest 5 kept), listed and restorable from the manager.
+- **Encrypted backup** export/import, file compatible with Keepmark for Android.
+- **Duplicates**: find bookmarks with the same URL, delete extra copies one
+  by one or in bulk — the last copy is always kept.
+- **Move service**: move your bookmarks to another service, into a new or an
+  existing sync (with merge preview).
+- Change password, activity log, per-step error messages, undo for quick actions.
+- **Extended features with Keepmark Server (v1.2)**: revision-based conflict
+  detection, conditional pulls, delete the sync from the server. Legacy
+  services fall back automatically.
+- **Languages**: English, Italiano, Français, Español, Deutsch — follows the browser language, override in
+  Settings.
+- **Privacy**: no telemetry, HTTPS-only services, no access to web pages.
+
+## Design principles
+
+Same robustness rules as Keepmark for Android: whole-blob sync, merge only
+as an explicit previewed choice (never silent), byte-level crypto interop.
 
 ## Stack
 
@@ -141,7 +185,7 @@ Android requires) and legacy `"KeepmarkApp"` files still import here.
   by the URL validator anyway. No content scripts, no page access: the grant
   covers API calls only.
 
-## Platform differences (from the original client)
+## Platform differences
 
 - Firefox: roots `menu________/unfiled_____/toolbar_____`, all 3 containers,
   native separators, `about:newtab`.
@@ -157,11 +201,12 @@ Android requires) and legacy `"KeepmarkApp"` files still import here.
 
 ## License
 
-GNU GPL v3 — see `LICENSE.md`. Interop logic derived from the official
-xBrowserSync `api` + `app` (also GPLv3). Independent client, not affiliated
-with xBrowserSync.
+Proprietary — © 2026 Yari Melzani, all rights reserved. See `LICENSE.md`.
+Independent implementation, written from scratch; compatible with the
+xBrowserSync protocol. Not affiliated with or endorsed by xBrowserSync. Third-party notices: `lzutf8` (MIT, © Rotem Dan),
+`webextension-polyfill` (MPL-2.0).
 
-Project home (source, releases, issues): <https://github.com/Keepmark>.
+Project home (releases, issues, documentation): <https://github.com/Keepmark>.
 
 ## Disclaimer
 
@@ -169,4 +214,4 @@ Keepmark is provided "as is", without warranty of any kind, express or
 implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
-from its use. See sections 15–17 of the GPL v3. Keep your own backups.
+from its use. See `LICENSE.md`. Keep your own backups.

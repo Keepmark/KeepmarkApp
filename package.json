@@ -3,7 +3,7 @@
   "description": "Keepmark browser extension (Firefox first, then Chromium MV3). xBrowserSync-compatible bookmark sync.",
   "version": "0.1.11",
   "private": true,
-  "license": "GPL-3.0-only",
+  "license": "UNLICENSED",
   "author": "Keepmark (https://github.com/Keepmark)",
   "homepage": "https://github.com/Keepmark",
   "bugs": { "url": "https://github.com/Keepmark" },

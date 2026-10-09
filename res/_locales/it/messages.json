@@ -3,7 +3,7 @@
     "message": "Keepmark"
   },
   "extDescription": {
-    "message": "Sincronizzazione dei segnalibri Keepmark (compatibile con xBrowserSync)."
+    "message": "Sincronizzazione dei segnalibri privata e cifrata end-to-end. Alternativa indipendente compatibile con xBrowserSync."
   },
   "actionTitle": {
     "message": "Keepmark"

@@ -21,10 +21,12 @@ against this spec (§13.4), not silently reinterpreted.
 
 ## 1. Product overview
 
-KeepmarkApp is a bookmark-sync browser extension, xBrowserSync-compatible,
-rewritten from scratch: **Firefox MV2 first, Chromium MV3 second**.
-It is an independent client (not affiliated with xBrowserSync), interoperable
-with the official apps and services plus KeepmarkApi (extended contract v1.2).
+KeepmarkApp (Keepmark for browsers) is a bookmark-sync browser extension:
+an independent alternative compatible with xBrowserSync, written from scratch,
+**Firefox MV2 first, Chromium MV3 second**. Not affiliated with or endorsed by
+xBrowserSync. It interoperates with the official xBrowserSync apps and services
+and with Keepmark Server (KeepmarkApi, extended contract v1.2). Proprietary
+license (`LICENSE.md`).
 
 Goals:
 
@@ -32,7 +34,7 @@ Goals:
   zero silent data loss (never auto-merge, never drop silently).
 - G2. Management UI (status, connection, space, backup, duplicates, move,
   logs, settings), not bookmark browsing.
-- G3. Same end-to-end encryption as the original client (password never leaves
+- G3. Same end-to-end encryption as the official xBrowserSync clients (password never leaves
   the device).
 - G4. Behavioral parity between Firefox and Chromium builds.
 
@@ -45,7 +47,7 @@ Non-goals (explicitly out of scope, must NOT be "found missing"):
 
 - Stack: TypeScript strict, `webextension-polyfill`, `lzutf8@0.6.0` (pinned),
   Vitest, Vite, vanilla-TS UI (no framework). Node v22, TS ~5.6.
-- License GPL-3.0-only. Name/version `keepmark-app@0.1.0` in `package.json`
+- License proprietary (`UNLICENSED`). Name/version `keepmark-app@0.1.0` in `package.json`
   and in both manifests (must match on release).
 - Layout: `src/shared/` (platform-agnostic core — cross-platform logic lives
   here), `src/firefox/` + `src/chromium/` (thin platform layers),

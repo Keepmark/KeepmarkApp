@@ -14,7 +14,7 @@ interop).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only. Name/version in `package.json` (`keepmark-app@0.1.10`)
+- License proprietary (`UNLICENSED`, see `LICENSE.md`). Name/version in `package.json` (`keepmark-app@0.1.10`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 
@@ -40,7 +40,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 
 ### `src/shared/` — platform-agnostic core (edit here for cross-platform logic)
 
-| File | Responsibility | Ported from |
+| File | Responsibility | Behavior reference |
 |---|---|---|
 | `constants.ts` | API/sync versions, timeouts, `compareVersions`, separator URL | Keepmark `XbsConstants.cs` |
 | `errors.ts` | 13 typed errors + `errorForStatus(status)` mapping | `app/api-xbrowsersync.service.ts` via Keepmark `XbsErrors.cs` |
@@ -116,7 +116,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    PBKDF2-SHA256/250k, salt = UTF-8(sync ID). `tests/vectors.json` (from
    Keepmark, generated from original `app/crypto.service.ts` + lzutf8@0.6.0)
    MUST decrypt green after any `crypto.ts` change. Legacy version-less syncs
-   rejected (open once in the original client).
+   rejected (open once in the official xBrowserSync client).
 2. **API**: dual-stack `Accept-Version: 1.1.13` (legacy) + `1.2.0` (extended,
    only after `capabilities.revision` probe; legacy answers 412), min service
    `1.1.9`, sync format `1.8.0` (never lower — remote≤local version gate).
