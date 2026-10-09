@@ -1,219 +1,136 @@
-# Keepmark for browsers (KeepmarkApp)
+<p align="center">
+  <img src="docs/img/keepmark.png" width="128" height="128" alt="Keepmark" />
+</p>
 
-Keepmark is private, end-to-end encrypted bookmark sync: an **independent
-alternative compatible with xBrowserSync**. It works with any xBrowserSync
-service (official, self-hosted or community) and with the official
-xBrowserSync apps: syncs created with Keepmark open there, and vice versa.
-Keepmark is not affiliated with or endorsed by xBrowserSync.
+<h1 align="center">Keepmark for browsers</h1>
 
-The Keepmark family:
+<p align="center">
+  <b>Your bookmarks in every browser, synced and end-to-end encrypted.</b><br />
+  An independent extension compatible with xBrowserSync.
+</p>
 
-- **Keepmark for browsers** — Firefox and Chromium-based browsers (`KeepmarkApp`).
-- **Keepmark for Android** — Android 10+ app (`KeepmarkMobile`).
-- **Keepmark Server** — drop-in xBrowserSync-compatible sync service with
-  opt-in extended features (`KeepmarkApi`).
+<p align="center">
+  <img src="https://img.shields.io/badge/Firefox-MV2-e66000" alt="Firefox" />
+  <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Brave-MV3-1a73e8" alt="Chromium-based browsers" />
+  <img src="https://img.shields.io/badge/license-GPL--3.0--only-243878" alt="GPL-3.0-only" />
+  <img src="https://img.shields.io/badge/languages-en%20%C2%B7%20it%20%C2%B7%20fr%20%C2%B7%20es%20%C2%B7%20de-4a5170" alt="Languages" />
+</p>
 
-This repo is the browser extension: Firefox (MV2) and Chromium-based
-browsers such as Chrome, Edge and Brave (MV3).
+---
+
+Keepmark keeps the same bookmarks on all your browsers and your phone.
+Everything is encrypted in the browser before it leaves: the service that
+stores your data sees only ciphertext, and your password never leaves the
+device.
+
+It works with **any xBrowserSync service** (the official one, a community
+host or your own) and with the official xBrowserSync apps. A sync created in
+Keepmark opens there, and the other way round. Nothing to migrate.
+
+## Highlights
+
+- **Private by design.** PBKDF2-SHA256 and AES-GCM in the browser. No
+  telemetry, HTTPS-only services, and no access to the pages you visit.
+- **Never lose a bookmark silently.** Conflicts are never resolved behind
+  your back: you pick take remote, upload local or merge, and merge shows a
+  preview of the counts before anything changes. The side being replaced is
+  backed up first.
+- **Set and forget.** Toolbar, menu and other bookmarks sync automatically,
+  with a periodic check for changes made elsewhere and a "Sync now" button.
+- **Fits your browser.** The toolbar icon follows the light or dark theme
+  and shows at a glance whether you are in sync.
 
 ## Features
 
-- **End-to-end encryption**: bookmarks are encrypted in the browser
-  (PBKDF2-SHA256 + AES-GCM); the password never leaves the device and the
-  service operator cannot read the data.
-- **Connect**: create a new sync or link an existing one, choosing download,
-  upload or merge — merge shows a preview of the counts before anything changes.
-- **Automatic sync** of toolbar, menu and other bookmarks (Firefox: all three
-  containers; Chromium: toolbar + other, menu kept as a folder), plus "Sync now"
-  and a periodic check for remote changes.
-- **No silent data loss**: conflicts are never auto-resolved; you pick
-  take remote / upload local / merge, and the side being replaced is
-  backed up first.
-- **Safety backups**: automatic encrypted snapshot before every destructive
-  step (newest 5 kept), listed and restorable from the manager.
-- **Encrypted backup** export/import, file compatible with Keepmark for Android.
-- **Duplicates**: find bookmarks with the same URL, delete extra copies one
-  by one or in bulk — the last copy is always kept.
-- **Move service**: move your bookmarks to another service, into a new or an
-  existing sync (with merge preview).
-- Change password, activity log, per-step error messages, undo for quick actions.
-- **Extended features with Keepmark Server (v1.2)**: revision-based conflict
-  detection, conditional pulls, delete the sync from the server. Legacy
-  services fall back automatically.
-- **Languages**: English, Italiano, Français, Español, Deutsch — follows the browser language, override in
-  Settings.
-- **Privacy**: no telemetry, HTTPS-only services, no access to web pages.
+| | |
+|---|---|
+| **Connect** | Create a new sync or link an existing one: download, upload or merge with preview |
+| **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
+| **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
+| **Backup** | Encrypted export and import, compatible with Keepmark for Android |
+| **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
+| **Move service** | Move your bookmarks to another service, into a new or existing sync |
+| **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
+| **Languages** | English, Italiano, Français, Español, Deutsch; follows the browser, override in Settings |
 
-## Design principles
+With **Keepmark Server** you also get revision-based conflict detection,
+faster "nothing changed" checks and the option to delete your sync from the
+server. On other services Keepmark falls back automatically.
 
-Same robustness rules as Keepmark for Android: whole-blob sync, merge only
-as an explicit previewed choice (never silent), byte-level crypto interop.
+## The Keepmark family
 
-## Stack
+| | |
+|---|---|
+| **Keepmark for browsers** | This extension (Firefox, Chrome, Edge, Brave) |
+| **Keepmark for Android** | Android 10+ app with search, share-to-Keepmark and app lock |
+| **Keepmark Server** | Drop-in xBrowserSync-compatible sync service with opt-in extended features |
 
-TypeScript strict + `webextension-polyfill` + `lzutf8@0.6.0` + Vitest + Vite.
-Popup is vanilla TS (no framework, for MV3 longevity).
+All three share the same encryption, the same backup format and the same
+wording, so moving between them feels the same.
 
-## Interop contract (load-bearing)
+## Compatibility
 
-- API `v1.1.13`, header `Accept-Version`, base default
-  `https://api.xbrowsersync.org`. Min supported `1.1.9`.
-- Password never leaves the client. Key = PBKDF2-SHA256/250k,
-  salt = UTF-8(sync ID) → base64. Legacy syncs without version rejected.
-- Wire blob = `base64(IV16B || AES-GCM-256(lzutf8(JSON bookmarks)))`.
-- Vectors: `tests/vectors.json` (copied from Keepmark, generated from the
-  original `app/crypto.service.ts` + `lzutf8@0.6.0`). Never change
-  `src/shared/crypto.ts` without `npm test` passing decrypt of all vectors.
+- **Browsers:** Firefox (Manifest V2) and Chromium-based browsers such as
+  Chrome, Edge and Brave (Manifest V3, Chrome 109 or later).
+- **Services:** any xBrowserSync API service, version 1.1.9 or later.
+- **Clients:** syncs open both ways with the official xBrowserSync apps
+  (sync format 1.8.0). The encryption is verified byte for byte against the
+  official implementation.
 
-## Commands
+## Permissions
+
+Keepmark asks only for what sync needs: bookmarks, storage, alarms (periodic
+checks), notifications (conflicts, sync removed) and downloads (backup
+files). On Chromium it also needs network access to reach the service you
+choose. There are no content scripts: Keepmark never reads web pages.
+Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-each-one).
+
+## Get it
+
+Download the latest build from the [Releases](../../releases) page, or build
+it yourself:
 
 ```sh
 npm install
-npm test              # vitest: crypto/api/bookmarks/sync/queue/reconcile/merge/backup/safety/duplicates/messages/logging/ui/core
-npm run lint          # tsc --noEmit
-npm run build         # both platforms -> build/firefox, build/chromium
-npm run build:firefox
-npm run build:chromium
-npm run package       # zips -> dist/ (needs system `zip` or python3, else fails)
-npm run qa            # static QA: ids, SW-safety, manifests, linter (no browser)
-npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (48 checks, see SPEC §11.3)
+npm run build      # build/firefox and build/chromium
 ```
 
-## Layout
+Then load it:
 
-- `src/shared/` — platform-agnostic core: `constants`, `errors`, `models`,
-  `bookmarks` (tree helpers), `native` (generic read/clear/populate/mappings),
-  `crypto`, `api`, `logging`, `store` (`StoreKey` + backends), `id-mapper`,
-  `sync` (first-sync flows), `sync-queue` (gated FIFO + failure policy),
-  `reconcile` (native→synced whole-tree pass), `merge` (pure two-way union +
-  preview stats), `messages` (popup↔background protocol + error wire format),
-  `backup`, `safety` (indexed snapshots), `duplicates`.
-- `src/firefox/` — `platform` (about: rules, fixed roots), `bookmarks`
-  (3 containers, `type:'separator'`), `adapter` (NativeAdapter).
-- `src/chromium/` — `platform` (chrome:/edge: rules, roots 2/1),
-  `bookmarks` (Menu = folder in Other, bookmark-style separators), `adapter`.
-- `src/background/` — `core.ts` (queue owner: jobs, alarms, listeners,
-  all message handlers), `adapter.ts` (NativeAdapter interface),
-  `background.ts` (browser wiring; `@platform/adapter` alias per build).
-- `src/popup/` — small popup: connect (new / existing pull-push-merge),
-  status card + sync now + undo banner + open manager. Display only;
-  mutations via messages.
-- `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
-  (export, two-step import with preview, safety list/restore/delete),
-  Duplicates (scan, single + bulk delete), Move (wizard with target +
-  merge preview), Logs, Settings (toolbar toggle via background, password
-  change), About.
-- `src/popup.html`, `src/background.html` — vite entries (land at output root).
-- `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
-- `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.
+- **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on →
+  `build/firefox/manifest.json`.
+- **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load
+  unpacked → `build/chromium`.
 
-## Sync model
+Project home: <https://github.com/Keepmark>.
 
-- Whole-blob: every push uploads the full tree with optimistic `lastUpdated`.
-- Queue lives only in the background context; popup talks via messages.
-- Native edits (listener debounce, popup add/remove) reconcile native→synced
-  through stored id mappings (stable ids), then push.
-- 409: the conflict is persisted (survives worker sleeps/restarts), the
-  uncommitted tree is stashed as a `keepmark-conflict-*.json` download and a
-  notification points to the manager, where you pick Take remote / Upload
-  local / Merge (each confirmed, destroyed side safety-backed-up first).
-  No auto-pull while it is pending; never auto-merge, never drop silently.
-- Native edits that never reached the server are checked before every pull:
-  they become a conflict instead of being overwritten.
-- Sync loss (401): queue cleared, credentials wiped, notification.
-- "Sync now" = pull-if-newer then push.
+## Documentation
 
-## Merge mode (third link direction)
+- [Developer guide](docs/DEVELOPMENT.md): stack, interop contract, layout,
+  sync model, safety backups, platform differences.
+- [Product and verification spec](docs/SPEC.en.md) ([italiano](docs/SPEC.md)).
+- [Workflows](docs/WORKFLOWS.md) and [UI terms](docs/UI-TERMS.md): shared
+  with Keepmark for Android.
+- [Contributing](CONTRIBUTING.md).
 
-When the local tree and the server copy diverged (offline edits here,
-uploads from another PC there), `merge` unions both sides instead of
-overwriting one: remote nodes/ids/metadata kept, local-only bookmarks
-adopted with fresh ids into path-matched (or newly created) folders,
-separators kept from both sides. Same URL both sides → server title wins
-(counted). Deletes are never merged (no tombstones): items deleted on one
-side while offline reappear — the preview says so.
+## Contact
 
-- `src/shared/merge.ts` is pure (no I/O, inputs never mutated): the same
-  `mergeTrees` serves the `PreviewMerge` dry-run and the confirmed flows.
-- Preview shows local-only / remote-only / title-conflicts /
-  folders-created / separators-adopted before anything mutates; both flows
-  confirm per-counts (popup dialog, move wizard check + confirm).
-- Fail-closed safety snapshots of BOTH sides (`merge-local`,
-  `merge-remote`), undo kinds `connect-merge` / `switch-merge`, PUT on the
-  remote base (revision CAS or timestamp; 409 honest).
-
-## Safety backups
-
-Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,
-ported from the Keepmark Android safety spec): connect pull/push, switch
-pull/push, change-password, import, restore, server delete, bulk duplicate
-cleanup. Snapshot write failure aborts the operation (fail closed); single
-bookmark add/remove is exempt (mirrors the Android single-delete exception).
-
-- Stored in `storage.local`: `SafetyIndex` manifest rows
-  (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated
-  syncId, enc`) + one `safetyFile:` payload each. Newest 5 kept, older
-  pruned (payload + row together). Listed/restored/deleted from Manager →
-  Backup → Safety backups.
-- Encrypted with the sync-derived key (`keyId` = SHA-256/8 recorded);
-  restores under a rotated key refuse honestly. Pre-link writes stay
-  plaintext flagged "not encrypted". Password change re-encrypts entries
-  best-effort (never fails the flow).
-- Restore: local-side entries replace natives (push-if-linked);
-  remote-side entries require the link and re-push (409 honest). The used
-  entry is never deleted; counts are validated, damage refused.
-- Success messages name the safety net ("see Backup → Safety backups").
-
-## Backup interop (Keepmark Android)
-
-Export envelope `{app, format, salt, blob}` is byte-compatible with the
-Android client: new exports are stamped `app: "xBrowserSyncNg"` (the tag
-Android requires) and legacy `"KeepmarkApp"` files still import here.
-
-## Permissions (why each one)
-
-- `alarms` — 15-min remote-change poll + SW-safe native-edit debounce.
-- `bookmarks` — read/clear/populate native containers + change listeners.
-- `downloads` — conflict files, backup export (data: URLs).
-- `notifications` — sync-removed / conflict notices.
-- `storage` + `unlimitedStorage` — encrypted blob (up to service maxSyncSize),
-  id mappings, install backup, safety files + index, trace log in
-  `storage.local` beyond the 5–10 MB default quota.
-- Chromium `host_permissions https://*/*` + loopback http (`localhost`,
-  `127.0.0.1`) — MV3 service workers need an explicit host grant for
-  `fetch()` to user-configured services. Plain-http LAN hosts are rejected
-  by the URL validator anyway. No content scripts, no page access: the grant
-  covers API calls only.
-
-## Platform differences
-
-- Firefox: roots `menu________/unfiled_____/toolbar_____`, all 3 containers,
-  native separators, `about:newtab`.
-- Chromium: roots Other=`2` + Toolbar=`1`, no Menu root (folder `[xbs] Menu`
-  inside Other), separators are `───` / `|` bookmarks, `chrome://newtab/`.
-
-## Install for testing
-
-- Firefox: `about:debugging → This Firefox → Load Temporary Add-on →
-  build/firefox/manifest.json`.
-- Chromium: `chrome://extensions → Developer mode → Load unpacked →
-  build/chromium`.
+Questions, feedback, security reports: <keepmark@proton.me>.
 
 ## License
 
 Copyright (C) 2026 Yari Melzani. Free software: you can redistribute it
 and/or modify it under the terms of the **GNU General Public License,
-version 3 only** (GPL-3.0-only) — see `LICENSE.md`. Distributed without any
-warranty.
+version 3 only** (GPL-3.0-only) — see [`LICENSE.md`](LICENSE.md).
+Distributed without any warranty.
 
 Contributions require signing the [CLA](CLA.md) — see
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Independent implementation, written from scratch; compatible with the
-xBrowserSync protocol. Not affiliated with or endorsed by xBrowserSync. Third-party notices: `lzutf8` (MIT, © Rotem Dan),
-`webextension-polyfill` (MPL-2.0).
-
-Project home (source, releases, issues, documentation): <https://github.com/Keepmark>.
+xBrowserSync protocol. Not affiliated with or endorsed by xBrowserSync.
+Third-party notices: `lzutf8` (MIT, © Rotem Dan), `webextension-polyfill`
+(MPL-2.0).
 
 ## Disclaimer
 

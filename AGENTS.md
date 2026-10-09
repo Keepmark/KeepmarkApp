@@ -1,7 +1,8 @@
 # AGENTS.md — KeepmarkApp (browser extension)
 
 Read this first when resuming work here. Companion docs: `README.md`
-(user-facing build/install/sync model), root `../AGENTS.md` (repo layout).
+(user-facing GitHub landing page), `docs/DEVELOPMENT.md` (build, interop,
+sync model, permissions), root `../AGENTS.md` (repo layout).
 
 ## 1. What this is
 
@@ -198,6 +199,6 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 are rendered from SVG (5D geometry from `../KeepmarkMobile` launcher icon).
 
 **Known limitations / next features (not started):** manual browser QA
-(see README install section); QR connect (only `QrDelimiter` constant exists);
+(see README "Get it"); QR connect (only `QrDelimiter` constant exists);
 no multi-account; no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.

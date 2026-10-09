@@ -1,7 +1,7 @@
 # KeepmarkApp — Product & Verification Specification
 
 Version: 0.1.0 · Status: working draft for outsourced code verification
-Companion docs: `README.md` (build/install), `AGENTS.md` (agent resume point).
+Companion docs: `README.md` (overview, install), `DEVELOPMENT.md` (build, contracts), `AGENTS.md` (agent resume point).
 Code under verification: `src/`, `res/`, `scripts/`, `tests/` in this repo.
 
 ## 0. Purpose and audience
@@ -461,7 +461,7 @@ white-mark in-page chip.
   first, confirm in UI, snapshot before mutate, persist undo only after
   remote write lands, never swallow errors (log with context).
 - S8. No telemetry, no page access, no `tabs` permission; minimal host grant
-  documented in README.
+  documented in `docs/DEVELOPMENT.md` (Permissions).
 
 ## 10. Build, packaging, QA gates
 
@@ -504,7 +504,7 @@ white-mark in-page chip.
   `KEEPMARK_E2E_URL`): real client vs real KeepmarkApi — extended vs frozen
   shapes, link lifecycles both contracts, legacy path on v1.2 server.
   Each run consumes server `DailyNewSyncsLimit` quota (default 3/day; reset
-  via Mongo `newsynclogs`, see `KeepmarkApi/README.md` + `scripts/e2e-*.sh`
+  via Mongo `newsynclogs`, see `KeepmarkApi/docs/DEVELOPMENT.md` + `scripts/e2e-*.sh`
   there). Command:
   `KEEPMARK_E2E_URL=http://localhost:8090 npm test -- tests/e2e-live.test.ts`.
 - 11.2b Automated browser QA (`npm run qa:browser`, `scripts/qa-browser.mjs`):
@@ -521,7 +521,7 @@ white-mark in-page chip.
   manual, §11.3): real toolbar clicks/popup sizing, AMO-signed install,
   multi-day MV3 sleep, 413/429 on a public service.
 - 11.3 Manual browser QA (required before release, needs a human): temp
-  install both builds (README §Install), click every button (busy labels,
+  install both builds (README "Get it"), click every button (busy labels,
   confirms, per-section evidence), rendering incl. dark mode, MV3 sleep/wake
   (alarms fire, debounce survives), real conflict (two clients racing → 409
   file + notify), real 401 (server wipe → snapshot + unlink), quota/413/429
