@@ -52,7 +52,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Delete sync from server (extension, service v1.2) | yes | `Delete sync from server…` | always, twice (`Yes, delete` → `Yes, delete for good`) | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
 | Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | `Download copy` / `Dismiss…` | Dismiss only | The kept copy is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
 | Sync conflict | conflict | direction → apply | always | Same direction text as Connect. |
-| Duplicates | no | mark → `Delete marked` | always | One copy of each URL stays; a safety backup is saved first. |
+| Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
 
@@ -66,8 +66,8 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 - A wizard that resumes (after leaving the page or an app restart) never resumes
   on its final review: it restarts at the step that asks the password, and the
   service check and merge preview run again.
-- Undo: the last overwrite offers `Undo` for its kind (named in words, not by
-  key). Result text: `Undone: <what was undone>.`
+- Undo (extension): the last overwrite offers `Undo` for its kind (named in
+  words, not by key). Result text: `Undone: <what was undone>.`
 
 ## Platform differences (allowed)
 
@@ -77,6 +77,9 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   reports v1.2.
 - The extension says "this browser's copy"; the mobile app says "this device's
   copy".
+- Undo of the last overwrite exists only in the extension; the mobile app's way
+  back is Backup → Safety backups (Home keeps a short undo for a single delete).
+- Change password result: the extension adds `Undo is in Status`.
 - Backup restore: the extension needs a linked sync (the restored tree is
   uploaded right away). The mobile app also restores while unlinked, on this
   device only; its implication line says which case applies.
