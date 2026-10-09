@@ -4,6 +4,7 @@
 
 import browser from 'webextension-polyfill';
 import { DefaultServiceUrl } from '../shared/constants.js';
+import { formatDate, formatTime, t } from '../shared/i18n.js';
 import type { BookmarkNode } from '../shared/models.js';
 import {
   $,
@@ -46,8 +47,8 @@ function shortWhen(iso: string | number): string {
   const d = new Date(iso);
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
-    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    ? formatTime(d, { hour: '2-digit', minute: '2-digit' })
+    : formatDate(d, { day: 'numeric', month: 'short' });
 }
 
 let status: StatusResponse | undefined;
@@ -78,16 +79,16 @@ async function refreshAll(): Promise<void> {
   renderStatusCard('p', view);
   // A GetStatus throw always means the background is unreachable (unlinked
   // links resolve fine), so report it instead of showing a bare "Not synced".
-  if (statusErr) showError('main-error', `Background error: ${statusErr}`);
-  else if (pingErr && status?.syncEnabled) showError('main-error', `Service probe failed: ${pingErr}`);
+  if (statusErr) showError('main-error', t('popup.err.background', { message: statusErr }));
+  else if (pingErr && status?.syncEnabled) showError('main-error', t('popup.err.probe', { message: pingErr }));
   else ($('main-error') as HTMLElement).hidden = true;
   const state = $('sync-state');
   if (!status?.syncEnabled) {
-    state.textContent = 'Not synced';
+    state.textContent = t('popup.state.notSynced');
   } else if (status.syncing || status.queueLength > 0) {
-    state.textContent = 'Syncing…';
+    state.textContent = t('ui.pill.syncing');
   } else {
-    state.textContent = status.lastUpdated ? `Synced ${shortWhen(status.lastUpdated)}` : 'Synced';
+    state.textContent = status.lastUpdated ? t('popup.state.syncedAt', { when: shortWhen(status.lastUpdated) }) : t('popup.state.synced');
   }
   // Show/hide conflict resolution button
   const conflictAction = $('p-conflict-action') as HTMLElement;
@@ -131,7 +132,7 @@ function initRemovedCard(): void {
     error.hidden = false;
   };
   $('btn-removed-download').addEventListener('click', () =>
-    void withBusy('btn-removed-download', 'Downloading…', async () => {
+    void withBusy('btn-removed-download', t('busy.downloading'), async () => {
       error.hidden = true;
       try {
         const removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
@@ -151,9 +152,9 @@ function initRemovedCard(): void {
     void (async () => {
       error.hidden = true;
       const ok = await confirmInline('btn-removed-dismiss', {
-        message: 'Delete the kept copy?',
+        message: t('popup.removed.deleteConfirm'),
         implication: RemovedSyncDismissImplication(),
-        confirmLabel: 'Yes, delete',
+        confirmLabel: t('common.yesDelete'),
         danger: true,
       });
       if (!ok) return;
@@ -202,12 +203,12 @@ async function initConnect(): Promise<void> {
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
     $('btn-connect').textContent =
       mode === 'new'
-        ? 'Create sync'
+        ? t('popup.connect.createSync')
         : direction === 'push'
-          ? 'Link and upload'
+          ? t('popup.connect.linkUpload')
           : direction === 'merge'
-            ? 'Link and preview merge'
-            : 'Link and download';
+            ? t('popup.connect.linkMerge')
+            : t('popup.connect.linkDownload');
   };
   document.querySelectorAll('input[name="conn-mode"], input[name="conn-direction"]').forEach((el) => {
     el.addEventListener('change', updateMode);
@@ -261,7 +262,7 @@ async function submitConnect(): Promise<void> {
       // Two-phase: preview first so the confirm shows exactly what the union
       // will upload/download before anything mutates.
       let preview: MergePreview | undefined;
-      await withBusy('btn-connect', 'Checking…', async () => {
+      await withBusy('btn-connect', t('busy.checking'), async () => {
         try {
           preview = await send<MergePreview>({ command: MessageCommand.PreviewMerge, serviceUrl, syncId, password });
         } catch (err) {
@@ -269,9 +270,11 @@ async function submitConnect(): Promise<void> {
         }
       });
       if (!preview) return;
-      counts =
-        `${preview.localOnly} local will upload, ${preview.remoteOnly} server will download, ` +
-        `${preview.titleConflicts} title conflicts (server title kept). `;
+      counts = t('popup.merge.counts', {
+        local: preview.localOnly,
+        remote: preview.remoteOnly,
+        titles: preview.titleConflicts,
+      });
     }
     const ok = await confirmInline('btn-connect', {
       message: directionConfirm(direction).message,
@@ -281,7 +284,7 @@ async function submitConnect(): Promise<void> {
     });
     if (!ok) return;
   }
-  await withBusy('btn-connect', 'Connecting…', async () => {
+  await withBusy('btn-connect', t('busy.connecting'), async () => {
     try {
       if (mode === 'new') {
         await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
@@ -304,7 +307,7 @@ async function submitConnect(): Promise<void> {
 function initMain(): void {
   $('btn-sync-now').addEventListener('click', async () => {
     clearMessages();
-    await withBusy('btn-sync-now', 'Syncing…', async () => {
+    await withBusy('btn-sync-now', t('ui.pill.syncing'), async () => {
       try {
         const result = await send<{ queued: boolean; conflict?: boolean }>({
           command: MessageCommand.SyncBookmarks,
@@ -337,13 +340,13 @@ function initMain(): void {
     }
   });
   $('btn-copy-id').addEventListener('click', () => {
-    if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
+    if (status?.syncId) void copyText(status.syncId, t('popup.copyIdPrompt'));
   });
   $('btn-undo').addEventListener('click', async () => {
     clearMessages();
     // Asked BEFORE withBusy (confirmInline owns the button while open).
     if (!(await confirmInline('btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
-    await withBusy('btn-undo', 'Undoing…', async () => {
+    await withBusy('btn-undo', t('busy.undoing'), async () => {
       try {
         const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
         await refreshAll();

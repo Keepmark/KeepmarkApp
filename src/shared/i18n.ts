@@ -47,8 +47,8 @@ export function tn(base: string, count: number, params?: Record<string, string |
 export function formatDateTime(d: Date | string | number): string {
   return new Date(d).toLocaleString(current);
 }
-export function formatDate(d: Date | string | number): string {
-  return new Date(d).toLocaleDateString(current);
+export function formatDate(d: Date | string | number, opts?: Intl.DateTimeFormatOptions): string {
+  return new Date(d).toLocaleDateString(current, opts);
 }
 export function formatTime(d: Date | string | number, opts?: Intl.DateTimeFormatOptions): string {
   return new Date(d).toLocaleTimeString(current, opts);
