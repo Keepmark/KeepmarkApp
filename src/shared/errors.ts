@@ -2,6 +2,8 @@
 // Port of Keepmark.Core/Errors/XbsErrors.cs — mapping mirrors
 // getErrorFromHttpResponse in app/api-xbrowsersync.service.ts.
 
+import { t } from './i18n.js';
+
 export class XbsException extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -63,7 +65,9 @@ export class ConflictCapturedException extends XbsException {
 /** Map an HTTP status to the matching typed error (shared by api client + tests). */
 export function errorForStatus(status: number, serverMessage: string, local: (key: string) => string): XbsException {
   const withServer = (msg: string): string => {
-    const suffix = serverMessage.trim() ? ` (server: ${serverMessage.trim()})` : ` (HTTP ${status})`;
+    const suffix = serverMessage.trim()
+      ? t('err.withServer', { message: serverMessage.trim() })
+      : t('err.withHttp', { status });
     return `${msg}${suffix}`;
   };
   switch (status) {

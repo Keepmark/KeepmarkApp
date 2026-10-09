@@ -23,6 +23,7 @@ import type { GetBookmarksResponse, SyncMeta, XSyncApiClient } from './api.js';
 import { Store, StoreKey, type SyncInfo } from './store.js';
 import { BookmarkIdMapper } from './id-mapper.js';
 import type { NativeOps } from './native.js';
+import { t, tn } from './i18n.js';
 
 export interface SyncDeps {
   api: XSyncApiClient;
@@ -38,7 +39,7 @@ export async function checkService(api: XSyncApiClient, log: IXbsLogger): Promis
   const res = await api.getInfo();
   if (!res.version || compareVersions(res.version, MinApiVersion) < 0) {
     throw new UnsupportedApiVersionException(
-      `Service version ${res.version ?? 'unknown'} is older than the minimum ${MinApiVersion}.`,
+      t('err.serviceTooOld', { version: res.version ?? t('err.unknownVersion'), min: MinApiVersion }),
     );
   }
   log.log(XbsLogLevel.Info, 'sync', `Service online, API ${res.version}`);
@@ -163,7 +164,7 @@ export async function createAndUpload(
   }
   const created = await api.createSync();
   if (!created.id || !created.lastUpdated || !created.version) {
-    throw new UnexpectedResponseException('Unexpected response from the service.');
+    throw new UnexpectedResponseException(t('err.unexpectedResponse'));
   }
   const derived = await deriveKey(password, created.id, created.version);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
@@ -189,7 +190,7 @@ async function createAndUploadV12(
 ): Promise<{ id: string; lastUpdated: string; v12: boolean }> {
   const created = await api.createSyncV12();
   if (!created.id || !created.lastUpdated || !created.version) {
-    throw new UnexpectedResponseException('Unexpected response from the service.');
+    throw new UnexpectedResponseException(t('err.unexpectedResponse'));
   }
   const derived = await deriveKey(password, created.id, created.version);
   const encrypted = await encryptData(JSON.stringify(bookmarks), derived);
@@ -245,14 +246,10 @@ export async function pullExistingSync(
   const versionRes = await api.getVersion(syncId);
   const remoteVersion = versionRes.version;
   if (!remoteVersion) {
-    throw new UnsupportedSyncVersionException(
-      'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-    );
+    throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
   }
   if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-    throw new UnsupportedSyncVersionException(
-      `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-    );
+    throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
   }
   const derived = await deriveKey(password, syncId, remoteVersion);
 
@@ -304,7 +301,7 @@ export async function pullWithDerivedKey(
   try {
     bookmarks = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
   } catch (err) {
-    throw new UnexpectedResponseException('Remote sync data is corrupted (decrypts but is not valid JSON).', {
+    throw new UnexpectedResponseException(t('err.remoteCorrupt'), {
       cause: err,
     });
   }
@@ -356,7 +353,7 @@ export async function pushBookmarks(
   baseRevision?: number,
 ): Promise<string> {
   const lastUpdated = await store.get<string>(StoreKey.LastUpdated);
-  if (!syncId || !derivedKey || !lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
+  if (!syncId || !derivedKey || !lastUpdated) throw new IncompleteSyncInfoException(t('err.syncInfoIncomplete'));
   const encrypted = await encryptData(JSON.stringify(bookmarks), derivedKey);
   return pushEncrypted(api, store, syncId, encrypted, lastUpdated, updateVersion, baseRevision);
 }
@@ -375,7 +372,7 @@ export async function pushEncrypted(
   updateVersion = false,
   baseRevision?: number,
 ): Promise<string> {
-  if (!syncId || !encrypted || !lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
+  if (!syncId || !encrypted || !lastUpdated) throw new IncompleteSyncInfoException(t('err.syncInfoIncomplete'));
   const res =
     baseRevision === undefined
       ? await api.updateBookmarks(syncId, encrypted, lastUpdated, updateVersion)
@@ -392,12 +389,12 @@ export async function pushEncrypted(
  * 412 and nothing is deleted.
  */
 export async function deleteRemoteSync(api: XSyncApiClient, syncId: string): Promise<void> {
-  if (!syncId) throw new IncompleteSyncInfoException('Sync info incomplete.');
+  if (!syncId) throw new IncompleteSyncInfoException(t('err.syncInfoIncomplete'));
   try {
     await api.deleteBookmarks(syncId);
   } catch (err) {
     if (err instanceof UnsupportedVersionException) {
-      throw new UnsupportedVersionException('Not supported (requires service v1.2).', { cause: err });
+      throw new UnsupportedVersionException(t('api.ErrUnsupportedVersion'), { cause: err });
     }
     throw err;
   }
@@ -437,16 +434,15 @@ export function describeMoveResult(input: {
   /** Local bookmark count for the outcomes that upload (new/push); omitted → 'your'. */
   bookmarkCount?: number;
 }): string {
-  const n = input.bookmarkCount ?? 'your';
-  const sync = input.syncId ? `the remote sync ${input.syncId}` : 'the remote sync';
+  const n = input.bookmarkCount;
+  const url = input.newServiceUrl;
+  const sync = input.syncId ? t('sync.move.remoteSyncId', { id: input.syncId }) : t('sync.move.remoteSync');
   if (input.mode === 'new') {
-    return `Move complete — created a new sync on ${input.newServiceUrl} and uploaded ${n} bookmarks.`;
+    return n === undefined ? t('sync.move.newNoCount', { url }) : tn('sync.move.new', n, { url });
   }
   if (input.direction === 'push') {
-    return `Move complete — overwrote ${sync} on ${input.newServiceUrl} with ${n} local bookmarks.`;
+    return n === undefined ? t('sync.move.pushNoCount', { url, sync }) : tn('sync.move.push', n, { url, sync });
   }
-  if (input.direction === 'merge') {
-    return `Move complete — merged your local bookmarks with ${sync} on ${input.newServiceUrl} (nothing deleted).`;
-  }
-  return `Move complete — replaced your local bookmarks with ${sync} from ${input.newServiceUrl}.`;
+  if (input.direction === 'merge') return t('sync.move.merge', { url, sync });
+  return t('sync.move.pull', { url, sync });
 }

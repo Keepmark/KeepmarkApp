@@ -5,6 +5,7 @@
 
 import lzutf8 from 'lzutf8';
 import { GcmNonceLength, KeyDerivationIterations } from './constants.js';
+import { t } from './i18n.js';
 import {
   IncompleteSyncInfoException,
   InvalidCredentialsException,
@@ -63,12 +64,10 @@ export async function derivedKeyId(derivedKeyB64: string): Promise<string> {
  */
 export async function deriveKey(password: string, syncId: string, syncVersion?: string): Promise<string> {
   if (!syncVersion) {
-    throw new UnsupportedSyncVersionException(
-      'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it.',
-    );
+    throw new UnsupportedSyncVersionException(t('err.legacySyncNoVersion'));
   }
   if (!password || !syncId) {
-    throw new IncompleteSyncInfoException('Password and sync ID are required to derive the sync key.');
+    throw new IncompleteSyncInfoException(t('err.needPasswordSyncId'));
   }
   const imported = await subtle().importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   const derived = await subtle().deriveKey(
@@ -87,7 +86,7 @@ export async function encryptData(plain: string, derivedKeyB64: string): Promise
   try {
     const keyBytes = base64ToBytes(derivedKeyB64);
     if (keyBytes.length !== 32) {
-      throw new IncompleteSyncInfoException('Stored sync key is corrupt (expected 32 bytes). Relink the sync.');
+      throw new IncompleteSyncInfoException(t('err.storedKeyCorrupt'));
     }
     const iv = globalThis.crypto.getRandomValues(new Uint8Array(GcmNonceLength));
     const key = await subtle().importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt']);
@@ -101,7 +100,7 @@ export async function encryptData(plain: string, derivedKeyB64: string): Promise
     if (err instanceof IncompleteSyncInfoException) throw err;
     // Local encryption failure (no WebCrypto, OOM, …) is not a credential
     // problem: report it distinctly so the UI never says "wrong password".
-    throw new UnexpectedResponseException('Encryption failed.', { cause: err });
+    throw new UnexpectedResponseException(t('err.encryptionFailed'), { cause: err });
   }
 }
 
@@ -112,7 +111,7 @@ export async function decryptData(blob: string, derivedKeyB64: string): Promise<
     const combined = base64ToBytes(blob);
     // 16B nonce + 16B GCM tag + >= 1B payload, mirrors Keepmark length guard.
     if (combined.length < GcmNonceLength + 16 + 1) {
-      throw new InvalidCredentialsException('Invalid credentials.');
+      throw new InvalidCredentialsException(t('err.invalidCredentials'));
     }
     const iv = combined.slice(0, GcmNonceLength);
     const ct = combined.slice(GcmNonceLength);
@@ -121,6 +120,6 @@ export async function decryptData(blob: string, derivedKeyB64: string): Promise<
     return lzutf8.decompress(new Uint8Array(pt)) as string;
   } catch (err) {
     if (err instanceof InvalidCredentialsException) throw err;
-    throw new InvalidCredentialsException('Invalid credentials.', { cause: err });
+    throw new InvalidCredentialsException(t('err.invalidCredentials'), { cause: err });
   }
 }

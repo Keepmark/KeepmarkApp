@@ -19,6 +19,7 @@ import { decryptData, derivedKeyId, encryptData } from './crypto.js';
 import { sanitizeSyncId } from './logging.js';
 import type { BookmarkNode } from './models.js';
 import { safetyFileKey, Store, StoreKey } from './store.js';
+import { t } from './i18n.js';
 
 /** Destroyed side a snapshot was taken from. */
 export type SafetySide = 'local' | 'remote';
@@ -173,38 +174,36 @@ export async function readSafetyTree(
 ): Promise<BookmarkNode[]> {
   const payload = await store.get<SafetyPayload>(safetyFileKey(entry.fileName));
   if (!payload || payload.app !== SafetyApp || payload.format !== SafetyFormat) {
-    throw new Error(`Safety backup ${entry.fileName} is damaged or missing.`);
+    throw new Error(t('err.safetyDamagedOrMissing', { fileName: entry.fileName }));
   }
   let tree: BookmarkNode[];
   if (payload.blob !== undefined) {
-    if (!derivedKey) throw new Error(`Safety backup ${entry.fileName} is encrypted — relink the sync first.`);
+    if (!derivedKey) throw new Error(t('err.safetyEncrypted', { fileName: entry.fileName }));
     if (entry.keyId) {
       const current = await derivedKeyId(derivedKey);
       if (current !== entry.keyId) {
-        throw new Error(
-          `Safety backup ${entry.fileName} is locked to another sync or password (key ${entry.keyId}).`,
-        );
+        throw new Error(t('err.safetyLocked', { fileName: entry.fileName, keyId: entry.keyId }));
       }
     }
     let plain: string;
     try {
       plain = await decryptData(payload.blob, derivedKey);
     } catch {
-      throw new Error(`Safety backup ${entry.fileName} is damaged or the key no longer fits.`);
+      throw new Error(t('err.safetyKeyMismatch', { fileName: entry.fileName }));
     }
     try {
       tree = JSON.parse(plain) as BookmarkNode[];
     } catch {
-      throw new Error(`Safety backup ${entry.fileName} is damaged.`);
+      throw new Error(t('err.safetyDamaged', { fileName: entry.fileName }));
     }
   } else if (payload.tree !== undefined) {
     tree = payload.tree;
   } else {
-    throw new Error(`Safety backup ${entry.fileName} is damaged.`);
+    throw new Error(t('err.safetyDamaged', { fileName: entry.fileName }));
   }
   validateTree(tree);
   if (countNodes(tree) !== entry.items) {
-    throw new Error(`Safety backup ${entry.fileName} is damaged (count drift).`);
+    throw new Error(t('err.safetyCountDrift', { fileName: entry.fileName }));
   }
   return tree;
 }

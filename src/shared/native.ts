@@ -20,6 +20,7 @@ import { HorizontalSeparatorTitle, VerticalSeparatorTitle } from './bookmarks.js
 import { SeparatorUrl } from './constants.js';
 import type { BookmarkIdMapping } from './id-mapper.js';
 import type { BookmarkNode } from './models.js';
+import { t } from './i18n.js';
 
 export interface ContainerIds {
   menu?: string;
@@ -117,13 +118,13 @@ export async function readAll(
   };
 
   const [otherTree] = await api.getSubTree(ids.other);
-  if (!otherTree) throw new ContainerNotFoundError('Other container not found in native tree.');
+  if (!otherTree) throw new ContainerNotFoundError(t('err.containerOther'));
   let otherChildren = otherTree.children ?? [];
   collect(otherTree.children);
   let menu: BookmarkNode[] = [];
   if (!opts.menuFolderInOther && ids.menu) {
     const [menuTree] = await api.getSubTree(ids.menu);
-    if (!menuTree) throw new ContainerNotFoundError('Menu container not found in native tree.');
+    if (!menuTree) throw new ContainerNotFoundError(t('err.containerMenu'));
     menu = toSynced(menuTree.children ?? [], opts);
     collect(menuTree.children);
   } else if (opts.menuFolderInOther) {
@@ -139,7 +140,7 @@ export async function readAll(
   let toolbar: BookmarkNode[] = [];
   if (syncToolbar) {
     const [toolbarTree] = await api.getSubTree(ids.toolbar);
-    if (!toolbarTree) throw new ContainerNotFoundError('Toolbar container not found in native tree.');
+    if (!toolbarTree) throw new ContainerNotFoundError(t('err.containerToolbar'));
     toolbar = toSynced(toolbarTree.children ?? [], opts);
     collect(toolbarTree.children);
   }
@@ -298,7 +299,7 @@ export async function buildMappings(
     if (!target?.children?.length) return;
     if (container === BookmarkContainer.Toolbar && !syncToolbar) return;
     const [tree] = await api.getSubTree(id);
-    if (!tree) throw new ContainerNotFoundError('Native container not found while rebuilding mappings.');
+    if (!tree) throw new ContainerNotFoundError(t('err.containerNative'));
     let natives = tree.children ?? [];
     if (container === BookmarkContainer.Other) {
       // Skip the chromium Menu folder: it maps under the Menu container instead.

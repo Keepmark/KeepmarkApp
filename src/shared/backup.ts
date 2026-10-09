@@ -15,6 +15,7 @@ import { bytesToBase64, decryptData, deriveKey, encryptData } from './crypto.js'
 import { SyncClientVersion } from './constants.js';
 import type { BookmarkNode } from './models.js';
 import { eachBookmark } from './bookmarks.js';
+import { t } from './i18n.js';
 
 export const BackupAppName = 'KeepmarkApp';
 /** Family tag written on new exports (required by the Android client). */
@@ -40,7 +41,7 @@ function randomSalt(): string {
 
 export function requireBackupPassword(password: string): void {
   if (!password || password.length < MinBackupPasswordLength) {
-    throw new Error(`Backup password must be at least ${MinBackupPasswordLength} characters.`);
+    throw new Error(t('err.backupPwShort', { min: MinBackupPasswordLength }));
   }
 }
 
@@ -52,7 +53,7 @@ export function countNodes(nodes: BookmarkNode[]): number {
 
 /** BFS validation: shape-checked nodes, rejects nulls, over-deep and oversized trees. */
 export function validateTree(nodes: BookmarkNode[]): void {
-  if (!Array.isArray(nodes)) throw new Error('Backup does not contain a bookmark tree.');
+  if (!Array.isArray(nodes)) throw new Error(t('err.backupNoTree'));
   // Index queue, not shift(): shift() is O(n²) on 200k nodes.
   const queue: { node: BookmarkNode; depth: number }[] = nodes.map((node) => ({ node, depth: 1 }));
   let head = 0;
@@ -60,28 +61,28 @@ export function validateTree(nodes: BookmarkNode[]): void {
   while (head < queue.length) {
     const { node, depth } = queue[head++];
     if (!node || typeof node !== 'object' || Array.isArray(node)) {
-      throw new Error('Backup contains an invalid node.');
+      throw new Error(t('err.backupInvalidNode'));
     }
-    if (depth > MaxBackupDepth) throw new Error('Backup exceeds the nesting limit.');
+    if (depth > MaxBackupDepth) throw new Error(t('err.backupNesting'));
     if (node.id !== undefined && typeof node.id !== 'number') {
-      throw new Error('Backup contains a node with an invalid id.');
+      throw new Error(t('err.backupBadId'));
     }
     if (node.title !== undefined && typeof node.title !== 'string') {
-      throw new Error('Backup contains a node with an invalid title.');
+      throw new Error(t('err.backupBadTitle'));
     }
     if (node.url !== undefined && typeof node.url !== 'string') {
-      throw new Error('Backup contains a node with an invalid url.');
+      throw new Error(t('err.backupBadUrl'));
     }
     if (node.description !== undefined && typeof node.description !== 'string') {
-      throw new Error('Backup contains a node with an invalid description.');
+      throw new Error(t('err.backupBadDescription'));
     }
     if (node.tags !== undefined && (!Array.isArray(node.tags) || node.tags.some((t) => typeof t !== 'string'))) {
-      throw new Error('Backup contains a node with invalid tags.');
+      throw new Error(t('err.backupBadTags'));
     }
     seen += 1;
-    if (seen > MaxBackupNodes) throw new Error('Backup exceeds the node limit.');
+    if (seen > MaxBackupNodes) throw new Error(t('err.backupNodeLimit'));
     if (node.children !== undefined) {
-      if (!Array.isArray(node.children)) throw new Error('Backup contains an invalid node.');
+      if (!Array.isArray(node.children)) throw new Error(t('err.backupInvalidNode'));
       for (const child of node.children) queue.push({ node: child, depth: depth + 1 });
     }
   }
@@ -100,12 +101,12 @@ export async function exportBackup(nodes: BookmarkNode[], password: string): Pro
 export async function importBackup(json: string, password: string): Promise<BookmarkNode[]> {
   requireBackupPassword(password);
   // Real bytes, not UTF-16 code units: the limit is a byte budget.
-  if (new TextEncoder().encode(json).length > MaxBackupBytes) throw new Error('Backup file too large.');
+  if (new TextEncoder().encode(json).length > MaxBackupBytes) throw new Error(t('err.backupTooLarge'));
   let envelope: BackupEnvelope;
   try {
     envelope = JSON.parse(json) as BackupEnvelope;
   } catch {
-    throw new Error('Backup file is not valid JSON.');
+    throw new Error(t('err.backupNotJson'));
   }
   if (
     (envelope.app !== SharedBackupAppName && envelope.app !== BackupAppName) ||
@@ -113,17 +114,17 @@ export async function importBackup(json: string, password: string): Promise<Book
     typeof envelope.blob !== 'string' ||
     typeof envelope.salt !== 'string'
   ) {
-    throw new Error('Unsupported backup format.');
+    throw new Error(t('err.backupFormat'));
   }
   const key = await deriveKey(password, envelope.salt, SyncClientVersion);
   const plain = await decryptData(envelope.blob, key).catch(() => {
-    throw new Error('Wrong backup password or corrupted file.');
+    throw new Error(t('err.backupWrongPw'));
   });
   let nodes: BookmarkNode[];
   try {
     nodes = JSON.parse(plain) as BookmarkNode[];
   } catch {
-    throw new Error('Backup file is corrupted.');
+    throw new Error(t('err.backupCorrupt'));
   }
   validateTree(nodes);
   return nodes;
