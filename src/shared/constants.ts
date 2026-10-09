@@ -2,6 +2,8 @@
 // Port of Keepmark.Core/XbsConstants.cs — do not change without checking
 // server version routing (Accept-Version) and sync-version compatibility.
 
+import { t } from './i18n.js';
+
 export const DefaultServiceUrl = 'https://api.xbrowsersync.org';
 
 /** Minimum API version this client supports (mirrors app Globals.MinApiVersion). */
@@ -72,4 +74,4 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 
 /** Any password the user invents (new sync, move to a new sync, change) needs this many characters. */
 export const MinNewPasswordLength = 8;
-export const PasswordTooShort = `Use a password of at least ${MinNewPasswordLength} characters.`;
+export const PasswordTooShort = (): string => t('errors.passwordTooShort', { min: MinNewPasswordLength });

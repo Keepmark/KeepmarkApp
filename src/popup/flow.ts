@@ -4,6 +4,7 @@
 // `Yes, <verb>` and `Cancel`. Never window.confirm, never a modal.
 
 import { $ } from './ui.js';
+import { t } from '../shared/i18n.js';
 
 export interface ConfirmOptions {
   /** The question, e.g. "Change the sync password?" */
@@ -48,7 +49,7 @@ export function confirmInline(anchorId: string, opts: ConfirmOptions): Promise<b
   const no = document.createElement('button');
   no.type = 'button';
   no.id = `${anchorId}-cancel`;
-  no.textContent = 'Cancel';
+  no.textContent = t('common.cancel');
   row.append(yes, no);
   box.append(text, row);
   after.after(box);

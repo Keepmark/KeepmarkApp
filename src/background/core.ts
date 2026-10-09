@@ -1249,7 +1249,7 @@ export class BackgroundCore {
   private async changePassword(currentPassword: string, newPassword: string): Promise<{ lastUpdated: string }> {
     if (!currentPassword) throw new IncompleteSyncInfoException('Current password is required.');
     if (!newPassword) throw new IncompleteSyncInfoException('A new password is required.');
-    if (newPassword.length < MinNewPasswordLength) throw new Error(PasswordTooShort);
+    if (newPassword.length < MinNewPasswordLength) throw new Error(PasswordTooShort());
     const { info } = await this.requireCreds();
     const version = info.version ?? SyncClientVersion;
     // Prove the current password BEFORE touching anything: the derived key

@@ -583,7 +583,7 @@ async function exportBackup(): Promise<void> {
   clearMessages();
   const password = input('m-backup-password').value;
   const confirm = input('m-backup-confirm').value;
-  if (password.length < MinBackupPasswordLength) return showError('backup-error', PasswordTooShort);
+  if (password.length < MinBackupPasswordLength) return showError('backup-error', PasswordTooShort());
   if (password !== confirm) return showError('backup-error', 'Passwords do not match.');
   await withBusy('m-btn-export', 'Exporting…', async () => {
     try {

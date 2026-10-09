@@ -5,7 +5,7 @@ import browser from 'webextension-polyfill';
 import { DefaultServiceUrl, MinNewPasswordLength, PasswordTooShort } from '../shared/constants.js';
 import { undoWhat } from './texts.js';
 import { StoreKey } from '../shared/store.js';
-import { getLang, resolveLang, setLang, t, type MessageKey } from '../shared/i18n.js';
+import { formatDateTime, getLang, resolveLang, setLang, t, tn, type MessageKey } from '../shared/i18n.js';
 import {
   fromWireError,
   type MessagePayload,
@@ -60,7 +60,7 @@ export function input(id: string): HTMLInputElement {
 export async function send<T>(msg: MessagePayload): Promise<T> {
   const res = (await browser.runtime.sendMessage(msg)) as MessageResponse;
   if (!res || typeof res !== 'object' || !('ok' in res)) {
-    throw new Error('Background did not respond.');
+    throw new Error(t('ui.noResponse'));
   }
   if (!res.ok) throw fromWireError({ errorName: (res as { errorName: string }).errorName, message: (res as { message: string }).message });
   return (res as { data?: T }).data as T;
@@ -117,7 +117,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   // Service version row is optional (older test mounts lack it).
   const swversion = document.getElementById(`${prefix}-swversion`);
   if (!status?.syncEnabled) {
-    setPill(pill, 'Not connected', 'bad');
+    setPill(pill, t('ui.pill.notConnected'), 'bad');
     badge.textContent = '—';
     badge.className = 'badge';
     $(`${prefix}-server`).textContent = '—';
@@ -138,34 +138,34 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   // would flicker the contract suffix on every failed probe.
   const v12 = ping?.supportsV12 ?? status?.supportsV12 ?? false;
   const contract = v12 ? ' · API v1.2' : '';
-  badge.textContent = `${official ? 'Official service' : 'Custom service'}${contract}`;
+  badge.textContent = `${official ? t('ui.badge.official') : t('ui.badge.custom')}${contract}`;
   badge.className = `badge ${official ? 'official' : 'custom'}`;
   $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
-  $(`${prefix}-last`).textContent = status.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : '—';
+  $(`${prefix}-last`).textContent = status.lastUpdated ? formatDateTime(status.lastUpdated) : '—';
 
   const used = status.usedBytes ?? 0;
   const max = ping?.maxSyncSize;
-  $(`${prefix}-space`).textContent = max ? `${formatBytes(used)} of ${formatBytes(max)}` : formatBytes(used);
+  $(`${prefix}-space`).textContent = max ? t('ui.space.of', { used: formatBytes(used), max: formatBytes(max) }) : formatBytes(used);
   setMeter(prefix, used, max);
   if (status.bookmarkCount !== undefined) {
     const countEl = document.getElementById(`${prefix}-count`);
-    if (countEl) countEl.textContent = `${status.bookmarkCount} bookmarks`;
+    if (countEl) countEl.textContent = tn('ui.bookmarksCount', status.bookmarkCount);
   }
 
   // Reachability first: a queued-but-offline client is Offline, not Syncing.
   // Conflict state takes priority over everything else.
   if (status.conflict) {
-    setPill(pill, 'Conflict', 'bad');
+    setPill(pill, t('ui.pill.conflict'), 'bad');
   } else if (ping && !ping.reachable) {
-    setPill(pill, 'Offline', 'bad');
+    setPill(pill, t('ui.pill.offline'), 'bad');
   } else if (status.syncing || status.queueLength > 0) {
-    setPill(pill, 'Syncing…', 'busy');
+    setPill(pill, t('ui.pill.syncing'), 'busy');
   } else if (!ping) {
-    setPill(pill, 'Checking…', 'busy');
+    setPill(pill, t('ui.pill.checking'), 'busy');
   } else if (ping.remoteLastUpdated && status.lastUpdated && ping.remoteLastUpdated !== status.lastUpdated) {
-    setPill(pill, 'Behind', 'warn');
+    setPill(pill, t('ui.pill.behind'), 'warn');
   } else {
-    setPill(pill, 'Synced', 'ok');
+    setPill(pill, t('ui.pill.synced'), 'ok');
   }
 }
 
@@ -199,7 +199,7 @@ export function contractGate(input: {
   const v12 = input.liveV12 ?? input.storedV12 ?? false;
   return {
     enabled: v12,
-    title: v12 ? '' : 'Not supported (requires service v1.2)',
+    title: v12 ? '' : t('common.needsV12'),
     hintHidden: v12 || !input.syncEnabled,
     badge: !input.syncEnabled ? '' : v12 ? 'API v1.2' : 'API v1.1',
   };
@@ -213,23 +213,23 @@ export { describeMoveResult } from '../shared/sync.js';
 /** Human-readable undo slot description for banners. */
 export function describeUndo(kind: string, count: number | undefined, when: number): string {
   const what = undoWhat(kind);
-  const n = count !== undefined ? ` (${count} bookmarks)` : '';
-  return `Last action: ${what}${n} at ${new Date(when).toLocaleString()}. Undo restores the previous state.`;
+  const n = count !== undefined ? tn('ui.undo.count', count) : '';
+  return t('ui.undo.lastAction', { what, n, when: formatDateTime(when) });
 }
 
 /** Service URL check: https always; http only for loopback (local dev/E2E). */
 export function validateServiceUrl(raw: string): string | null {
   const url = raw.trim();
-  if (!url) return 'Service URL is required.';
+  if (!url) return t('val.url.required');
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return 'Service URL is not a valid URL.';
+    return t('val.url.invalid');
   }
   if (parsed.protocol === 'https:') return null;
   if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)) return null;
-  return 'Service URL must use https (http is allowed only for localhost).';
+  return t('val.url.https');
 }
 
 /** Pure connect-form validation (foolproof rules). Null = valid. */
@@ -243,23 +243,23 @@ export function validateConnect(input: {
 }): string | null {
   const urlErr = validateServiceUrl(input.serviceUrl);
   if (urlErr) return urlErr;
-  if (!input.password) return 'Password is required.';
+  if (!input.password) return t('val.password.required');
   if (input.mode === 'new') {
-    if (input.password.length < MinNewPasswordLength) return PasswordTooShort;
-    if (input.password !== input.confirm) return 'Passwords do not match.';
+    if (input.password.length < MinNewPasswordLength) return PasswordTooShort();
+    if (input.password !== input.confirm) return t('val.passwords.mismatch');
     return null;
   }
-  if (!input.syncId.trim()) return 'Sync ID is required for an existing sync.';
+  if (!input.syncId.trim()) return t('val.syncId.required');
   return null;
 }
 
 /** Pure password-change validation. Null = valid. */
 export function validatePasswordChange(input: { current: string; next: string; confirm: string }): string | null {
-  if (!input.current) return 'Current password is required.';
-  if (!input.next) return 'A new password is required.';
-  if (input.next === input.current) return 'The new password must be different from the current one.';
-  if (input.next.length < MinNewPasswordLength) return PasswordTooShort;
-  if (input.next !== input.confirm) return 'New passwords do not match.';
+  if (!input.current) return t('val.current.required');
+  if (!input.next) return t('val.new.required');
+  if (input.next === input.current) return t('val.new.different');
+  if (input.next.length < MinNewPasswordLength) return PasswordTooShort();
+  if (input.next !== input.confirm) return t('val.new.mismatch');
   return null;
 }
 
@@ -274,16 +274,16 @@ export function validateSwitch(input: {
   const urlErr = validateServiceUrl(input.newServiceUrl);
   if (urlErr) return urlErr;
   if (!input.newPassword) {
-    return input.mode === 'new' ? 'A new password is required.' : 'The target sync password is required.';
+    return input.mode === 'new' ? t('val.new.required') : t('val.target.passwordRequired');
   }
   // Confirm only when inventing a password (new mode): a typo there locks
   // you out of the fresh sync. In existing mode the password is verified by
   // decrypting the target BEFORE anything mutates — a typo fails safely as
   // InvalidCredentials with zero side effects, so no confirmation needed.
-  if (input.mode === 'new' && input.newPassword.length < MinNewPasswordLength) return PasswordTooShort;
-  if (input.mode === 'new' && input.newPassword !== input.confirm) return 'Passwords do not match.';
+  if (input.mode === 'new' && input.newPassword.length < MinNewPasswordLength) return PasswordTooShort();
+  if (input.mode === 'new' && input.newPassword !== input.confirm) return t('val.passwords.mismatch');
   if (input.mode === 'existing' && !input.syncId?.trim()) {
-    return 'Sync ID is required for an existing sync.';
+    return t('val.syncId.required');
   }
   return null;
 }
