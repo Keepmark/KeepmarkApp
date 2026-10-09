@@ -28,3 +28,47 @@ Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
 `Downloaded server copy — Move service`, `Merged both sides — Move service`, … (see code tables).
+
+## Translations (it / fr / es / de)
+
+UI languages: English (source), Italiano, Français, Español, Deutsch. Always use
+these terms, also inside longer sentences. Register: it "tu", fr "vous", es "tú", de "du".
+Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
+
+| English | Italiano | Français | Español | Deutsch |
+|---|---|---|---|---|
+| bookmarks | segnalibri | favoris | marcadores | Lesezeichen |
+| item(s) | elementi | éléments | elementos | Elemente |
+| sync (noun) | sincronizzazione | synchronisation | sincronización | Synchronisierung |
+| Sync ID | ID di sincronizzazione | ID de synchronisation | ID de sincronización | Sync-ID |
+| Sync now | Sincronizza ora | Synchroniser maintenant | Sincronizar ahora | Jetzt synchronisieren |
+| Service / Service URL | Servizio / URL del servizio | Service / URL du service | Servicio / URL del servicio | Dienst / Dienst-URL |
+| Server copy | Copia sul server | Copie du serveur | Copia del servidor | Serverkopie |
+| this device / this browser | questo dispositivo / questo browser | cet appareil / ce navigateur | este dispositivo / este navegador | dieses Gerät / dieser Browser |
+| Connect | Collega | Connecter | Conectar | Verbinden |
+| Link / Unlink | Collega / Scollega | Associer / Dissocier | Vincular / Desvincular | Verknüpfen / Trennen |
+| linked | collegato | associé | vinculado | verknüpft |
+| Download | Scarica | Télécharger | Descargar | Herunterladen |
+| Upload | Carica | Envoyer | Subir | Hochladen |
+| Merge | Unisci | Fusionner | Combinar | Zusammenführen |
+| Sync conflict | Conflitto di sincronizzazione | Conflit de synchronisation | Conflicto de sincronización | Synchronisierungskonflikt |
+| Move service | Cambia servizio | Changer de service | Cambiar de servicio | Dienst wechseln |
+| Backup | Backup | Sauvegarde | Copia de seguridad | Sicherung |
+| Safety backups | Backup di sicurezza | Sauvegardes de sécurité | Copias de seguridad preventivas | Sicherheitskopien |
+| Export / Restore | Esporta / Ripristina | Exporter / Restaurer | Exportar / Restaurar | Exportieren / Wiederherstellen |
+| Undo | Annulla modifica | Annuler la modification | Deshacer | Rückgängig |
+| Duplicates | Duplicati | Doublons | Duplicados | Duplikate |
+| Yes, download | Sì, scarica | Oui, télécharger | Sí, descargar | Ja, herunterladen |
+| Yes, upload | Sì, carica | Oui, envoyer | Sí, subir | Ja, hochladen |
+| Yes, merge | Sì, unisci | Oui, fusionner | Sí, combinar | Ja, zusammenführen |
+| Yes, unlink | Sì, scollega | Oui, dissocier | Sí, desvincular | Ja, trennen |
+| Yes, delete | Sì, elimina | Oui, supprimer | Sí, eliminar | Ja, löschen |
+| Cancel | Annulla | Annuler | Cancelar | Abbrechen |
+| Settings | Impostazioni | Paramètres | Ajustes | Einstellungen |
+| Status | Stato | État | Estado | Status |
+| Logs | Log | Journaux | Registros | Protokolle |
+| About | Informazioni | À propos | Acerca de | Info |
+| Language | Lingua | Langue | Idioma | Sprache |
+| System default | Lingua di sistema | Langue du système | Idioma del sistema | Systemsprache |
+| password | password | mot de passe | contraseña | Passwort |
+| Online / Offline | Online / Offline | En ligne / Hors ligne | En línea / Sin conexión | Online / Offline |

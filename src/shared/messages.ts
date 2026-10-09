@@ -3,6 +3,7 @@
 // serializes thrown errors as {name, message}, popup rebuilds them by name.
 
 import type { TreeDiff } from './tree-diff.js';
+import type { LangSetting } from './i18n.js';
 import {
   DailyNewSyncLimitException,
   DataOutOfSyncException,
@@ -45,6 +46,8 @@ export enum MessageCommand {
   ClearRemovedSync = 'clear-removed-sync',
   GetToolbarSync = 'get-toolbar-sync',
   SetToolbarSync = 'set-toolbar-sync',
+  GetUiLanguage = 'get-ui-language',
+  SetUiLanguage = 'set-ui-language',
   PreviewBackup = 'preview-backup',
   GetSafetyList = 'get-safety-list',
   RestoreSafety = 'restore-safety',
@@ -244,6 +247,8 @@ export type MessagePayload =
   | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
   | { command: MessageCommand.GetToolbarSync }
   | { command: MessageCommand.SetToolbarSync; enabled: boolean }
+  | { command: MessageCommand.GetUiLanguage }
+  | { command: MessageCommand.SetUiLanguage; language: LangSetting }
   | { command: MessageCommand.PreviewBackup; json: string; password: string }
   | { command: MessageCommand.GetSafetyList }
   | { command: MessageCommand.RestoreSafety; fileName: string }

@@ -6,6 +6,7 @@
 // context; the popup talks to it exclusively through messages.
 
 import { XSyncApiClient } from '../shared/api.js';
+import { isLang, resolveLang, setLang, t, type LangSetting } from '../shared/i18n.js';
 import { decryptData, deriveKey, encryptData } from '../shared/crypto.js';
 import { compareVersions, DefaultServiceUrl, MinApiVersion, MinNewPasswordLength, PasswordTooShort, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
@@ -138,6 +139,8 @@ export interface CorePorts {
 export interface CoreOptions {
   debounceMs?: number;
   pollMinutes?: number;
+  /** System UI language tag (browser.i18n.getUILanguage); absent in tests → en. */
+  uiLanguage?: () => string;
 }
 
 interface Creds {
@@ -200,11 +203,16 @@ export class BackgroundCore {
     // this event upstream. Absent on Firefox — optional port.
     ports.listeners.childrenReordered?.add(onEvent);
     ports.alarms.onAlarm((name) => {
+      // An alarm can wake a sleeping MV3 worker without startup(): reload the language first.
       if (name === UpdatesAlarmName) {
-        void this.checkForUpdates().catch((err) => this.onBackgroundError(err));
+        void this.loadLanguage()
+          .then(() => this.checkForUpdates())
+          .catch((err) => this.onBackgroundError(err));
       } else if (name === NativeDebounceAlarmName) {
         this.queue.enqueue('remote', false);
-        void this.drain().catch((err) => this.onBackgroundError(err));
+        void this.loadLanguage()
+          .then(() => this.drain())
+          .catch((err) => this.onBackgroundError(err));
       }
     });
   }
@@ -212,6 +220,7 @@ export class BackgroundCore {
   // ---------------------------------------------------------------- messages
 
   async handleMessage(msg: MessagePayload): Promise<unknown> {
+    await this.loadLanguage();
     switch (msg.command) {
       case MessageCommand.SyncBookmarks:
         return this.queueSync(msg.sync.type, msg.sync.bookmarks);
@@ -267,6 +276,14 @@ export class BackgroundCore {
       case MessageCommand.SetToolbarSync:
         await this.store.set(StoreKey.SyncBookmarksToolbar, msg.enabled);
         return { enabled: msg.enabled };
+      case MessageCommand.GetUiLanguage:
+        return { language: (await this.store.get<LangSetting>(StoreKey.UiLanguage)) ?? 'system' };
+      case MessageCommand.SetUiLanguage: {
+        const language: LangSetting = msg.language === 'system' || isLang(msg.language) ? msg.language : 'system';
+        await this.store.set(StoreKey.UiLanguage, language);
+        setLang(resolveLang(language, this.options.uiLanguage?.()));
+        return { language };
+      }
       case MessageCommand.PreviewBackup:
         return this.previewBackup(msg.json, msg.password);
       case MessageCommand.GetSafetyList:
@@ -2378,7 +2395,14 @@ export class BackgroundCore {
   }
 
   /** First-run / startup: verbosity, one-time install snapshot, resume polling. */
+  /** Load the stored UI language into the i18n module (call at every wake-up). */
+  async loadLanguage(): Promise<void> {
+    const s = await this.store.get<LangSetting>(StoreKey.UiLanguage);
+    setLang(resolveLang(s, this.options.uiLanguage?.()));
+  }
+
   async startup(): Promise<void> {
+    await this.loadLanguage();
     if (this.started) return;
     await this.applyVerbosity();
     try {

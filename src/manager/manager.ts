@@ -19,7 +19,10 @@ import {
   send,
   withBusy,
   type StatusView,
+  initI18n,
 } from '../popup/ui.js';
+import { StoreKey } from '../shared/store.js';
+import type { LangSetting } from '../shared/i18n.js';
 import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
   ChangePasswordDone,
@@ -1294,9 +1297,23 @@ async function renderSettings(): Promise<void> {
   (input('m-opt-toolbar') as HTMLInputElement).checked = toolbar.enabled;
   const level = st?.logLevel ?? 2;
   ($('m-opt-verbosity') as HTMLSelectElement).value = String(level);
+  const lang = await send<{ language: string }>({ command: MessageCommand.GetUiLanguage }).catch(() => ({
+    language: 'system',
+  }));
+  ($('m-opt-language') as HTMLSelectElement).value = lang.language;
 }
 
 function initSettingsSection(): void {
+  ($('m-opt-language') as HTMLSelectElement).addEventListener('change', async (e) => {
+    clearMessages();
+    const language = (e.target as HTMLSelectElement).value as LangSetting;
+    try {
+      await send({ command: MessageCommand.SetUiLanguage, language });
+      location.reload();
+    } catch (err) {
+      showError('settings-error', (err as Error).message);
+    }
+  });
   (input('m-opt-toolbar') as HTMLInputElement).addEventListener('change', (e) => {
     void send({ command: MessageCommand.SetToolbarSync, enabled: (e.target as HTMLInputElement).checked }).catch(
       (err: Error) => showError('settings-error', err.message),
@@ -1385,7 +1402,8 @@ function renderAbout(): void {
   }
 }
 
-function init(): void {
+async function init(): Promise<void> {
+  await initI18n();
   initSidebar();
   initStatusSection();
   initUndoBanner();
@@ -1400,6 +1418,7 @@ function init(): void {
   // manual refresh. refreshStatus() is race-guarded (statusSeq), so bursts
   // of storage events collapse onto the newest read.
   browser.storage.onChanged.addListener((changes) => {
+    if (StoreKey.UiLanguage in changes) location.reload();
     if ('syncEnabled' in changes || 'syncInfo' in changes) void refreshStatus();
   });
   void refreshStatus();

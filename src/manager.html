@@ -3,147 +3,147 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Keepmark — Manager</title>
+  <title data-i18n="manager.pageTitle">Keepmark — Manager</title>
   <link rel="stylesheet" href="./manager/manager.css" />
 </head>
 <body>
   <div class="layout">
-    <nav id="sidebar" aria-label="Manager sections">
+    <nav id="sidebar" aria-label="Manager sections" data-i18n-aria-label="manager.nav.label">
       <div class="brand"><span class="brand-chip"><img src="./assets/brand-mark.png" alt="" /></span> Keepmark</div>
-      <button data-section="status" class="active">Status</button>
-      <button data-section="backup">Backup</button>
-      <button data-section="duplicates">Duplicates <span id="nav-dup-count"></span></button>
-      <button data-section="move">Move service</button>
-      <button data-section="logs">Logs</button>
-      <button data-section="settings">Settings</button>
-      <button data-section="about">About</button>
+      <button data-section="status" class="active" data-i18n="manager.nav.status">Status</button>
+      <button data-section="backup" data-i18n="manager.nav.backup">Backup</button>
+      <button data-section="duplicates"><span data-i18n="manager.nav.duplicates">Duplicates</span> <span id="nav-dup-count"></span></button>
+      <button data-section="move" data-i18n="manager.nav.move">Move service</button>
+      <button data-section="logs" data-i18n="manager.nav.logs">Logs</button>
+      <button data-section="settings" data-i18n="manager.nav.settings">Settings</button>
+      <button data-section="about" data-i18n="manager.nav.about">About</button>
     </nav>
     <main>
       <section id="sec-status">
-        <h2>Status</h2>
+        <h2 data-i18n="manager.nav.status">Status</h2>
         <div class="card">
           <div class="status-row">
             <span id="m-pill" class="pill">…</span>
             <span id="m-service-badge" class="badge"></span>
           </div>
           <dl class="status-grid">
-            <dt>Service</dt><dd id="m-server">…</dd>
-            <dt>Service version</dt><dd id="m-swversion">…</dd>
-            <dt>Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
-            <dt>Bookmarks</dt><dd id="m-count">…</dd>
-            <dt>Last sync</dt><dd id="m-last">…</dd>
-            <dt>Space used</dt>
+            <dt data-i18n="common.service">Service</dt><dd id="m-server">…</dd>
+            <dt data-i18n="common.serviceVersion">Service version</dt><dd id="m-swversion">…</dd>
+            <dt data-i18n="common.syncId">Sync ID</dt><dd><code id="m-syncid">…</code> <button id="m-btn-copy-id" class="mini" aria-label="Copy the sync ID" data-i18n-aria-label="popup.copyId.label" data-i18n="common.copy">Copy</button></dd>
+            <dt data-i18n="common.bookmarks">Bookmarks</dt><dd id="m-count">…</dd>
+            <dt data-i18n="common.lastSync">Last sync</dt><dd id="m-last">…</dd>
+            <dt data-i18n="common.spaceUsed">Space used</dt>
             <dd>
-              <div class="meter" role="progressbar" aria-label="Service space used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="m-space-fill"></div></div>
+              <div class="meter" role="progressbar" aria-label="Service space used" data-i18n-aria-label="popup.space.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="m-space-fill"></div></div>
               <span id="m-space">…</span>
             </dd>
           </dl>
         </div>
         <!-- Conflict resolution section (shown when status.conflict === true) -->
         <div id="m-conflict-section" class="conflict-section" hidden>
-          <h3>Sync conflict</h3>
-          <p class="hint">The server copy changed on another device while this browser had unsynced edits.
+          <h3 data-i18n="manager.conflict.title">Sync conflict</h3>
+          <p class="hint" data-i18n="manager.conflict.intro">The server copy changed on another device while this browser had unsynced edits.
             Syncing is paused until you choose which copy to keep.</p>
           <div class="conflict-sides">
-            <div><span>This browser</span><strong id="m-conflict-local-count"></strong><small>items</small></div>
-            <div><span>Server</span><strong id="m-conflict-remote-count"></strong><small id="m-conflict-remote-time"></small></div>
+            <div><span data-i18n="manager.conflict.thisBrowser">This browser</span><strong id="m-conflict-local-count"></strong><small data-i18n="common.items">items</small></div>
+            <div><span data-i18n="manager.conflict.server">Server</span><strong id="m-conflict-remote-count"></strong><small id="m-conflict-remote-time"></small></div>
           </div>
           <p id="conflict-explain" class="hint" hidden></p>
-          <div class="conflict-actions" role="group" aria-label="Resolve the conflict">
-            <button id="conflict-btn-pull" class="conflict-choice"><b>Keep the server copy</b><small id="conflict-hint-pull"></small></button>
-            <button id="conflict-btn-merge" class="conflict-choice"><b>Merge both <span class="tag ok">Recommended</span></b><small id="conflict-hint-merge"></small></button>
-            <button id="conflict-btn-push" class="conflict-choice"><b>Keep this browser's copy</b><small id="conflict-hint-push"></small></button>
+          <div class="conflict-actions" role="group" aria-label="Resolve the conflict" data-i18n-aria-label="manager.conflict.resolveLabel">
+            <button id="conflict-btn-pull" class="conflict-choice"><b data-i18n="common.keepServerCopy">Keep the server copy</b><small id="conflict-hint-pull"></small></button>
+            <button id="conflict-btn-merge" class="conflict-choice"><b><span data-i18n="common.mergeBoth">Merge both</span> <span class="tag ok" data-i18n="common.recommended">Recommended</span></b><small id="conflict-hint-merge"></small></button>
+            <button id="conflict-btn-push" class="conflict-choice"><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small id="conflict-hint-push"></small></button>
           </div>
           <div id="conflict-error" class="error" role="alert" hidden></div>
           <details class="conflict-details">
-            <summary>What differs (counts and first 5 of each)</summary>
+            <summary data-i18n="manager.conflict.differs">What differs (counts and first 5 of each)</summary>
             <dl class="conflict-stats">
-              <dt>Local only (merge uploads)</dt><dd id="conflict-stat-local"></dd>
-              <dt>Server only (merge downloads)</dt><dd id="conflict-stat-remote"></dd>
-              <dt>Title conflicts (server title kept)</dt><dd id="conflict-stat-titles"></dd>
-              <dt>Folders created</dt><dd id="conflict-stat-folders"></dd>
-              <dt>Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
-              <dt>Moved to another folder</dt><dd id="conflict-stat-moved"></dd>
-              <dt>Description/tags differ</dt><dd id="conflict-stat-meta"></dd>
+              <dt data-i18n="manager.conflict.statLocal">Local only (merge uploads)</dt><dd id="conflict-stat-local"></dd>
+              <dt data-i18n="manager.conflict.statRemote">Server only (merge downloads)</dt><dd id="conflict-stat-remote"></dd>
+              <dt data-i18n="manager.conflict.statTitles">Title conflicts (server title kept)</dt><dd id="conflict-stat-titles"></dd>
+              <dt data-i18n="manager.conflict.statFolders">Folders created</dt><dd id="conflict-stat-folders"></dd>
+              <dt data-i18n="manager.conflict.statSeparators">Separators kept from both</dt><dd id="conflict-stat-separators"></dd>
+              <dt data-i18n="manager.conflict.statMoved">Moved to another folder</dt><dd id="conflict-stat-moved"></dd>
+              <dt data-i18n="manager.conflict.statMeta">Description/tags differ</dt><dd id="conflict-stat-meta"></dd>
             </dl>
             <div class="conflict-detail-grid">
-              <div><h4>Local only</h4><ul id="conflict-list-local"></ul></div>
-              <div><h4>Server only</h4><ul id="conflict-list-remote"></ul></div>
-              <div><h4>Title conflicts (local → server)</h4><ul id="conflict-list-titles"></ul></div>
-              <div><h4>Folders created</h4><ul id="conflict-list-folders"></ul></div>
-              <div><h4>Moved (local → server folder)</h4><ul id="conflict-list-moved"></ul></div>
-              <div><h4>Description/tags differ</h4><ul id="conflict-list-meta"></ul></div>
+              <div><h4 data-i18n="manager.conflict.listLocal">Local only</h4><ul id="conflict-list-local"></ul></div>
+              <div><h4 data-i18n="manager.conflict.listRemote">Server only</h4><ul id="conflict-list-remote"></ul></div>
+              <div><h4 data-i18n="manager.conflict.listTitles">Title conflicts (local → server)</h4><ul id="conflict-list-titles"></ul></div>
+              <div><h4 data-i18n="manager.conflict.statFolders">Folders created</h4><ul id="conflict-list-folders"></ul></div>
+              <div><h4 data-i18n="manager.conflict.listMoved">Moved (local → server folder)</h4><ul id="conflict-list-moved"></ul></div>
+              <div><h4 data-i18n="manager.conflict.statMeta">Description/tags differ</h4><ul id="conflict-list-meta"></ul></div>
             </div>
           </details>
         </div>
         <div id="conflict-result" class="result" role="status" hidden></div>
-        <p id="m-notlinked-hint" class="hint" hidden>Not connected — open the Keepmark popup to connect a sync first.
+        <p id="m-notlinked-hint" class="hint" hidden data-i18n="manager.status.notLinkedHint">Not connected — open the Keepmark popup to connect a sync first.
           (“Move service” needs an existing link to move from.)</p>
         <div class="row">
-          <button id="m-btn-sync-now" class="primary">Sync now</button>
-          <button id="m-btn-refresh">Refresh status</button>
+          <button id="m-btn-sync-now" class="primary" data-i18n="common.syncNow">Sync now</button>
+          <button id="m-btn-refresh" data-i18n="manager.status.refresh">Refresh status</button>
         </div>
         <div id="status-error" class="error" role="alert" hidden></div>
         <div id="undo-banner" class="undo" hidden>
           <span id="undo-text"></span>
-          <span class="row"><button id="m-btn-undo" class="mini">Undo</button>
-          <button id="m-btn-undo-dismiss" class="mini">Dismiss</button></span>
+          <span class="row"><button id="m-btn-undo" class="mini" data-i18n="common.undo">Undo</button>
+          <button id="m-btn-undo-dismiss" class="mini" data-i18n="common.dismiss">Dismiss</button></span>
         </div>
-        <h3>Danger zone</h3>
-        <div class="row"><button id="m-btn-unlink" class="danger">Unlink this browser…</button></div>
+        <h3 data-i18n="manager.status.danger">Danger zone</h3>
+        <div class="row"><button id="m-btn-unlink" class="danger" data-i18n="manager.status.unlink">Unlink this browser…</button></div>
         <div class="row">
-          <button id="m-btn-delete-remote" class="danger" disabled title="Not supported (requires service v1.2)">Delete sync from server…</button>
+          <button id="m-btn-delete-remote" class="danger" disabled title="Not supported (requires service v1.2)" data-i18n-title="common.needsV12" data-i18n="manager.status.deleteRemote">Delete sync from server…</button>
           <span id="m-api-contract" class="badge"></span>
         </div>
-        <p id="m-delete-v12-hint" class="hint" hidden>Server delete needs API v1.2 — this service speaks v1.1, so the sync
+        <p id="m-delete-v12-hint" class="hint" hidden data-i18n="manager.status.deleteV12Hint">Server delete needs API v1.2 — this service speaks v1.1, so the sync
           cannot be deleted from here (Unlink above only removes this device; the sync on the server stays).</p>
         <div id="status-error-2" class="error" role="alert" hidden></div>
         <div id="status-result" class="result" hidden></div>
       </section>
 
       <section id="sec-backup" hidden>
-        <h2>Backup</h2>
-        <h3>Export</h3>
-        <p class="hint">Save this browser's bookmarks to an encrypted file in your downloads. Choose a backup
+        <h2 data-i18n="manager.nav.backup">Backup</h2>
+        <h3 data-i18n="manager.backup.export">Export</h3>
+        <p class="hint" data-i18n="manager.backup.exportHint">Save this browser's bookmarks to an encrypted file in your downloads. Choose a backup
           password of at least 8 characters. It is not your sync password and cannot be recovered: without it the
           file cannot be opened.</p>
-        <label>Backup password <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
-        <label>Confirm backup password <input id="m-backup-confirm" type="password" autocomplete="new-password" /></label>
-        <div class="row"><button id="m-btn-export">Export encrypted backup</button></div>
+        <label><span data-i18n="manager.backup.password">Backup password</span> <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
+        <label><span data-i18n="manager.backup.confirm">Confirm backup password</span> <input id="m-backup-confirm" type="password" autocomplete="new-password" /></label>
+        <div class="row"><button id="m-btn-export" data-i18n="manager.backup.exportBtn">Export encrypted backup</button></div>
         <div id="backup-error" class="error" role="alert" hidden></div>
         <div id="backup-result" class="result" hidden></div>
 
-        <h3>Restore from a backup file</h3>
-        <p class="hint">Replaces this browser's bookmarks and the server copy; your other devices get the backup at
+        <h3 data-i18n="manager.backup.restore">Restore from a backup file</h3>
+        <p class="hint" data-i18n="manager.backup.restoreHint">Replaces this browser's bookmarks and the server copy; your other devices get the backup at
           their next sync. The current bookmarks are saved to Safety backups first.</p>
-        <p class="notice needs-link-notice" hidden>Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
+        <p class="notice needs-link-notice" hidden data-i18n="manager.backup.restoreNeedsLink">Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
         <div class="row">
-          <button id="m-btn-import" data-needs-link>Choose backup file…</button>
+          <button id="m-btn-import" data-needs-link data-i18n="manager.backup.chooseFile">Choose backup file…</button>
           <span id="m-import-file-name" class="hint"></span>
-          <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" hidden />
+          <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" data-i18n-aria-label="manager.backup.fileLabel" hidden />
         </div>
         <div id="m-import-step" hidden>
-          <label>Password of this backup <input id="m-import-password" type="password" autocomplete="off" /></label>
-          <div class="row"><button id="m-btn-import-check" class="primary">Check backup</button></div>
+          <label><span data-i18n="manager.backup.filePassword">Password of this backup</span> <input id="m-import-password" type="password" autocomplete="off" /></label>
+          <div class="row"><button id="m-btn-import-check" class="primary" data-i18n="manager.backup.check">Check backup</button></div>
         </div>
         <div id="m-import-preview" class="preview" hidden></div>
-        <div id="m-import-confirm-row" class="row" hidden><button id="m-btn-import-confirm" class="danger">Replace with this backup…</button></div>
+        <div id="m-import-confirm-row" class="row" hidden><button id="m-btn-import-confirm" class="danger" data-i18n="manager.backup.replace">Replace with this backup…</button></div>
         <div id="backup-error-2" class="error" role="alert" hidden></div>
         <div id="backup-result-2" class="result" hidden></div>
 
-        <h3>Safety backups</h3>
-        <p class="hint">Automatic snapshots taken before every overwrite or deletion (newest 5 kept).
+        <h3 data-i18n="manager.backup.safety">Safety backups</h3>
+        <p class="hint" data-i18n="manager.backup.safetyHint">Automatic snapshots taken before every overwrite or deletion (newest 5 kept).
           Encrypted entries need the current sync link to restore.</p>
-        <div class="row"><button id="m-btn-safety">Refresh list</button></div>
+        <div class="row"><button id="m-btn-safety" data-i18n="manager.backup.refreshList">Refresh list</button></div>
         <div id="m-safety-list"></div>
         <div id="backup-error-3" class="error" role="alert" hidden></div>
         <div id="backup-result-3" class="result" hidden></div>
       </section>
 
       <section id="sec-duplicates" hidden>
-        <h2>Duplicate bookmarks</h2>
-        <p class="hint">Same URL saved more than once. Mark copies to delete — one copy of each URL always stays. Click a title to open it.</p>
-        <div class="row"><button id="m-btn-duplicates">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled>Delete marked</button></div>
+        <h2 data-i18n="manager.dup.title">Duplicate bookmarks</h2>
+        <p class="hint" data-i18n="manager.dup.hint">Same URL saved more than once. Mark copies to delete — one copy of each URL always stays. Click a title to open it.</p>
+        <div class="row"><button id="m-btn-duplicates" data-i18n="manager.dup.scan">Scan now</button> <button id="m-btn-duplicates-delete-all" disabled data-i18n="manager.dup.deleteMarked">Delete marked</button></div>
         <div id="dup-error" class="error" role="alert" hidden></div>
         <div id="dup-result" class="result" hidden></div>
         <div id="m-dup-list"></div>
@@ -151,123 +151,124 @@
       </section>
 
       <section id="sec-move" hidden>
-        <h2>Move to another service</h2>
-        <p class="hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
+        <h2 data-i18n="manager.move.title">Move to another service</h2>
+        <p class="hint" data-i18n="manager.move.hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
           is saved to Backup → Safety backups first.</p>
-        <p class="notice needs-link-notice" hidden>Moving needs a linked sync. Connect from the Keepmark popup first.</p>
-        <h3>1. Target</h3>
-        <label>Target service URL <input id="m-switch-url" type="url" /></label>
-        <fieldset class="options" role="radiogroup" aria-label="Move mode">
-          <legend>Into which sync?</legend>
+        <p class="notice needs-link-notice" hidden data-i18n="manager.move.needsLink">Moving needs a linked sync. Connect from the Keepmark popup first.</p>
+        <h3 data-i18n="manager.move.step1">1. Target</h3>
+        <label><span data-i18n="manager.move.targetUrl">Target service URL</span> <input id="m-switch-url" type="url" /></label>
+        <fieldset class="options" role="radiogroup" aria-label="Move mode" data-i18n-aria-label="manager.move.modeLabel">
+          <legend data-i18n="manager.move.modeLegend">Into which sync?</legend>
           <label class="check option"><input type="radio" name="m-switch-mode" value="new" checked />
-            <span><b>A new sync</b><small>Create it on the target service and upload this browser's bookmarks.</small></span></label>
+            <span><b data-i18n="manager.move.modeNew">A new sync</b><small data-i18n="manager.move.modeNewDesc">Create it on the target service and upload this browser's bookmarks.</small></span></label>
           <label class="check option"><input type="radio" name="m-switch-mode" value="existing" />
-            <span><b>An existing sync</b><small>You already sync on the target service: open it with its sync ID and password.</small></span></label>
+            <span><b data-i18n="manager.move.modeExisting">An existing sync</b><small data-i18n="manager.move.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
         </fieldset>
-        <label id="m-switch-id-row" hidden>Sync ID <input id="m-switch-id" type="text" class="mono" /></label>
+        <label id="m-switch-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-switch-id" type="text" class="mono" /></label>
         <div id="m-switch-existing-pw-slot"></div>
         <div id="m-switch-direction-row" hidden>
-          <fieldset class="options" role="radiogroup" aria-label="Move direction">
-            <legend>Which copy do you want to keep?</legend>
+          <fieldset class="options" role="radiogroup" aria-label="Move direction" data-i18n-aria-label="manager.move.directionLabel">
+            <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
             <label class="check option"><input type="radio" name="m-switch-direction" value="pull" checked />
-              <span><b>Keep the server copy</b><small>Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
+              <span><b data-i18n="common.keepServerCopy">Keep the server copy</b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
             <label class="check option"><input type="radio" name="m-switch-direction" value="merge" />
-              <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
+              <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="manager.move.mergeDesc">Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
             <label class="check option"><input type="radio" name="m-switch-direction" value="push" />
-              <span><b>Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
+              <span><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
           </fieldset>
         </div>
-        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link>Check target</button></div>
+        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link data-i18n="manager.move.check">Check target</button></div>
         <div id="move-error" class="error" role="alert" hidden></div>
         <div id="move-preview" class="preview" hidden></div>
-        <p id="move-gate-hint" class="hint">Step 2 opens once the check passes, and only for these exact inputs —
+        <p id="move-gate-hint" class="hint" data-i18n="manager.move.gateHint">Step 2 opens once the check passes, and only for these exact inputs —
           change anything and check again.</p>
         <div id="move-step2" hidden>
-          <h3>2. Confirm</h3>
-          <label id="m-switch-password-row"><span id="m-switch-password-label">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
-          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
-          <p id="m-switch-pw-hint" class="hint">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+          <h3 data-i18n="manager.move.step2">2. Confirm</h3>
+          <label id="m-switch-password-row"><span id="m-switch-password-label" data-i18n="manager.move.newPassword">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
+          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
+          <p id="m-switch-pw-hint" class="hint" data-i18n="manager.move.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
           <div id="move-summary" class="hint"></div>
-          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled>Move now…</button></div>
+          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled data-i18n="manager.move.now">Move now…</button></div>
           <div id="move-error-2" class="error" role="alert" hidden></div>
         </div>
         <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
       </section>
 
       <section id="sec-logs" hidden>
-        <h2>Logs</h2>
-        <div class="row"><button id="m-btn-logs">Refresh logs</button></div>
+        <h2 data-i18n="manager.nav.logs">Logs</h2>
+        <div class="row"><button id="m-btn-logs" data-i18n="manager.logs.refresh">Refresh logs</button></div>
         <div id="logs-error" class="error" role="alert" hidden></div>
         <pre id="m-log-list"></pre>
       </section>
 
       <section id="sec-settings" hidden>
-        <h2>Settings</h2>
+        <h2 data-i18n="manager.nav.settings">Settings</h2>
+        <label><span data-i18n="settings.language">Language</span>
+          <select id="m-opt-language">
+            <option value="system" data-i18n="settings.language.system">System default</option>
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="de">Deutsch</option>
+          </select>
+        </label>
         <dl id="m-service-info"></dl>
-        <label class="check"><input id="m-opt-toolbar" type="checkbox" /> Sync bookmarks toolbar</label>
-        <label>Log verbosity
+        <label class="check"><input id="m-opt-toolbar" type="checkbox" /> <span data-i18n="manager.settings.toolbar">Sync bookmarks toolbar</span></label>
+        <label><span data-i18n="manager.settings.verbosity">Log verbosity</span>
           <select id="m-opt-verbosity">
-            <option value="0">Error</option>
-            <option value="1">Warning</option>
-            <option value="2">Info</option>
-            <option value="3">Debug</option>
-            <option value="4">Verbose (may include your bookmark titles/URLs)</option>
+            <option value="0" data-i18n="manager.settings.verbError">Error</option>
+            <option value="1" data-i18n="manager.settings.verbWarning">Warning</option>
+            <option value="2" data-i18n="manager.settings.verbInfo">Info</option>
+            <option value="3" data-i18n="manager.settings.verbDebug">Debug</option>
+            <option value="4" data-i18n="manager.settings.verbVerbose">Verbose (may include your bookmark titles/URLs)</option>
           </select>
         </label>
         <div id="settings-error" class="error" role="alert" hidden></div>
         <div id="settings-result" class="result" hidden></div>
-        <h3>Change password</h3>
-        <p class="hint">Re-encrypts the sync with a new password (at least 8 characters). Your current password is verified first and never leaves this device. The old password stops working on every device at once.</p>
-        <p class="notice needs-link-notice" hidden>Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
-        <label>Current password <input id="m-current-password" type="password" autocomplete="current-password" /></label>
-        <label>New password <input id="m-new-password" type="password" autocomplete="new-password" /></label>
-        <label>Confirm new password <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
-        <div class="row"><button id="m-btn-password" class="primary" data-needs-link>Change password…</button></div>
+        <h3 data-i18n="manager.settings.changePw">Change password</h3>
+        <p class="hint" data-i18n="manager.settings.changePwHint">Re-encrypts the sync with a new password (at least 8 characters). Your current password is verified first and never leaves this device. The old password stops working on every device at once.</p>
+        <p class="notice needs-link-notice" hidden data-i18n="manager.settings.changePwNeedsLink">Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
+        <label><span data-i18n="manager.settings.currentPw">Current password</span> <input id="m-current-password" type="password" autocomplete="current-password" /></label>
+        <label><span data-i18n="manager.move.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
+        <label><span data-i18n="manager.settings.confirmNewPw">Confirm new password</span> <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
+        <div class="row"><button id="m-btn-password" class="primary" data-needs-link data-i18n="manager.settings.changePwBtn">Change password…</button></div>
         <div id="pw-error" class="error" role="alert" hidden></div>
         <div id="pw-result" class="result" hidden></div>
       </section>
 
       <section id="sec-about" hidden>
-        <h2>About</h2>
-        <p class="notice">Keepmark is an <strong>independent client, not affiliated with xBrowserSync</strong>.
-          It speaks the open xBrowserSync API and is interoperable with the official apps.</p>
+        <h2 data-i18n="manager.nav.about">About</h2>
+        <p class="notice"><span data-i18n="about.notice1">Keepmark is an</span> <strong data-i18n="about.notice2">independent client, not affiliated with xBrowserSync</strong><span data-i18n="about.notice3">. It speaks the open xBrowserSync API and is interoperable with the official apps.</span></p>
         <p><strong>Keepmark</strong> <span id="about-version">…</span></p>
-        <h3>Compatibility</h3>
+        <h3 data-i18n="about.compat">Compatibility</h3>
         <ul>
-          <li>Legacy contract <strong>xBrowserSync API <span id="about-api">…</span></strong> always supported
-            (official, self-hosted or community services, API <span id="about-minapi">…</span>+ required).</li>
-          <li>Extended contract <strong>Keepmark API <span id="about-api12">…</span></strong>
-            (revision CAS, conditional pull, server-side delete): used automatically when
-            the service advertises it; legacy services fall back to v1.1.</li>
-          <li>Sync format <strong><span id="about-syncver">…</span></strong>: syncs created here
-            open in the official xBrowserSync apps, and vice versa.</li>
-          <li>Same end-to-end encryption (PBKDF2-SHA256 + AES-GCM): only your password
-            unlocks the data — the service operator cannot read it.</li>
+          <li><span data-i18n="about.legacy1">Legacy contract</span> <strong>xBrowserSync API <span id="about-api">…</span></strong> <span data-i18n="about.legacy2">always supported (official, self-hosted or community services, API</span> <span id="about-minapi">…</span><span data-i18n="about.legacy3">+ required).</span></li>
+          <li><span data-i18n="about.ext1">Extended contract</span> <strong>Keepmark API <span id="about-api12">…</span></strong>
+            <span data-i18n="about.ext2">(revision CAS, conditional pull, server-side delete): used automatically when the service advertises it; legacy services fall back to v1.1.</span></li>
+          <li><span data-i18n="about.fmt1">Sync format</span> <strong><span id="about-syncver">…</span></strong><span data-i18n="about.fmt2">: syncs created here open in the official xBrowserSync apps, and vice versa.</span></li>
+          <li data-i18n="about.crypto">Same end-to-end encryption (PBKDF2-SHA256 + AES-GCM): only your password unlocks the data — the service operator cannot read it.</li>
         </ul>
-        <h3>Project</h3>
-        <p>Source code, releases, issue tracker and documentation:
+        <h3 data-i18n="about.project">Project</h3>
+        <p><span data-i18n="about.projectText">Source code, releases, issue tracker and documentation:</span>
           <a href="https://github.com/Keepmark" target="_blank" rel="noreferrer">github.com/Keepmark</a></p>
-        <h3>References</h3>
+        <h3 data-i18n="about.refs">References</h3>
         <ul>
-          <li><a href="https://www.xbrowsersync.org/" target="_blank" rel="noreferrer">xBrowserSync project</a> (GPL-3.0)</li>
-          <li><a href="https://github.com/xbrowsersync/api" target="_blank" rel="noreferrer">Official API service source</a></li>
-          <li><a href="https://github.com/xbrowsersync/app" target="_blank" rel="noreferrer">Official client source</a></li>
-          <li><a href="https://www.xbrowsersync.org/privacypolicy" target="_blank" rel="noreferrer">Official service privacy policy</a></li>
+          <li><a href="https://www.xbrowsersync.org/" target="_blank" rel="noreferrer" data-i18n="about.refProject">xBrowserSync project</a> (GPL-3.0)</li>
+          <li><a href="https://github.com/xbrowsersync/api" target="_blank" rel="noreferrer" data-i18n="about.refApi">Official API service source</a></li>
+          <li><a href="https://github.com/xbrowsersync/app" target="_blank" rel="noreferrer" data-i18n="about.refClient">Official client source</a></li>
+          <li><a href="https://www.xbrowsersync.org/privacypolicy" target="_blank" rel="noreferrer" data-i18n="about.refPrivacy">Official service privacy policy</a></li>
         </ul>
-        <h3>License</h3>
-        <p>This client is free software under the <strong>GNU GPL v3</strong>: you may share and
-          modify it; see LICENSE in the
-          <a href="https://github.com/Keepmark" target="_blank" rel="noreferrer">source repository</a>.</p>
-        <h3>Disclaimer</h3>
-        <p>Keepmark is provided <strong>"as is"</strong>, without warranty of any kind, express or implied,
-          including merchantability and fitness for a particular purpose. You use it
-          <strong>at your own risk</strong>: the authors are not liable for any loss of data (including
-          bookmarks), damage or other consequences arising from its use. Keep your own backups.</p>
-        <h3>Report a bug</h3>
-        <p>Bugs and feature requests: open an issue on
-          <a href="https://github.com/Keepmark" target="_blank" rel="noreferrer">GitHub</a>.
-          The button copies version details to the clipboard: paste them into the issue.</p>
-        <div class="row"><button id="about-bug">Report a bug</button></div>
+        <h3 data-i18n="about.license">License</h3>
+        <p><span data-i18n="about.lic1">This client is free software under the</span> <strong>GNU GPL v3</strong><span data-i18n="about.lic2">: you may share and modify it; see LICENSE in the</span>
+          <a href="https://github.com/Keepmark" target="_blank" rel="noreferrer" data-i18n="about.lic3">source repository</a>.</p>
+        <h3 data-i18n="about.disclaimer">Disclaimer</h3>
+        <p><span data-i18n="about.dis1">Keepmark is provided</span> <strong data-i18n="about.dis2">"as is"</strong><span data-i18n="about.dis3">, without warranty of any kind, express or implied, including merchantability and fitness for a particular purpose. You use it</span>
+          <strong data-i18n="about.dis4">at your own risk</strong><span data-i18n="about.dis5">: the authors are not liable for any loss of data (including bookmarks), damage or other consequences arising from its use. Keep your own backups.</span></p>
+        <h3 data-i18n="about.bug">Report a bug</h3>
+        <p><span data-i18n="about.bug1">Bugs and feature requests: open an issue on</span>
+          <a href="https://github.com/Keepmark" target="_blank" rel="noreferrer">GitHub</a><span data-i18n="about.bug2">. The button copies version details to the clipboard: paste them into the issue.</span></p>
+        <div class="row"><button id="about-bug" data-i18n="about.bug">Report a bug</button></div>
       </section>
     </main>
   </div>

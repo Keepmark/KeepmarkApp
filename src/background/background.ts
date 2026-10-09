@@ -50,6 +50,8 @@ async function main(): Promise<void> {
     log,
     makeAdapter(bookmarksApi),
     ports(),
+    undefined,
+    { uiLanguage: () => browser.i18n.getUILanguage() },
   );
 
   browser.runtime.onMessage.addListener((msg: unknown) => {

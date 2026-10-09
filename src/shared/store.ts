@@ -35,6 +35,8 @@ export enum StoreKey {
   TelemetryEnabled = 'telemetryEnabled',
   TraceLog = 'traceLog',
   UndoSlot = 'undoSlot',
+  /** UI language: 'system' (browser UI language) or a Lang code. */
+  UiLanguage = 'uiLanguage',
 }
 
 /** Persisted sync credentials. password holds the derived key, never the raw password. */
@@ -67,6 +69,7 @@ const defaults = new Map<StoreKey, unknown>([
   [StoreKey.SyncBookmarksToolbar, true],
   [StoreKey.DarkModeEnabled, false],
   [StoreKey.BookmarkIdMappings, []],
+  [StoreKey.UiLanguage, 'system'],
 ]);
 
 export class Store {

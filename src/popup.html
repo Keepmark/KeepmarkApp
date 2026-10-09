@@ -15,51 +15,51 @@
   <main>
   <section id="view-connect">
     <div id="p-removed" class="warning removed" hidden>
-      <p><strong>Your sync is gone from the service.</strong></p>
+      <p><strong data-i18n="popup.removed.title">Your sync is gone from the service.</strong></p>
       <p id="p-removed-text"></p>
       <div class="row">
-        <button id="btn-removed-download" type="button" class="mini">Download copy</button>
-        <button id="btn-removed-dismiss" type="button" class="mini danger">Dismiss…</button>
+        <button id="btn-removed-download" type="button" class="mini" data-i18n="popup.removed.download">Download copy</button>
+        <button id="btn-removed-dismiss" type="button" class="mini danger" data-i18n="popup.removed.dismiss">Dismiss…</button>
       </div>
       <div id="removed-error" class="error" role="alert" hidden></div>
     </div>
-    <h2>Connect this browser</h2>
-    <div class="seg" role="radiogroup" aria-label="Sync mode">
-      <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span>New sync</span></label>
-      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span>Existing sync</span></label>
+    <h2 data-i18n="popup.connect.title">Connect this browser</h2>
+    <div class="seg" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="popup.connect.modeLabel">
+      <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span data-i18n="popup.connect.modeNew">New sync</span></label>
+      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span data-i18n="popup.connect.modeExisting">Existing sync</span></label>
     </div>
-    <p class="hint mode-hint mode-new">Create a sync on the service and upload this browser's bookmarks.</p>
-    <p class="hint mode-hint mode-existing">Link this browser to a sync ID from your other device.</p>
-    <label>Service URL
+    <p class="hint mode-hint mode-new" data-i18n="popup.connect.hintNew">Create a sync on the service and upload this browser's bookmarks.</p>
+    <p class="hint mode-hint mode-existing" data-i18n="popup.connect.hintExisting">Link this browser to a sync ID from your other device.</p>
+    <label><span data-i18n="common.serviceUrl">Service URL</span>
       <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
     </label>
     <div id="conn-existing-only" hidden>
-      <label>Sync ID
-        <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" />
+      <label><span data-i18n="common.syncId">Sync ID</span>
+        <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" data-i18n-placeholder="popup.connect.syncIdPlaceholder" />
       </label>
-      <fieldset class="options" role="radiogroup" aria-label="Link direction">
-        <legend>Which copy do you want to keep?</legend>
+      <fieldset class="options" role="radiogroup" aria-label="Link direction" data-i18n-aria-label="popup.connect.directionLabel">
+        <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
         <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
-          <span><b>Keep the server copy <span class="tag ok">Recommended</span></b><small>Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
+          <span><b><span data-i18n="common.keepServerCopy">Keep the server copy</span> <span class="tag ok" data-i18n="common.recommended">Recommended</span></b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="merge" />
-          <span><b>Merge both</b><small>Nothing is deleted: items from both copies are kept. Shows the counts first.</small></span></label>
+          <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="popup.connect.mergeDesc">Nothing is deleted: items from both copies are kept. Shows the counts first.</small></span></label>
         <label class="check option"><input type="radio" name="conn-direction" value="push" />
-          <span><b class="danger-text">Keep this browser's copy</b><small>Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
+          <span><b class="danger-text" data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
       </fieldset>
     </div>
-    <label>Password
+    <label><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
     </label>
     <div id="conn-new-only">
-      <label>Confirm password
+      <label><span data-i18n="common.confirmPassword">Confirm password</span>
         <input id="confirm-password" type="password" autocomplete="new-password" />
       </label>
-      <p class="hint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
+      <p class="hint" data-i18n="popup.connect.passwordHint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
     </div>
     <div id="connect-error" class="error" role="alert" hidden></div>
     <div class="row actions">
-      <button id="btn-connect" class="primary">Create sync</button>
-      <button id="btn-open-tab" class="icon" title="Open in a full tab (stays open while you copy from your vault)" aria-label="Open in a full tab">
+      <button id="btn-connect" class="primary" data-i18n="popup.connect.createSync">Create sync</button>
+      <button id="btn-open-tab" class="icon" title="Open in a full tab (stays open while you copy from your vault)" aria-label="Open in a full tab" data-i18n-title="popup.openTab.title" data-i18n-aria-label="popup.openTab.label">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 5H5v14h14v-5" /></svg>
       </button>
     </div>
@@ -72,17 +72,17 @@
         <span id="p-service-badge" class="badge"></span>
       </div>
       <dl class="status-grid">
-        <dt>Service</dt>
+        <dt data-i18n="common.service">Service</dt>
         <dd id="p-server">…</dd>
-        <dt>Service version</dt>
+        <dt data-i18n="common.serviceVersion">Service version</dt>
         <dd id="p-swversion">…</dd>
-        <dt>Sync ID</dt>
-        <dd class="id-row"><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID">Copy</button></dd>
-        <dt>Last sync</dt>
+        <dt data-i18n="common.syncId">Sync ID</dt>
+        <dd class="id-row"><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID" data-i18n-aria-label="popup.copyId.label" data-i18n="common.copy">Copy</button></dd>
+        <dt data-i18n="common.lastSync">Last sync</dt>
         <dd id="p-last">…</dd>
-        <dt>Space used</dt>
+        <dt data-i18n="common.spaceUsed">Space used</dt>
         <dd>
-          <div class="meter" role="progressbar" aria-label="Service space used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="p-space-fill"></div></div>
+          <div class="meter" role="progressbar" aria-label="Service space used" data-i18n-aria-label="popup.space.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="p-space-fill"></div></div>
           <span id="p-space">…</span>
         </dd>
       </dl>
@@ -91,15 +91,15 @@
     <div id="main-result" class="result" role="status" hidden></div>
     <div id="p-undo" class="undo" hidden>
       <span id="p-undo-text"></span>
-      <span class="row"><button id="btn-undo" class="mini">Undo</button>
-      <button id="btn-undo-dismiss" class="mini">Dismiss</button></span>
+      <span class="row"><button id="btn-undo" class="mini" data-i18n="common.undo">Undo</button>
+      <button id="btn-undo-dismiss" class="mini" data-i18n="common.dismiss">Dismiss</button></span>
     </div>
     <div id="p-conflict-action" class="conflict-action-row" hidden>
-      <button id="btn-resolve-conflict">Resolve conflict →</button>
+      <button id="btn-resolve-conflict" data-i18n="popup.resolveConflict">Resolve conflict →</button>
     </div>
     <div class="row actions">
-      <button id="btn-sync-now" class="primary">Sync now</button>
-      <button id="btn-manage">Manage</button>
+      <button id="btn-sync-now" class="primary" data-i18n="common.syncNow">Sync now</button>
+      <button id="btn-manage" data-i18n="popup.manage">Manage</button>
     </div>
   </section>
   </main>

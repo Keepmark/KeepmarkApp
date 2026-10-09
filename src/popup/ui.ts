@@ -4,6 +4,8 @@
 import browser from 'webextension-polyfill';
 import { DefaultServiceUrl, MinNewPasswordLength, PasswordTooShort } from '../shared/constants.js';
 import { undoWhat } from './texts.js';
+import { StoreKey } from '../shared/store.js';
+import { getLang, resolveLang, setLang, t, type MessageKey } from '../shared/i18n.js';
 import {
   fromWireError,
   type MessagePayload,
@@ -11,6 +13,39 @@ import {
   type PingResponse,
   type StatusResponse,
 } from '../shared/messages.js';
+
+/** Read the language setting, activate it, then translate the static markup.
+ *  Call first in every page init(). */
+export async function initI18n(root: ParentNode = document): Promise<void> {
+  let setting: unknown = 'system';
+  try {
+    const got = await browser.storage.local.get(StoreKey.UiLanguage);
+    setting = got[StoreKey.UiLanguage] ?? 'system';
+  } catch {
+    // storage unavailable: system language
+  }
+  setLang(resolveLang(setting, browser.i18n.getUILanguage()));
+  document.documentElement.lang = getLang();
+  applyI18n(root);
+}
+
+/** Static markup: data-i18n (textContent), data-i18n-placeholder/-title/-aria-label/-alt. */
+export function applyI18n(root: ParentNode = document): void {
+  const attrs: [string, string | null][] = [
+    ['data-i18n', null],
+    ['data-i18n-placeholder', 'placeholder'],
+    ['data-i18n-title', 'title'],
+    ['data-i18n-aria-label', 'aria-label'],
+    ['data-i18n-alt', 'alt'],
+  ];
+  for (const [data, target] of attrs) {
+    root.querySelectorAll<HTMLElement>(`[${data}]`).forEach((el) => {
+      const text = t(el.getAttribute(data) as MessageKey);
+      if (target) el.setAttribute(target, text);
+      else el.textContent = text;
+    });
+  }
+}
 
 export function $(id: string): HTMLElement {
   const el = document.getElementById(id);
