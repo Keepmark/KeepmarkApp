@@ -22,6 +22,7 @@ import {
   initI18n,
 } from '../popup/ui.js';
 import { StoreKey } from '../shared/store.js';
+import { formatDateTime, t, tn } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
 import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
@@ -205,8 +206,7 @@ async function loadConflictPreview(): Promise<void> {
     if (conflictPreview.diff.identical) {
       // The background already adopted the server copy and cleared it.
       conflictPreview = undefined;
-      showResult('status-result',
-        'Nothing to resolve: the server and this browser already hold exactly the same bookmarks. Conflict cleared.');
+      showResult('status-result', t('mgr.conflict.identical'));
       await refreshStatus();
       return;
     }
@@ -242,19 +242,18 @@ function renderConflictSection(): void {
   const { mergeStats } = conflictPreview;
   $('m-conflict-local-count').textContent = String(mergeStats.localCount);
   $('m-conflict-remote-count').textContent = String(mergeStats.remoteCount);
-  $('m-conflict-remote-time').textContent = mergeStats.remoteCount > 0 ? 'items' : 'items (empty)';
+  $('m-conflict-remote-time').textContent = mergeStats.remoteCount > 0 ? t('common.items') : t('mgr.conflict.itemsEmpty');
   $('conflict-stat-local').textContent = String(mergeStats.localOnly);
   $('conflict-stat-remote').textContent = String(mergeStats.remoteOnly);
   $('conflict-stat-titles').textContent = String(mergeStats.titleConflicts);
   $('conflict-stat-folders').textContent = String(mergeStats.foldersCreated);
   $('conflict-stat-separators').textContent = String(mergeStats.separatorsAdopted);
-  $('conflict-hint-merge').textContent =
-    `Nothing is deleted: ${mergeStats.localOnly} local-only upload, ${mergeStats.remoteOnly} server-only download` +
-    (mergeStats.titleConflicts > 0 ? `, ${mergeStats.titleConflicts} title conflicts keep the server title.` : '.');
-  $('conflict-hint-pull').textContent =
-    `Download: this browser gets the ${mergeStats.remoteCount} server items; its unsynced edits are discarded.`;
-  $('conflict-hint-push').textContent =
-    `Upload: the server gets your ${mergeStats.localCount} items; changes made on other devices are discarded.`;
+  $('conflict-hint-merge').textContent = t(
+    mergeStats.titleConflicts > 0 ? 'mgr.conflict.hintMergeTitles' : 'mgr.conflict.hintMerge',
+    { local: mergeStats.localOnly, remote: mergeStats.remoteOnly, titles: mergeStats.titleConflicts },
+  );
+  $('conflict-hint-pull').textContent = t('mgr.conflict.hintPull', { count: mergeStats.remoteCount });
+  $('conflict-hint-push').textContent = t('mgr.conflict.hintPush', { count: mergeStats.localCount });
   fillList('conflict-list-local', conflictPreview.localOnlySample, mergeStats.localOnly);
   fillList('conflict-list-remote', conflictPreview.remoteOnlySample, mergeStats.remoteOnly);
   fillList('conflict-list-titles', conflictPreview.titleConflictsSample, mergeStats.titleConflicts);
@@ -274,27 +273,28 @@ function explainConflict(p: ConflictPreviewResponse): string {
   const { mergeStats: m, diff: d } = p;
   const urlLevel = m.localOnly + m.remoteOnly + m.titleConflicts;
   if (d.orderOnly) {
-    return 'Both sides hold the same bookmarks in the same folders — only the order differs. ' +
-      'Download loses nothing but your local ordering.';
+    return t('mgr.conflict.explainOrder');
   }
   if (urlLevel === 0 && d.moved === 0 && d.metadataChanged === 0 && d.foldersDiffer) {
-    return 'Same bookmarks on both sides; the folder structure differs (e.g. an empty folder exists on one side only).';
+    return t('mgr.conflict.explainFolders');
   }
   if (urlLevel === 0) {
     const parts = [];
-    if (d.moved > 0) parts.push(`${d.moved} moved to another folder`);
-    if (d.metadataChanged > 0) parts.push(`${d.metadataChanged} with different description/tags`);
-    return `Same set of links on both sides; they differ in placement or details: ${parts.join(', ')}. See the details below.`;
+    if (d.moved > 0) parts.push(t('mgr.conflict.partMoved', { count: d.moved }));
+    if (d.metadataChanged > 0) parts.push(t('mgr.conflict.partMeta', { count: d.metadataChanged }));
+    return t('mgr.conflict.explainDiff', { parts: parts.join(', ') });
   }
-  return `${m.localOnly} only here, ${m.remoteOnly} only on the server, ${m.titleConflicts} renamed` +
-    (d.moved > 0 ? `, ${d.moved} moved` : '') + (d.metadataChanged > 0 ? `, ${d.metadataChanged} with different description/tags` : '') + '.';
+  return t('mgr.conflict.explainCounts', {
+    local: m.localOnly,
+    remote: m.remoteOnly,
+    titles: m.titleConflicts,
+    moved: d.moved > 0 ? t('mgr.conflict.suffixMoved', { count: d.moved }) : '',
+    meta: d.metadataChanged > 0 ? t('mgr.conflict.suffixMeta', { count: d.metadataChanged }) : '',
+  });
 }
 
-const conflictDone: Record<ConflictResolutionDirection, string> = {
-  pull: 'Conflict resolved: downloaded the server copy. Your previous local bookmarks are in Backup → Safety backups.',
-  push: 'Conflict resolved: uploaded your local bookmarks. The previous server copy is in Backup → Safety backups.',
-  merge: 'Conflict resolved: merged both sides (nothing deleted). Both previous sides are in Backup → Safety backups.',
-};
+const conflictDone = (d: ConflictResolutionDirection): string =>
+  t(d === 'pull' ? 'mgr.conflict.donePull' : d === 'push' ? 'mgr.conflict.donePush' : 'mgr.conflict.doneMerge');
 
 const conflictButtons = DirectionOrder.map((d) => `conflict-btn-${d}`);
 
@@ -315,9 +315,9 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
   const label = $(`conflict-btn-${direction}`).querySelector('b') as HTMLElement;
   const original = [...label.childNodes];
   const busy: Record<ConflictResolutionDirection, string> = {
-    pull: 'Downloading…',
-    push: 'Uploading…',
-    merge: 'Merging…',
+    pull: t('busy.downloading'),
+    push: t('busy.uploading'),
+    merge: t('busy.merging'),
   };
   buttons.forEach((b) => (b.disabled = true));
   label.textContent = busy[direction];
@@ -325,7 +325,7 @@ async function resolveConflict(direction: ConflictResolutionDirection): Promise<
     await send({ command: MessageCommand.ResolveConflict, direction });
     // The conflict section hides as soon as the conflict clears: the
     // success evidence (naming the safety backups) sits right below it.
-    showResult('conflict-result', conflictDone[direction]);
+    showResult('conflict-result', conflictDone(direction));
     await refreshStatus();
   } catch (err) {
     showError('conflict-error', (err as Error).message);
@@ -346,7 +346,7 @@ function initUndoBanner(): void {
     clearMessages();
     // Asked BEFORE withBusy (confirmInline owns the button while open).
     if (!(await confirmInline('m-btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
-    await withBusy('m-btn-undo', 'Undoing…', async () => {
+    await withBusy('m-btn-undo', t('busy.undoing'), async () => {
       try {
         const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
         showResult('status-result', undoneText(res.undone));
@@ -381,7 +381,7 @@ function initSidebar(): void {
 function initStatusSection(): void {
   $('m-btn-sync-now').addEventListener('click', () => {
     if (($('m-btn-sync-now') as HTMLButtonElement).disabled) return;
-    void withBusy('m-btn-sync-now', 'Syncing…', async () => {
+    void withBusy('m-btn-sync-now', t('ui.pill.syncing'), async () => {
       clearMessages();
       try {
         const result = await send<{ queued: boolean; conflict?: boolean }>({
@@ -400,10 +400,10 @@ function initStatusSection(): void {
   });
   $('m-btn-refresh').addEventListener('click', () => {
     if (($('m-btn-refresh') as HTMLButtonElement).disabled) return;
-    void withBusy('m-btn-refresh', 'Refreshing…', () => refreshStatus());
+    void withBusy('m-btn-refresh', t('busy.refreshing'), () => refreshStatus());
   });
   $('m-btn-copy-id').addEventListener('click', () => {
-    if (status?.syncId) void copyText(status.syncId, 'Copy sync ID:');
+    if (status?.syncId) void copyText(status.syncId, t('popup.copyIdPrompt'));
   });
   $('m-btn-unlink').addEventListener('click', () => void unlink());
   $('m-btn-delete-remote').addEventListener('click', () => void deleteRemote());
@@ -417,13 +417,13 @@ async function unlink(): Promise<void> {
   if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
   clearMessages();
   const ok = await confirmInline('m-btn-unlink', {
-    message: 'Unlink this browser?',
+    message: t('mgr.status.unlinkMessage'),
     implication: UnlinkImplication(),
-    confirmLabel: 'Yes, unlink',
+    confirmLabel: t('common.yesUnlink'),
     danger: true,
   });
   if (!ok) return;
-  await withBusy('m-btn-unlink', 'Unlinking…', async () => {
+  await withBusy('m-btn-unlink', t('busy.unlinking'), async () => {
     try {
       await send({ command: MessageCommand.DisableSync });
       showResult('status-result', UnlinkDone());
@@ -446,19 +446,19 @@ async function deleteRemote(): Promise<void> {
   // confirms plus the fail-closed safety backup of the server copy in the
   // background.
   const first = await confirmInline('m-btn-delete-remote', {
-    message: 'Delete your sync from the server for good?',
+    message: t('mgr.status.deleteMessage'),
     implication: DeleteRemoteImplication(),
-    confirmLabel: 'Yes, delete',
+    confirmLabel: t('common.yesDelete'),
     danger: true,
   });
   if (!first) return;
   const second = await confirmInline('m-btn-delete-remote', {
-    message: 'Last chance: delete the sync from the server?',
-    confirmLabel: 'Yes, delete for good',
+    message: t('mgr.status.deleteLastChance'),
+    confirmLabel: t('common.yesDeleteForGood'),
     danger: true,
   });
   if (!second) return;
-  await withBusy('m-btn-delete-remote', 'Deleting…', async () => {
+  await withBusy('m-btn-delete-remote', t('busy.deleting'), async () => {
     try {
       await send({ command: MessageCommand.DeleteRemoteSync });
       showResult('status-result', DeleteRemoteDone());
@@ -485,10 +485,10 @@ function updateStatusActions(): void {
   const linked = !!status?.syncEnabled;
   const syncNow = $('m-btn-sync-now') as HTMLButtonElement;
   syncNow.disabled = !linked;
-  syncNow.title = linked ? '' : 'Nothing to sync — this device is not linked.';
+  syncNow.title = linked ? '' : t('mgr.status.nothingToSync');
   const refresh = $('m-btn-refresh') as HTMLButtonElement;
   refresh.disabled = !linked;
-  refresh.title = linked ? '' : 'Nothing to refresh — this device is not linked.';
+  refresh.title = linked ? '' : t('mgr.status.nothingToRefresh');
 }
 
 /**
@@ -502,7 +502,7 @@ function updateDangerZone(): void {
   const linked = !!status?.syncEnabled;
   const unlink = $('m-btn-unlink') as HTMLButtonElement;
   unlink.disabled = !linked;
-  unlink.title = linked ? '' : 'Nothing to unlink — this device is not linked.';
+  unlink.title = linked ? '' : t('mgr.status.nothingToUnlink');
   const btn = $('m-btn-delete-remote') as HTMLButtonElement;
   const hint = $('m-delete-v12-hint') as HTMLElement;
   const contract = $('m-api-contract');
@@ -530,7 +530,7 @@ function updateLinkGates(): void {
     if (!linked && !btn.disabled) {
       btn.disabled = true;
       btn.dataset.linkGated = '1';
-      btn.title = 'Needs a linked sync — connect from the Keepmark popup first.';
+      btn.title = t('mgr.needsLinkTitle');
     } else if (linked && btn.dataset.linkGated) {
       btn.disabled = false;
       delete btn.dataset.linkGated;
