@@ -105,7 +105,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - `res/manifest.{firefox,chromium}.json` → output `manifest.json`;
   `res/assets/` → output `assets/`. Icons follow the Android app (canvas
   "BxRibbon", v0.1.12): manifest/notification icons 48/128 = launcher icon 5D
-  tile; manifest 16/32 + toolbar = bare ribbon (`synced*` navy, `notsynced*`
+  tile; manifest 16/32 + toolbar = bare ribbon filling the slot (`synced*` navy
+  with a 1px light edge for dark Chromium toolbars, `notsynced*`
   grey; `*-dark*` white variants picked on Firefox via `matchMedia` in
   `background.ts` + manifest `theme_icons`; Chromium SW always navy);
   pages use `brand-ribbon.svg` hanging from the navy header/sidebar band.
