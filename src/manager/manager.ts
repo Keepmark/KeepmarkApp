@@ -22,7 +22,7 @@ import {
   initI18n,
 } from '../popup/ui.js';
 import { StoreKey } from '../shared/store.js';
-import { formatDateTime, t, tn } from '../shared/i18n.js';
+import { formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
 import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
@@ -562,7 +562,7 @@ function initBackupSection(): void {
     if (!file) return;
     if (file.size > MaxBackupBytes) {
       resetImport();
-      showError('backup-error-2', 'Backup file too large (over 50 MB).');
+      showError('backup-error-2', t('mgr.backup.tooLarge'));
       return;
     }
     $('m-import-file-name').textContent = file.name;
@@ -574,7 +574,7 @@ function initBackupSection(): void {
     if ((e as KeyboardEvent).key === 'Enter') void checkImport();
   });
   $('m-btn-import-confirm').addEventListener('click', () => void confirmImport());
-  $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', 'Loading…', () => refreshSafety()));
+  $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', t('busy.loading'), () => refreshSafety()));
 }
 
 /** Export: a new backup password typed twice (docs/WORKFLOWS.md rule 4). The
@@ -584,8 +584,8 @@ async function exportBackup(): Promise<void> {
   const password = input('m-backup-password').value;
   const confirm = input('m-backup-confirm').value;
   if (password.length < MinBackupPasswordLength) return showError('backup-error', PasswordTooShort());
-  if (password !== confirm) return showError('backup-error', 'Passwords do not match.');
-  await withBusy('m-btn-export', 'Exporting…', async () => {
+  if (password !== confirm) return showError('backup-error', t('val.passwords.mismatch'));
+  await withBusy('m-btn-export', t('busy.exporting'), async () => {
     try {
       const json = await send<string>({ command: MessageCommand.ExportBackup, password });
       const filename = `keepmark-backup-${new Date().toISOString().slice(0, 10)}.xbs.json`;
@@ -605,10 +605,10 @@ async function exportBackup(): Promise<void> {
 async function checkImport(): Promise<void> {
   clearMessages();
   const file = ($('m-import-file') as HTMLInputElement).files?.[0];
-  if (!file) return showError('backup-error-2', 'Choose the backup file first.');
+  if (!file) return showError('backup-error-2', t('mgr.backup.chooseFirst'));
   const password = input('m-import-password').value;
-  if (!password) return showError('backup-error-2', 'Enter the password of this backup.');
-  await withBusy('m-btn-import-check', 'Checking…', async () => {
+  if (!password) return showError('backup-error-2', t('mgr.backup.enterPassword'));
+  await withBusy('m-btn-import-check', t('busy.checking'), async () => {
     try {
       const preview = await send<{ count: number }>({
         command: MessageCommand.PreviewBackup,
@@ -642,16 +642,16 @@ async function confirmImport(): Promise<void> {
     pending.lastModified !== file.lastModified
   ) {
     resetImport();
-    return showError('backup-error-2', 'The file changed since the check. Choose it again.');
+    return showError('backup-error-2', t('mgr.backup.fileChanged'));
   }
   const ok = await confirmInline('m-btn-import-confirm', {
-    message: `Replace your bookmarks with this backup (${pending.count} items)?`,
+    message: tn('mgr.backup.replaceMessage', pending.count),
     implication: ImportImplication(),
-    confirmLabel: 'Yes, restore',
+    confirmLabel: t('common.yesRestore'),
     danger: true,
   });
   if (!ok) return;
-  await withBusy('m-btn-import-confirm', 'Restoring…', async () => {
+  await withBusy('m-btn-import-confirm', t('busy.restoring'), async () => {
     try {
       const res = await send<{ count: number; safety: string }>({
         command: MessageCommand.ImportBackup,
@@ -695,20 +695,20 @@ let importPreview:
   | { name: string; size: number; lastModified: number; password: string; count: number }
   | undefined;
 
-const SafetyOperations: Record<string, string> = {
-  'take-remote': 'Downloaded server copy — Connect',
-  'upload-local': 'Uploaded local bookmarks — Connect',
-  'create-empty': 'Created empty sync — Connect',
-  'import-backup': 'Imported encrypted backup',
-  'change-password': 'Changed sync password — Settings',
-  'switch-take-remote': 'Downloaded server copy — Move service',
-  'switch-upload': 'Uploaded local bookmarks — Move service',
-  'duplicates-cleanup': 'Deleted duplicates',
-  'pre-restore': 'Before safety-backup restore',
-  restore: 'Restored safety backup',
-  'delete-remote': 'Deleted sync from server',
-  'merge-local': 'Merged both sides (local copy)',
-  'merge-remote': 'Merged both sides (server copy)',
+const SafetyOperations: Record<string, MessageKey> = {
+  'take-remote': 'mgr.safety.op.takeRemote',
+  'upload-local': 'mgr.safety.op.uploadLocal',
+  'create-empty': 'mgr.safety.op.createEmpty',
+  'import-backup': 'mgr.safety.op.importBackup',
+  'change-password': 'mgr.safety.op.changePassword',
+  'switch-take-remote': 'mgr.safety.op.switchTakeRemote',
+  'switch-upload': 'mgr.safety.op.switchUpload',
+  'duplicates-cleanup': 'mgr.safety.op.duplicatesCleanup',
+  'pre-restore': 'mgr.safety.op.preRestore',
+  restore: 'mgr.safety.op.restore',
+  'delete-remote': 'mgr.safety.op.deleteRemote',
+  'merge-local': 'mgr.safety.op.mergeLocal',
+  'merge-remote': 'mgr.safety.op.mergeRemote',
 };
 
 async function refreshSafety(): Promise<void> {
@@ -724,29 +724,35 @@ async function refreshSafety(): Promise<void> {
   if (entries.length === 0) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = 'No safety backups yet.';
+    p.textContent = t('mgr.safety.none');
     box.append(p);
     return;
   }
   const ul = document.createElement('ul');
   for (const [index, entry] of entries.entries()) {
     const li = document.createElement('li');
-    const when = new Date(entry.createdAtUtc).toLocaleString();
-    const what = SafetyOperations[entry.operation] ?? entry.operation;
-    const side = entry.side === 'local' ? 'local bookmarks' : 'server copy';
-    li.textContent =
-      `${when} · ${what} · ${side} · ${entry.items} items · ${formatBytes(entry.sizeBytes)} · ` +
-      `sync ${entry.syncId} · ${entry.enc ? 'encrypted' : 'not encrypted'} `;
+    const when = formatDateTime(entry.createdAtUtc);
+    const opKey = SafetyOperations[entry.operation];
+    const what = opKey ? t(opKey) : entry.operation;
+    const side = entry.side === 'local' ? t('mgr.safety.sideLocal') : t('mgr.safety.sideRemote');
+    li.textContent = tn('mgr.safety.line', entry.items, {
+      when,
+      what,
+      side,
+      size: formatBytes(entry.sizeBytes),
+      syncId: entry.syncId,
+      enc: entry.enc ? t('mgr.safety.encrypted') : t('mgr.safety.notEncrypted'),
+    });
     const restore = document.createElement('button');
-    restore.textContent = 'Restore…';
+    restore.textContent = t('mgr.safety.restoreBtn');
     restore.className = 'mini';
-    restore.setAttribute('aria-label', `Restore safety backup ${entry.fileName}`);
+    restore.setAttribute('aria-label', t('mgr.safety.restoreAria', { fileName: entry.fileName }));
     restore.id = `safety-restore-${index}`;
     restore.addEventListener('click', () => void restoreSafety(entry, restore.id));
     const del = document.createElement('button');
-    del.textContent = 'Delete';
+    del.textContent = t('mgr.safety.deleteBtn');
     del.className = 'mini danger';
-    del.setAttribute('aria-label', `Delete safety backup ${entry.fileName}`);
+    del.setAttribute('aria-label', t('mgr.safety.deleteAria', { fileName: entry.fileName }));
     del.id = `safety-delete-${index}`;
     del.addEventListener('click', () => void deleteSafety(entry, del.id));
     li.append(restore, ' ', del);
@@ -758,13 +764,13 @@ async function refreshSafety(): Promise<void> {
 async function restoreSafety(entry: SafetyEntry, anchorId: string): Promise<void> {
   clearMessages();
   const ok = await confirmInline(anchorId, {
-    message: `Restore the safety backup from ${new Date(entry.createdAtUtc).toLocaleString()}?`,
+    message: t('mgr.safety.restoreMessage', { when: formatDateTime(entry.createdAtUtc) }),
     implication: safetyRestoreImplication(entry.side, entry.items),
-    confirmLabel: 'Yes, restore',
+    confirmLabel: t('common.yesRestore'),
     danger: true,
   });
   if (!ok) return;
-  await withBusy(anchorId, 'Restoring…', async () => {
+  await withBusy(anchorId, t('busy.restoring'), async () => {
     try {
       const res = await send<{ count: number; safety: string }>({ command: MessageCommand.RestoreSafety, fileName: entry.fileName });
       await refreshSafety();
@@ -779,17 +785,17 @@ async function restoreSafety(entry: SafetyEntry, anchorId: string): Promise<void
 async function deleteSafety(entry: SafetyEntry, anchorId: string): Promise<void> {
   clearMessages();
   const ok = await confirmInline(anchorId, {
-    message: `Delete the safety backup from ${new Date(entry.createdAtUtc).toLocaleString()}?`,
+    message: t('mgr.safety.deleteMessage', { when: formatDateTime(entry.createdAtUtc) }),
     implication: SafetyDeleteImplication(),
-    confirmLabel: 'Yes, delete',
+    confirmLabel: t('common.yesDelete'),
     danger: true,
   });
   if (!ok) return;
-  await withBusy(anchorId, 'Deleting…', async () => {
+  await withBusy(anchorId, t('busy.deleting'), async () => {
     try {
       await send({ command: MessageCommand.DeleteSafety, fileName: entry.fileName });
       await refreshSafety();
-      showResult('backup-result-3', 'Safety backup deleted.');
+      showResult('backup-result-3', t('mgr.safety.deleted'));
     } catch (err) {
       showError('backup-error-3', (err as Error).message);
     }
@@ -828,7 +834,10 @@ async function scanDuplicates(): Promise<void> {
   lastDupGroups = groups;
   dupMarked = defaultMarkedIds(groups);
   if (groups.length === 0) {
-    box.innerHTML = '<p class="clean">No duplicates. Your library is clean.</p>';
+    const clean = document.createElement('p');
+    clean.className = 'clean';
+    clean.textContent = t('mgr.dup.clean');
+    box.replaceChildren(clean);
     updateDupBar();
     return;
   }
@@ -841,7 +850,7 @@ async function scanDuplicates(): Promise<void> {
 function updateDupBar(): void {
   const btn = $('m-btn-duplicates-delete-all') as HTMLButtonElement;
   btn.disabled = dupMarked.size === 0;
-  btn.textContent = dupMarked.size > 0 ? `Delete marked (${dupMarked.size})` : 'Delete marked';
+  btn.textContent = dupMarked.size > 0 ? t('mgr.dup.deleteMarkedCount', { count: dupMarked.size }) : t('manager.dup.deleteMarked');
 }
 
 function renderDuplicates(): void {
@@ -861,7 +870,7 @@ function renderDuplicates(): void {
     const sample = group.entries[0]?.url;
     head.textContent =
       sample && sample !== group.url
-        ? `${sample} (+ variants, grouped as ${group.url})`
+        ? t('mgr.dup.variants', { sample, url: group.url })
         : group.url;
     const count = document.createElement('span');
     count.className = 'badge';
@@ -881,9 +890,13 @@ function renderDuplicates(): void {
       toggle.setAttribute('aria-pressed', String(marked));
       toggle.setAttribute(
         'aria-label',
-        marked ? `Unmark deletion of ${entry.title ?? group.url}` : locked ? 'Always kept copy' : `Mark ${entry.title ?? group.url} for deletion`,
+        marked
+          ? t('mgr.dup.unmarkAria', { title: entry.title ?? group.url })
+          : locked
+            ? t('mgr.dup.lockedAria')
+            : t('mgr.dup.markAria', { title: entry.title ?? group.url }),
       );
-      toggle.title = locked ? 'Always kept — unmark another copy first' : toggle.getAttribute('aria-label')!;
+      toggle.title = locked ? t('mgr.dup.lockedTitle') : toggle.getAttribute('aria-label')!;
       const glyph = document.createElement('span');
       glyph.setAttribute('aria-hidden', 'true');
       glyph.textContent = marked ? '✕' : locked ? '🔒' : '';
@@ -921,7 +934,7 @@ function renderDuplicates(): void {
     del.id = `dup-del-${gi}`;
     dupDeleteIds.push(del.id);
     del.className = 'mini danger';
-    del.textContent = markedHere.length > 0 ? `Delete ${markedHere.length} marked` : 'Delete marked';
+    del.textContent = markedHere.length > 0 ? t('mgr.dup.deleteGroup', { count: markedHere.length }) : t('manager.dup.deleteMarked');
     del.disabled = markedHere.length === 0;
     del.addEventListener('click', async () => {
       clearMessages();
@@ -947,7 +960,7 @@ function renderDuplicates(): void {
 
 function initDuplicatesSection(): void {
   $('m-btn-duplicates').addEventListener('click', () =>
-    withBusy('m-btn-duplicates', 'Scanning…', () => scanDuplicates()),
+    withBusy('m-btn-duplicates', t('busy.scanning'), () => scanDuplicates()),
   );
   $('m-btn-duplicates-delete-all').addEventListener('click', async () => {
     clearMessages();
@@ -955,7 +968,7 @@ function initDuplicatesSection(): void {
     if (ids.length === 0) return;
     // Confirm before withBusy (it disables the anchor while running).
     if (!(await confirmInline('m-btn-duplicates-delete-all', { ...dupDeleteConfirm(ids.length), danger: true }))) return;
-    await withBusy('m-btn-duplicates-delete-all', 'Deleting…', async () => {
+    await withBusy('m-btn-duplicates-delete-all', t('busy.deleting'), async () => {
       try {
         const res = await send<{ deleted: number; safety: string }>({
           command: MessageCommand.RemoveDuplicates,
