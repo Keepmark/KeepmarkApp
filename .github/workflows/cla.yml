@@ -27,4 +27,4 @@ jobs:
           path-to-signatures: "signatures/version1/cla.json"
           path-to-document: "https://github.com/Keepmark/KeepmarkApp/blob/master/CLA.md"
           branch: "cla-signatures"
-          allowlist: "dependabot[bot],bot*"
+          allowlist: "Keepmark,dependabot[bot],bot*"
