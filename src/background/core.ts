@@ -368,7 +368,7 @@ export class BackgroundCore {
       if (this.queue.length === 0 && !this.queue.syncing) break;
     }
     if (this.queue.length === 0) return last;
-    return new Error('Sync queue did not drain.', { cause: last });
+    return new Error(t('core.queueNotDrained'), { cause: last });
   }
 
   /**
@@ -625,7 +625,7 @@ export class BackgroundCore {
       .download(`keepmark-conflict-${Date.now()}.json`, JSON.stringify(localTree))
       .catch(() => undefined);
     await this.ports.chrome
-      .notify('Sync conflict', 'The server copy changed first. Open the manager to resolve.')
+      .notify(t('manager.conflict.title'), t('core.conflictBody'))
       .catch(() => undefined);
   }
 
@@ -664,16 +664,14 @@ export class BackgroundCore {
       res = await api.getBookmarks(info.id!);
     }
     if (res.version && compareVersions(res.version, SyncClientVersion) > 0) {
-      throw new UnsupportedSyncVersionException(
-        `This sync was created by a newer client (v${res.version}). Update the extension to open it.`,
-      );
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: res.version }));
     }
     const plain = await decryptData(res.bookmarks ?? '', info.password!);
     let tree: BookmarkNode[];
     try {
       tree = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
     } catch (err) {
-      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+      throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
     }
     return { res, tree };
   }
@@ -737,7 +735,7 @@ export class BackgroundCore {
   }
 
   private async doRestoreJob(bookmarks?: BookmarkNode[]): Promise<void> {
-    if (!bookmarks) throw new UnexpectedResponseException('Nothing to restore.');
+    if (!bookmarks) throw new UnexpectedResponseException(t('core.nothingToRestore'));
     const tree = bookmarks;
     const { info, syncToolbar } = await this.requireCreds();
     // Restore overwrites natives: snapshot first like every mutating flow.
@@ -809,7 +807,7 @@ export class BackgroundCore {
   // ---------------------------------------------------------------- connect
 
   private async connectNew(serviceUrl: string, password: string): Promise<{ id: string }> {
-    if (this.connecting) throw new UnexpectedResponseException('Connect already in progress.');
+    if (this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
     this.connecting = true;
     await this.setBadge(true);
     try {
@@ -823,7 +821,7 @@ export class BackgroundCore {
         createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl, v12),
       );
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-      if (!linked?.password) throw new IncompleteSyncInfoException('Link state missing after create.');
+      if (!linked?.password) throw new IncompleteSyncInfoException(t('core.linkMissingCreate'));
       if (v12 && linked?.supportsV12 !== true) {
         // createAndUpload fell back to legacy mid-flight: fix the poisoned cache.
         this.v12cache.set(serviceUrl, false);
@@ -850,7 +848,7 @@ export class BackgroundCore {
     password: string,
     direction: 'pull' | 'push' | 'merge' = 'pull',
   ): Promise<{ id: string }> {
-    if (this.connecting) throw new UnexpectedResponseException('Connect already in progress.');
+    if (this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
     this.connecting = true;
     await this.setBadge(true);
     try {
@@ -867,14 +865,10 @@ export class BackgroundCore {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
         if (!remoteVersion) {
-          throw new UnsupportedSyncVersionException(
-            'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-          );
+          throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
         }
         if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-          throw new UnsupportedSyncVersionException(
-            `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-          );
+          throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
         }
         const derived = await deriveKey(password, syncId, remoteVersion);
         const natives = await this.adapter.readAll(syncToolbar);
@@ -954,14 +948,10 @@ export class BackgroundCore {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
-      throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-      );
+      throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-      throw new UnsupportedSyncVersionException(
-        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-      );
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
     // v1.2 links read the extended shape so the upload can use revision CAS.
@@ -1051,14 +1041,10 @@ export class BackgroundCore {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
-      throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-      );
+      throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-      throw new UnsupportedSyncVersionException(
-        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-      );
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
     const res = await api.getBookmarks(syncId);
@@ -1067,7 +1053,7 @@ export class BackgroundCore {
     try {
       remoteTree = (plain ? JSON.parse(plain) : []) as BookmarkNode[];
     } catch (err) {
-      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+      throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
     }
     const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
     const natives = await this.adapter.readAll(syncToolbar);
@@ -1092,14 +1078,10 @@ export class BackgroundCore {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
-      throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-      );
+      throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-      throw new UnsupportedSyncVersionException(
-        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-      );
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
     const derived = await deriveKey(password, syncId, remoteVersion);
     let res: import('../shared/api.js').GetBookmarksResponse;
@@ -1121,7 +1103,7 @@ export class BackgroundCore {
     try {
       remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
     } catch (err) {
-      throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+      throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
     }
     const natives = await this.adapter.readAll(syncToolbar);
     const { tree: merged } = mergeTrees(natives, remoteTree);
@@ -1247,8 +1229,8 @@ export class BackgroundCore {
    * timestamp on legacy links.
    */
   private async changePassword(currentPassword: string, newPassword: string): Promise<{ lastUpdated: string }> {
-    if (!currentPassword) throw new IncompleteSyncInfoException('Current password is required.');
-    if (!newPassword) throw new IncompleteSyncInfoException('A new password is required.');
+    if (!currentPassword) throw new IncompleteSyncInfoException(t('val.current.required'));
+    if (!newPassword) throw new IncompleteSyncInfoException(t('val.new.required'));
     if (newPassword.length < MinNewPasswordLength) throw new Error(PasswordTooShort());
     const { info } = await this.requireCreds();
     const version = info.version ?? SyncClientVersion;
@@ -1257,14 +1239,14 @@ export class BackgroundCore {
     // overwritten.
     const currentDerived = await deriveKey(currentPassword, info.id!, version);
     if (currentDerived !== info.password) {
-      throw new InvalidCredentialsException('Current password is incorrect.');
+      throw new InvalidCredentialsException(t('core.currentPwWrong'));
     }
     await this.quiesce();
     const tree = await this.cachedTree(info);
     const derived = await deriveKey(newPassword, info.id!, version);
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
-    if (!lastUpdated) throw new IncompleteSyncInfoException('Sync info incomplete.');
+    if (!lastUpdated) throw new IncompleteSyncInfoException(t('err.syncInfoIncomplete'));
     // Fail-closed: the PUT re-encrypts the server copy. Abort when the
     // pre-change snapshot cannot be written.
     await writeSafety(this.store, {
@@ -1301,7 +1283,7 @@ export class BackgroundCore {
     });
     // Re-read before rotating the key: a concurrent ping refresh must survive.
     const current = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-    if (current?.id !== info.id) throw new IncompleteSyncInfoException('Sync changed during password rotation.');
+    if (current?.id !== info.id) throw new IncompleteSyncInfoException(t('core.pwRotationChanged'));
     await this.store.set(StoreKey.SyncInfo, { ...current, password: derived });
     // Migrate safety entries to the new key (best-effort: rotation never
     // fails the flow; unmigrated entries refuse honestly via keyId).
@@ -1380,10 +1362,10 @@ export class BackgroundCore {
   private async restoreSafety(fileName: string): Promise<{ count: number; safety: string }> {
     const rows = await listSafety(this.store);
     const entry = rows.find((e) => e.fileName === fileName);
-    if (!entry) throw new UnexpectedResponseException(`Safety backup ${fileName} not found.`);
+    if (!entry) throw new UnexpectedResponseException(t('core.safetyNotFound', { fileName }));
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (entry.side === 'remote' && (!info?.id || !info.password)) {
-      throw new IncompleteSyncInfoException('Link the sync this backup belongs to first.');
+      throw new IncompleteSyncInfoException(t('core.linkBackupSync'));
     }
     const tree = await readSafetyTree(this.store, entry, info?.password);
     const toolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
@@ -1412,7 +1394,7 @@ export class BackgroundCore {
       }
     } else {
       if (!info?.id || !info.password) {
-        throw new IncompleteSyncInfoException('Link the sync this backup belongs to first.');
+        throw new IncompleteSyncInfoException(t('core.linkBackupSync'));
       }
       const pre = await writeSafety(this.store, {
         operation: 'pre-restore',
@@ -1489,7 +1471,7 @@ export class BackgroundCore {
   private notifyMoveDone(target: SwitchTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
     return this.ports.chrome
       .notify(
-        'Move completed',
+        t('core.moveCompleted'),
         describeMoveResult({
           mode: target.mode,
           direction: target.direction,
@@ -1512,9 +1494,9 @@ export class BackgroundCore {
     const { info, syncToolbar } = await this.requireCreds();
     await this.quiesce();
     const tree = await this.cachedTree(info);
-    if (!target.newPassword) throw new IncompleteSyncInfoException('A password is required.');
+    if (!target.newPassword) throw new IncompleteSyncInfoException(t('core.passwordRequired'));
     if (target.mode === 'existing' && !target.syncId) {
-      throw new IncompleteSyncInfoException('A sync ID is required for an existing sync.');
+      throw new IncompleteSyncInfoException(t('core.syncIdRequired'));
     }
     const newApi = this.makeApi(target.newServiceUrl);
     const svc = await checkService(newApi, this.log);
@@ -1524,7 +1506,7 @@ export class BackgroundCore {
       const prev = await this.capturePrev();
       const { id } = await switchService(newApi, this.store, tree, target.newPassword, target.newServiceUrl, v12);
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-      if (!linked?.password) throw new IncompleteSyncInfoException('Link state missing after move.');
+      if (!linked?.password) throw new IncompleteSyncInfoException(t('core.linkMissingMove'));
       if (v12 && linked?.supportsV12 !== true) {
         this.v12cache.set(target.newServiceUrl, false);
       }
@@ -1545,14 +1527,10 @@ export class BackgroundCore {
     const versionRes = await newApi.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
     if (!remoteVersion) {
-      throw new UnsupportedSyncVersionException(
-        'Legacy sync without a version. Open it once in the original xBrowserSync client to upgrade it, then reconnect here.',
-      );
+      throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
     }
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
-      throw new UnsupportedSyncVersionException(
-        `This sync was created by a newer client (v${remoteVersion}). Update the extension to open it.`,
-      );
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
     const derived = await deriveKey(target.newPassword, syncId, remoteVersion);
     let remote: import('../shared/api.js').GetBookmarksResponse;
@@ -1611,7 +1589,7 @@ export class BackgroundCore {
       try {
         remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
       } catch (err) {
-        throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+        throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
       }
       const natives = await this.adapter.readAll(syncToolbar);
       const { tree: merged } = mergeTrees(natives, remoteTree);
@@ -1682,7 +1660,7 @@ export class BackgroundCore {
       try {
         remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
       } catch (err) {
-        throw new UnexpectedResponseException('Remote sync data is corrupted.', { cause: err });
+        throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
       }
       await writeSafety(this.store, {
         operation: 'switch-upload',
@@ -1753,7 +1731,7 @@ export class BackgroundCore {
     const { info } = await this.requireCreds();
     await this.quiesce();
     if (!v12Usable(info)) {
-      throw new UnsupportedVersionException('Not supported (requires service v1.2).');
+      throw new UnsupportedVersionException(t('api.ErrUnsupportedVersion'));
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     // Per-feature check: the delete capability is required proactively
@@ -1765,7 +1743,7 @@ export class BackgroundCore {
       (): undefined => undefined,
     );
     if (caps && caps.delete !== true) {
-      throw new UnsupportedVersionException('Not supported (requires service v1.2).');
+      throw new UnsupportedVersionException(t('api.ErrUnsupportedVersion'));
     }
     const tree = await this.cachedTree(info);
     // Fail-closed: no undelete exists server-side. Abort when the snapshot
@@ -1804,7 +1782,7 @@ export class BackgroundCore {
         this.log.log(XbsLogLevel.Warning, 'sync', `RemovedSync snapshot failed: ${(e as Error)?.message}`),
       );
     await this.ports.chrome
-      .notify('Sync deleted from server', 'The sync was deleted from the service. This device is now unlinked; local bookmarks are untouched.')
+      .notify(t('core.deletedTitle'), t('core.deletedBody'))
       .catch(() => undefined);
     return { deleted: true };
   }
@@ -1939,7 +1917,7 @@ export class BackgroundCore {
 
   private async undoLastLink(): Promise<{ undone: UndoKind }> {
     const slot = await this.store.get<UndoSlotData>(StoreKey.UndoSlot);
-    if (!slot) throw new UnexpectedResponseException('Nothing to undo.');
+    if (!slot) throw new UnexpectedResponseException(t('core.nothingToUndo'));
     await this.quiesce();
     const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
 
@@ -2048,7 +2026,7 @@ export class BackgroundCore {
     const { info, syncToolbar } = await this.requireCreds();
     const conflict = await this.loadConflict(info);
     if (!conflict) {
-      throw new UnexpectedResponseException('No active conflict to preview.');
+      throw new UnexpectedResponseException(t('core.noConflictPreview'));
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const { res, tree: remoteTree } = await this.fetchRemote(api, info);
@@ -2085,7 +2063,7 @@ export class BackgroundCore {
     const { info, syncToolbar } = await this.requireCreds();
     const conflict = await this.loadConflict(info);
     if (!conflict) {
-      throw new UnexpectedResponseException('No active conflict to resolve.');
+      throw new UnexpectedResponseException(t('core.noConflictResolve'));
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const localTree = conflict.localTree;
@@ -2388,7 +2366,7 @@ export class BackgroundCore {
     await this.store.set(StoreKey.SyncInfo, {});
     await this.setBadge(false);
     if (err instanceof SyncNotFoundException) {
-      await this.ports.chrome.notify('Sync removed', 'The sync was removed from the service.');
+      await this.ports.chrome.notify(t('core.removedTitle'), t('core.removedBody'));
     } else if (err) {
       this.log.log(XbsLogLevel.Warning, 'sync', `Sync disabled: ${err.message}`);
     }
@@ -2437,14 +2415,14 @@ export class BackgroundCore {
 
   private async requireCreds(): Promise<Creds> {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-    if (!info?.id || !info.password) throw new IncompleteSyncInfoException('Sync is not connected.');
+    if (!info?.id || !info.password) throw new IncompleteSyncInfoException(t('core.notConnected'));
     const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
     return { info, syncToolbar };
   }
 
   private async cachedTree(info: SyncInfo): Promise<BookmarkNode[]> {
     const blob = await this.store.get<string>(StoreKey.Bookmarks);
-    if (!blob) throw new IncompleteSyncInfoException('No cached bookmarks.');
+    if (!blob) throw new IncompleteSyncInfoException(t('core.noCache'));
     const plain = await decryptData(blob, info.password!);
     return (plain ? JSON.parse(plain) : []) as BookmarkNode[];
   }
@@ -2465,7 +2443,7 @@ export class BackgroundCore {
   private async setBadge(syncing: boolean): Promise<void> {
     const enabled = await this.store.get<boolean>(StoreKey.SyncEnabled).catch(() => false);
     await this.ports.chrome
-      .setBadge(syncing ? '…' : enabled ? '' : '!', syncing ? 'Syncing…' : enabled ? 'Synced' : 'Not synced')
+      .setBadge(syncing ? '…' : enabled ? '' : '!', syncing ? t('ui.pill.syncing') : enabled ? t('popup.state.synced') : t('popup.state.notSynced'))
       .catch(() => undefined);
   }
 
