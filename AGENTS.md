@@ -108,7 +108,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   tile; manifest 16/32 + toolbar = bare ribbon filling the slot (`synced*` navy
   with a 1px light edge for dark Chromium toolbars, `notsynced*`
   grey; `*-dark*` white variants picked on Firefox via `matchMedia` in
-  `background.ts` + manifest `theme_icons`; Chromium SW always navy);
+  `background.ts` + manifest `theme_icons`; Chromium SW has no `matchMedia`,
+  so `src/offscreen.html` (permission `offscreen`, reason `MATCH_MEDIA`)
+  reports the theme with `km-theme` messages, routed in `background.ts`
+  before `core.handleMessage`; a restarted SW asks it via `km-theme-query`);
   pages use `brand-ribbon.svg` hanging from the navy header/sidebar band.
 - `scripts/package.mjs` zips `build/*` → `dist/`.
 

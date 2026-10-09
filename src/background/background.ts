@@ -11,6 +11,7 @@ import { BookmarkIdMapper } from '../shared/id-mapper.js';
 import { InMemoryLogger } from '../shared/logging.js';
 import { BrowserLocalBackend, Store } from '../shared/store.js';
 import { BackgroundCore, type CorePorts } from './core.js';
+import { isThemeReport, THEME_QUERY } from '../shared/theme.js';
 
 const bookmarksApi = browser.bookmarks as unknown as BookmarkApi;
 
@@ -55,6 +56,10 @@ async function main(): Promise<void> {
   );
 
   browser.runtime.onMessage.addListener((msg: unknown) => {
+    if (isThemeReport(msg)) {
+      theme.set(msg.dark);
+      return undefined;
+    }
     return core
       .handleMessage(msg as MessagePayload)
       .then((data) => ({ ok: true as const, data }))
@@ -64,6 +69,47 @@ async function main(): Promise<void> {
   browser.runtime.onInstalled.addListener(() => void core.startup());
   browser.runtime.onStartup?.addListener(() => void core.startup());
   await core.startup();
+  void watchThemeOffscreen();
+}
+
+// Toolbar ribbon (canvas "BxRibbon"): navy on light toolbars, white on dark.
+// Firefox's background page has matchMedia (it follows the browser theme);
+// the Chromium worker has none, so an offscreen document reports it instead.
+const darkQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : undefined;
+const theme = {
+  dark: darkQuery?.matches ?? false,
+  onChange: (): void => undefined,
+  set(dark: boolean): void {
+    if (dark === this.dark) return;
+    this.dark = dark;
+    this.onChange();
+  },
+};
+darkQuery?.addEventListener?.('change', () => theme.set(darkQuery.matches));
+
+async function watchThemeOffscreen(): Promise<void> {
+  type Offscreen = {
+    hasDocument?(): Promise<boolean>;
+    createDocument(p: { url: string; reasons: string[]; justification: string }): Promise<void>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const offscreen = (globalThis as any).chrome?.offscreen as Offscreen | undefined;
+  if (darkQuery || !offscreen) return;
+  try {
+    if (await offscreen.hasDocument?.()) {
+      // Worker restarted: the document still runs but won't resend on its own.
+      const res = (await browser.runtime.sendMessage({ type: THEME_QUERY })) as { dark?: unknown } | undefined;
+      if (typeof res?.dark === 'boolean') theme.set(res.dark);
+      return;
+    }
+    await offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['MATCH_MEDIA'],
+      justification: 'Pick the toolbar icon that matches the light or dark browser theme.',
+    });
+  } catch {
+    // Icon stays navy (with its light edge): cosmetic only.
+  }
 }
 
 function ports(): CorePorts {
@@ -85,17 +131,13 @@ function ports(): CorePorts {
       };
     }
   ).onChildrenReordered;
-  // Toolbar ribbon (canvas "BxRibbon"): navy on light toolbars, white on dark.
-  // Only the Firefox background page has matchMedia (it follows the browser
-  // theme); the Chromium service worker has none and keeps the navy ribbon.
-  const darkQuery = typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia('(prefers-color-scheme: dark)') : undefined;
   let iconState: 'synced' | 'notsynced' = 'notsynced';
   const applyIcon = async (): Promise<void> => {
     if (!action) return;
-    const name = darkQuery?.matches ? `${iconState}-dark` : iconState;
+    const name = theme.dark ? `${iconState}-dark` : iconState;
     await action.setIcon({ path: { '16': `assets/${name}16.png`, '32': `assets/${name}32.png` } }).catch(() => undefined);
   };
-  darkQuery?.addEventListener?.('change', () => void applyIcon());
+  theme.onChange = () => void applyIcon();
   return {
     alarms: {
       schedule: (name, periodMinutes) => browser.alarms.create(name, { periodInMinutes: periodMinutes }).then(() => undefined),

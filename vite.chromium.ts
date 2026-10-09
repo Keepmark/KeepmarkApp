@@ -1,4 +1,4 @@
-// Chromium MV3 build, part 1: popup page.
+// Chromium MV3 build, part 1: popup, manager and theme offscreen pages.
 import { defineConfig } from 'vite';
 import { copyStatic, stripLzutf8InnerHtml, platformAlias, root } from './vite.shared';
 
@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         popup: `${root}/src/popup.html`,
         manager: `${root}/src/manager.html`,
+        offscreen: `${root}/src/offscreen.html`,
       },
     },
   },
