@@ -241,6 +241,17 @@ async function tourManager(ctx) {
     check(`${ctx.kind}: manager section ${s} renders`, h2.length === 1, h2.join(','));
     if (s === 'duplicates') { await click(m, '#m-btn-duplicates'); await sleep(1500); }
     if (s === 'logs') { await click(m, '#m-btn-logs'); await sleep(1000); }
+    if (s === 'settings') {
+      // v1.2 /info capabilities.syncExpiryDays -> "Unused syncs" row (KeepmarkApi always advertises it).
+      const row = async () => m.evaluate(() => {
+        const dts = [...document.querySelectorAll('#m-service-info dt')];
+        const dt = dts.find((e) => e.textContent.trim() === 'Unused syncs');
+        return dt?.nextElementSibling?.textContent.trim() ?? null;
+      });
+      await waitFor(async () => (await row()) !== null, 8000);
+      const expiry = await row();
+      check(`${ctx.kind}: settings shows the service's sync expiry`, /^(kept forever|deleted after \d+ days? without use)$/.test(expiry ?? ''), expiry ?? 'missing');
+    }
     await shot(ctx, m, `manager-${s}`);
   }
   // Leak checks in the rendered logs viewer (sync IDs truncated, no password).

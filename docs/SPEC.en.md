@@ -535,7 +535,7 @@ notsynced), white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 48/48 on Firefox 157 + Chromium 153); remaining manual items in §11.3; permanent Firefox install
+Browser QA automated (§11.2b, last run 52/52 on Firefox 157 + Chromium 153); remaining manual items in §11.3; permanent Firefox install
 blocked on AMO signing; no multi-account/auto-backup/QR; toolbar toggle +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — check `git status`/`log` before assuming
