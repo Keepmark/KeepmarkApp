@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Firefox-MV2-e66000" alt="Firefox" />
   <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Brave-MV3-1a73e8" alt="Chromium-based browsers" />
   <img src="https://img.shields.io/badge/license-GPL--3.0--only-243878" alt="GPL-3.0-only" />
-  <img src="https://img.shields.io/badge/languages-en%20%C2%B7%20it%20%C2%B7%20fr%20%C2%B7%20es%20%C2%B7%20de-4a5170" alt="Languages" />
+  <img src="https://img.shields.io/badge/languages-en%20%C2%B7%20it%20%C2%B7%20fr%20%C2%B7%20es%20%C2%B7%20de%20%C2%B7%20ja%20%C2%B7%20pt--BR%20%C2%B7%20ru%20%C2%B7%20zh-4a5170" alt="Languages" />
 </p>
 
 ---
@@ -51,7 +51,7 @@ Keepmark opens there, and the other way round. Nothing to migrate.
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Move service** | Move your bookmarks to another service, into a new or existing sync |
 | **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
-| **Languages** | English, Italiano, Français, Español, Deutsch; follows the browser, override in Settings |
+| **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |
 
 With **Keepmark Server** you also get revision-based conflict detection,
 faster "nothing changed" checks and the option to delete your sync from the

@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "Приватная синхронизация закладок со сквозным шифрованием. Независимая альтернатива, совместимая с xBrowserSync."
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

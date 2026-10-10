@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "私密的端到端加密书签同步。兼容 xBrowserSync 的独立替代应用。"
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

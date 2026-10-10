@@ -416,7 +416,7 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
   `confirmInline`, see `docs/WORKFLOWS.md`), as do undo (`undoConfirm`) and
   the conflict choices (`directionConfirm`). Password fields cleared per-flow (confirm always; current
   on failure; new kept only to retype proof).
-- UI in en/it/fr/es/de (system language by default, override in Settings → Language; logs stay English); no telemetry prompts wired; dynamic list buttons get
+- UI in en/it/fr/es/de/ja/pt/ru/zh (system language by default, override in Settings → Language; logs stay English); no telemetry prompts wired; dynamic list buttons get
   `aria-label`s; clipboard falls back to `prompt` when denied.
 
 ## 8. Platform matrix

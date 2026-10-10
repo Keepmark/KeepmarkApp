@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "プライベートでエンドツーエンド暗号化されたブックマーク同期。xBrowserSync 互換の独立した代替アプリ。"
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

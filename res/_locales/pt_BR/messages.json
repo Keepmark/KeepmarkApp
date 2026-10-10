@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "Sincronização de favoritos privada e criptografada de ponta a ponta. Alternativa independente compatível com o xBrowserSync."
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

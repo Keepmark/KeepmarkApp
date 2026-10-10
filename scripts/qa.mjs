@@ -148,13 +148,13 @@ ok('background/shared/platform DOM-free (if no failure above)');
   const unknown = [...used].filter((k) => !en.has(k));
   if (unknown.length > 0) fail(`HTML uses unknown i18n keys: ${unknown.join(', ')}`);
   else ok(`all ${used.size} HTML i18n keys exist in the catalog`);
-  for (const lang of ['it', 'fr', 'es', 'de']) {
+  for (const lang of ['it', 'fr', 'es', 'de', 'ja', 'pt', 'ru', 'zh']) {
     const keys = catalog(lang);
     const lacking = [...en].filter((k) => !keys.has(k));
     if (lacking.length > 0) fail(`${lang} catalog lacks: ${lacking.slice(0, 5).join(', ')}`);
   }
-  ok('catalogs complete in it/fr/es/de');
-  for (const lang of ['en', 'it', 'fr', 'es', 'de']) {
+  ok('catalogs complete in it/fr/es/de/ja/pt/ru/zh');
+  for (const lang of ['en', 'it', 'fr', 'es', 'de', 'ja', 'pt_BR', 'ru', 'zh_CN']) {
     if (!existsSync(path.join(root, `res/_locales/${lang}/messages.json`))) fail(`missing _locales/${lang}`);
   }
 }

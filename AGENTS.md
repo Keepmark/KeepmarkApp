@@ -15,7 +15,7 @@ interop).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.10`)
+- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.15`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 
@@ -51,7 +51,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `logging.ts` | Levels, ring `InMemoryLogger`, `LogSanitizer` (sync IDs truncated, secrets never logged) | Keepmark `Logging.cs` |
 | `bookmarks.ts` | Tree helpers: containers, `newBookmark/cleanBookmark`, ids, validate/repair, `nativeToSynced`, separator detection | `app/bookmark-helper.service.ts` |
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
-| `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de | new |
+| `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ru/zh | new |
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
 | `id-mapper.ts` | `syncedId<->nativeId` mappings, sorted, rebuilt on populate | `app/bookmark-id-mapper.service.ts` |
 | `sync.ts` | `checkService`, `createNewSync`, `pullExistingSync`, `pullWithDerivedKey`, `pushBookmarks`, `switchService` | `app/bookmark-sync-provider` + login component |
@@ -135,8 +135,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
    one file (`vite.chromium-sw.ts` lib build). Static imports only.
-5. **i18n** (en, it, fr, es, de): every user-facing text is a key in
-   `src/shared/i18n/en.ts` (source of truth) with a translation in `it/fr/es/de.ts`
+5. **i18n** (en, it, fr, es, de, ja, pt-BR, ru, zh): every user-facing text is a key in
+   `src/shared/i18n/en.ts` (source of truth) with a translation in
+   `it/fr/es/de/ja/pt/ru/zh.ts` (`resolveLang` keeps only the base tag, so `pt-PT` → `pt`,
+   `zh-TW` → `zh` Simplified)
    (`Record<MessageKey,string>`: a missing key fails `tsc`; `tests/i18n.test.ts`
    checks keys and `{placeholders}`). Use `t(key, params)` / `tn(base, n)` (plurals:
    `<base>_one` / `<base>_other`) from `src/shared/i18n.ts` (DOM-free, SW-safe, static
@@ -146,8 +148,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    Language setting: `StoreKey.UiLanguage` (`system` = `browser.i18n.getUILanguage()`),
    loaded by the background at every wake-up (`loadLanguage`) and by pages in
    `initI18n`; changing it reloads the page. Logs stay English. Wording follows
-   `docs/UI-TERMS.md` (5-language glossary, identical in KeepmarkMobile). Manifest
-   name/description use `res/_locales/*`. No telemetry; HTTPS-only services.
+   `docs/UI-TERMS.md` (9-language glossary, identical in KeepmarkMobile). Manifest
+   name/description use `res/_locales/*` (`pt_BR`, `zh_CN` folders). No telemetry; HTTPS-only services.
 
 ## 5. Testing
 
