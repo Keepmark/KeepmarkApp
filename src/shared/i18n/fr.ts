@@ -469,4 +469,7 @@ export const fr: Record<MessageKey, string> = {
   'val.new.different': 'Le nouveau mot de passe doit être différent de l\'actuel.',
   'val.new.mismatch': 'Les nouveaux mots de passe ne correspondent pas.',
   'val.target.passwordRequired': 'Le mot de passe de la synchronisation de destination est obligatoire.',
+  'container.menu': 'Menu des marque-pages',
+  'container.other': 'Autres marque-pages',
+  'container.toolbar': 'Barre personnelle',
 };

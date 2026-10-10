@@ -57,3 +57,18 @@ export function formatDate(d: Date | string | number, opts?: Intl.DateTimeFormat
 export function formatTime(d: Date | string | number, opts?: Intl.DateTimeFormatOptions): string {
   return new Date(d).toLocaleTimeString(current, opts);
 }
+
+const CONTAINER_KEYS: Record<string, MessageKey> = {
+  Menu: 'container.menu',
+  Other: 'container.other',
+  Toolbar: 'container.toolbar',
+};
+
+/**
+ * Display-only: swap the sync-format root titles ("[xbs] Other", ...) inside a
+ * path or sample line for the localized browser names. Synced data keeps the
+ * "[xbs] ..." titles; call this only when rendering text.
+ */
+export function displayPath(text: string): string {
+  return text.replace(/\[xbs\] (Menu|Other|Toolbar)(?=$| \/ | → |,)/g, (_, k: string) => t(CONTAINER_KEYS[k]));
+}

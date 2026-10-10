@@ -8,7 +8,7 @@ import { ja } from '../src/shared/i18n/ja';
 import { pt } from '../src/shared/i18n/pt';
 import { ru } from '../src/shared/i18n/ru';
 import { zh } from '../src/shared/i18n/zh';
-import { getLang, resolveLang, setLang, t, tn } from '../src/shared/i18n';
+import { displayPath, getLang, resolveLang, setLang, t, tn } from '../src/shared/i18n';
 
 const ph = (s: string): string[] => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
@@ -55,5 +55,18 @@ describe('t / tn', () => {
   });
   it('tn is exported and falls back to the key when missing', () => {
     expect(tn('no.such', 1)).toBe('no.such_one');
+  });
+});
+
+describe('displayPath', () => {
+  it('shows browser names for the sync root titles, only at path boundaries', () => {
+    setLang('en');
+    expect(displayPath('[xbs] Other / Work / Regex101')).toBe('Other Bookmarks / Work / Regex101');
+    expect(displayPath('GitHub: [xbs] Other / Dev → [xbs] Toolbar')).toBe('GitHub: Other Bookmarks / Dev → Bookmarks Toolbar');
+    expect(displayPath('[xbs] Menu')).toBe('Bookmarks Menu');
+    expect(displayPath('[xbs] Menus / x')).toBe('[xbs] Menus / x');
+    setLang('it');
+    expect(displayPath('[xbs] Toolbar / MDN')).toBe('Barra dei segnalibri / MDN');
+    setLang('en');
   });
 });

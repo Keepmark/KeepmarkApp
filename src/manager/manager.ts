@@ -23,7 +23,7 @@ import {
   initI18n,
 } from '../popup/ui.js';
 import { StoreKey } from '../shared/store.js';
-import { formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
+import { displayPath, formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
 import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import {
@@ -226,7 +226,7 @@ function fillList(id: string, items: string[], total: number): void {
   const rows = total > 0 ? items : [];
   for (const text of rows.length > 0 ? rows : ['—']) {
     const li = document.createElement('li');
-    li.textContent = text;
+    li.textContent = displayPath(text);
     if (rows.length === 0) li.className = 'empty';
     list.appendChild(li);
   }
@@ -923,7 +923,7 @@ function renderDuplicates(): void {
       }
       const path = document.createElement('div');
       path.className = 'dup-sub';
-      path.textContent = entry.path;
+      path.textContent = displayPath(entry.path);
       text.append(path);
       row.append(toggle, text);
       div.append(row);

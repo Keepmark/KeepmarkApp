@@ -469,4 +469,7 @@ export const ja: Record<MessageKey, string> = {
   'val.new.different': '新しいパスワードは現在のものと異なる必要があります。',
   'val.new.mismatch': '新しいパスワードが一致しません。',
   'val.target.passwordRequired': '移行先の同期のパスワードが必要です。',
+  'container.menu': 'ブックマークメニュー',
+  'container.other': '他のブックマーク',
+  'container.toolbar': 'ブックマークツールバー',
 };

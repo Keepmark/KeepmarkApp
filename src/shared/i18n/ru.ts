@@ -471,4 +471,7 @@ export const ru: Record<MessageKey, string> = {
   'val.new.different': 'Новый пароль должен отличаться от текущего.',
   'val.new.mismatch': 'Новые пароли не совпадают.',
   'val.target.passwordRequired': 'Нужен пароль целевой синхронизации.',
+  'container.menu': 'Меню закладок',
+  'container.other': 'Другие закладки',
+  'container.toolbar': 'Панель закладок',
 };
