@@ -47,11 +47,18 @@ export interface ApiCapabilities {
   revision?: boolean;
   conditionalGet?: boolean;
   delete?: boolean;
+  /** Days an unused sync is kept before the server deletes it; 0 = forever. */
+  syncExpiryDays?: number;
 }
 
 /** True when the service speaks the v1.2 extended contract. */
 export function supportsV12(info: ServiceInfo): boolean {
   return info.capabilities?.revision === true;
+}
+
+/** Server-advertised `syncExpiryDays`, or undefined when absent or malformed (never trust a wire value). */
+export function validExpiryDays(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 /** Normalize a tree like Keepmark SyncEngine: empty descriptions/tags -> undefined, trim to DescriptionMaxLength. */

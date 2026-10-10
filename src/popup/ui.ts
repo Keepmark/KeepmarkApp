@@ -66,6 +66,12 @@ export async function send<T>(msg: MessagePayload): Promise<T> {
   return (res as { data?: T }).data as T;
 }
 
+/** Inactive-sync expiry as shown in Settings / move preview: '—' when the service does not say (legacy). */
+export function describeSyncExpiry(days: number | undefined): string {
+  if (days === undefined) return '—';
+  return days === 0 ? t('mgr.settings.expiryNever') : tn('mgr.settings.expiryDays', days);
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

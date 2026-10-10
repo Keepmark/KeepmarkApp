@@ -24,6 +24,7 @@ import {
 import type { IXbsLogger } from '../shared/logging.js';
 import { sanitizeSyncId, XbsLogLevel } from '../shared/logging.js';
 import type { BookmarkNode } from '../shared/models.js';
+import { validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer } from '../shared/bookmarks.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
@@ -1818,6 +1819,7 @@ export class BackgroundCore {
       maxSyncSize: service.maxSyncSize,
       localCount,
       supportsV12: service.capabilities?.revision === true,
+      syncExpiryDays: validExpiryDays(service.capabilities?.syncExpiryDays),
     };
     if (mode === 'existing' && syncId) {
       try {
@@ -2265,15 +2267,16 @@ export class BackgroundCore {
     if (!info?.id) return { reachable: false };
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl, ServiceProbeTimeoutMs);
     try {
-      const [service, remote, v12] = await Promise.all([
+      const [service, remote, caps] = await Promise.all([
         api.getInfo(),
         api.getLastUpdated(info.id).catch(() => undefined),
         // undefined = unknown (offline/mid-probe failure): never downgrades.
         api
           .getInfoV12()
-          .then((r) => r.capabilities?.revision === true)
+          .then((r) => r.capabilities ?? null)
           .catch(() => undefined),
       ]);
+      const v12 = caps === undefined ? undefined : caps?.revision === true;
       // Refresh capability flag + service version from the live probe. Both
       // writes re-read the stored link and patch a single field, so a
       // concurrent password rotation or downgrade is never clobbered; an
@@ -2301,6 +2304,7 @@ export class BackgroundCore {
         maxSyncSize: service.maxSyncSize,
         remoteLastUpdated: remote?.lastUpdated ?? undefined,
         supportsV12: v12 ?? v12Usable(info),
+        syncExpiryDays: validExpiryDays(caps?.syncExpiryDays),
       };
     } catch {
       return { reachable: false };

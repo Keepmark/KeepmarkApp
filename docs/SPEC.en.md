@@ -123,6 +123,12 @@ Advertised via `capabilities: {revision, conditionalGet, delete}` in
 `supportsV12()` in `models.ts`, `v12Usable(info)` requires
 `info.supportsV12 === true` — `undefined`/never-probed counts as legacy).
 
+`capabilities.syncExpiryDays` (integer ≥ 0, `0` = kept forever) is the
+service's inactive-sync expiry. Display only: `ping()` and `SwitchPreview`
+return it (`validExpiryDays()` drops absent/malformed values → `undefined`),
+the manager shows it in Settings (“Unused syncs”) and in the move preview via
+`describeSyncExpiry()` (`—` when unknown, i.e. legacy service). Never stored.
+
 | Feature | Request | Behavior |
 |---|---|---|
 | Extended info | `GET info` + `Accept-Version: 1.2.0` | legacy servers return the legacy shape (no capabilities) or 412 → treated as v1.1 |

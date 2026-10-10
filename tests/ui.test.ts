@@ -11,6 +11,7 @@ vi.mock('webextension-polyfill', () => ({
 import {
   contractGate,
   describeMoveResult,
+  describeSyncExpiry,
   describeUndo,
   formatBytes,
   renderStatusCard,
@@ -233,6 +234,17 @@ describe('formatBytes', () => {
     [1048576, '1.00 MB'],
   ])('%i -> %s', (bytes, expected) => {
     expect(formatBytes(bytes)).toBe(expected);
+  });
+});
+
+describe('describeSyncExpiry', () => {
+  it.each([
+    [undefined, '—'],
+    [0, 'kept forever'],
+    [1, 'deleted after 1 day without use'],
+    [21, 'deleted after 21 days without use'],
+  ])('%s -> %s', (days, expected) => {
+    expect(describeSyncExpiry(days)).toBe(expected);
   });
 });
 

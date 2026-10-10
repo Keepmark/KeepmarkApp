@@ -9,6 +9,7 @@ import {
   contractGate,
   copyText,
   describeMoveResult,
+  describeSyncExpiry,
   describeUndo,
   formatBytes,
   validatePasswordChange,
@@ -1099,6 +1100,9 @@ async function previewTarget(): Promise<void> {
         }),
         t('mgr.move.previewLocal', { count: preview.localCount ?? '?' }),
       ];
+      if (preview.syncExpiryDays !== undefined) {
+        lines.push(t('mgr.move.previewExpiry', { state: describeSyncExpiry(preview.syncExpiryDays) }));
+      }
       // Merge direction: dry-run the union so the user sees exactly what
       // will upload/download before the Move button unlocks. Needs the
       // target password (already in the form for the submit step).
@@ -1313,6 +1317,7 @@ async function renderSettings(): Promise<void> {
     [t('common.service'), st?.serviceUrl ?? '—'],
     [t('mgr.settings.apiVersion'), pg?.version ?? '—'],
     [t('mgr.settings.apiContract'), pg?.supportsV12 ?? st?.supportsV12 ? t('mgr.settings.contractV12') : 'v1.1'],
+    [t('mgr.settings.syncExpiry'), describeSyncExpiry(pg?.syncExpiryDays)],
     [t('common.syncId'), st?.syncId ?? '—'],
   ];
   for (const [k, v] of rows) {

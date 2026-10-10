@@ -130,6 +130,8 @@ export interface SwitchPreviewResult {
   localCount?: number;
   /** True when the target speaks the v1.2 contract. */
   supportsV12?: boolean;
+  /** Target's inactive-sync expiry from v1.2 /info (0 = never); absent on legacy services. */
+  syncExpiryDays?: number;
 }
 
 /** Live server probe result (fast timeout, never throws). */
@@ -143,6 +145,8 @@ export interface PingResponse {
   remoteLastUpdated?: string;
   /** True when the linked service speaks the v1.2 contract. */
   supportsV12?: boolean;
+  /** Inactive-sync expiry from v1.2 /info (0 = never); absent when unknown or legacy. */
+  syncExpiryDays?: number;
 }
 
 /** Current conflict state (set when a push gets 409). */

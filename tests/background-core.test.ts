@@ -73,6 +73,8 @@ interface FakeApiState {
   /** Revision-CAS pushes seen (v1.2 path only). */
   v12puts: { blob: string; baseRevision: number }[];
   deleted: string[];
+  /** Advertised `capabilities.syncExpiryDays` (v1.2 only; any wire value). */
+  syncExpiryDays?: unknown;
 }
 
 async function unsupportedVersion(): Promise<never> {
@@ -94,12 +96,14 @@ function makeFakeApi(state: FakeApiState): (url: string) => XSyncApiClient {
     status: number;
     version: string;
     maxSyncSize: number;
-    capabilities?: { revision: boolean; conditionalGet: boolean; delete: boolean };
+    capabilities?: { revision: boolean; conditionalGet: boolean; delete: boolean; syncExpiryDays?: unknown };
   }> => {
     // A downgraded service 412s the extended contract (shaped legacy answers
     // only come from genuinely legacy services).
     if (state.v12 && !state.v12alive) await unsupportedVersion();
-    return state.v12 ? { ...state.info, capabilities: v12caps() } : { ...state.info };
+    return state.v12
+      ? { ...state.info, capabilities: { ...v12caps(), syncExpiryDays: state.syncExpiryDays } }
+      : { ...state.info };
   };
   const fail409 = async (): Promise<never> => {
     const { DataOutOfSyncException } = await import('../src/shared/errors');
@@ -1423,6 +1427,39 @@ describe('background core v1.2', () => {
     })) as { reachable: boolean; supportsV12?: boolean };
     expect(preview.reachable).toBe(true);
     expect(preview.supportsV12).toBe(true);
+  });
+
+  it('ping and switch preview carry the advertised sync expiry', async () => {
+    const state = v12State();
+    state.syncExpiryDays = 21;
+    const { core } = await linkedV12Core(state);
+    const ping = async (): Promise<number | undefined> =>
+      ((await core.handleMessage({ command: MessageCommand.Ping })) as { syncExpiryDays?: number }).syncExpiryDays;
+    expect(await ping()).toBe(21);
+    state.syncExpiryDays = 0; // never expires: 0 is a real answer, not "unknown"
+    expect(await ping()).toBe(0);
+    const preview = (await core.handleMessage({
+      command: MessageCommand.SwitchPreview,
+      newServiceUrl: 'https://new.test/',
+      mode: 'new',
+    })) as { syncExpiryDays?: number };
+    expect(preview.syncExpiryDays).toBe(0);
+    for (const bad of [-1, 1.5, '21', null, undefined]) {
+      state.syncExpiryDays = bad; // malformed or absent -> unknown, never shown as a number
+      expect(await ping()).toBeUndefined();
+    }
+  });
+
+  it('legacy service reports no sync expiry', async () => {
+    const state = baseState();
+    state.syncExpiryDays = 21; // ignored: legacy /info has no capabilities
+    const { core } = await linkedCore(state);
+    const pong = (await core.handleMessage({ command: MessageCommand.Ping })) as {
+      reachable: boolean;
+      syncExpiryDays?: number;
+    };
+    expect(pong.reachable).toBe(true);
+    expect(pong.syncExpiryDays).toBeUndefined();
   });
 
   it('switch-service new onto v1.2 links with the flag set', async () => {
