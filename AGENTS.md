@@ -200,6 +200,15 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 **Icons/assets — DONE (v0.1.12, canvas "BxRibbon"):** see section 3; PNGs
 are rendered from SVG (5D geometry from `../KeepmarkMobile` launcher icon).
 
+**Chromium narrow host permissions (not started, agreed 2026-10-11):** Chrome
+Web Store flags `host_permissions https://*/*` as "broad host permissions"
+(in-depth review, slower on every update). Plan: keep only the default
+service in `host_permissions`, move `https://*/*` to
+`optional_host_permissions`, call `chrome.permissions.request({origins})`
+from the popup/manager (user gesture) on connect and on move service; test
+connect + move flows (unit + `qa:browser`). First check whether CORS alone
+already lets the MV3 worker reach the service without any host grant.
+
 **Known limitations / next features (not started):** manual browser QA
 (see README "Get it"); QR connect (only `QrDelimiter` constant exists);
 no multi-account; no auto-backup schedule; toolbar toggle + Chromium Menu
