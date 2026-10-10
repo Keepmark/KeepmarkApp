@@ -61,12 +61,12 @@ describe('t / tn', () => {
 describe('displayPath', () => {
   it('shows browser names for the sync root titles, only at path boundaries', () => {
     setLang('en');
-    expect(displayPath('[xbs] Other / Work / Regex101')).toBe('Other Bookmarks / Work / Regex101');
-    expect(displayPath('GitHub: [xbs] Other / Dev → [xbs] Toolbar')).toBe('GitHub: Other Bookmarks / Dev → Bookmarks Toolbar');
-    expect(displayPath('[xbs] Menu')).toBe('Bookmarks Menu');
+    expect(displayPath('[xbs] Other / Work / Regex101')).toBe('Other / Work / Regex101');
+    expect(displayPath('GitHub: [xbs] Other / Dev → [xbs] Toolbar')).toBe('GitHub: Other / Dev → Toolbar');
+    expect(displayPath('[xbs] Menu')).toBe('Menu');
     expect(displayPath('[xbs] Menus / x')).toBe('[xbs] Menus / x');
     setLang('it');
-    expect(displayPath('[xbs] Toolbar / MDN')).toBe('Barra dei segnalibri / MDN');
+    expect(displayPath('[xbs] Toolbar / MDN')).toBe('Toolbar / MDN');
     setLang('en');
   });
 });

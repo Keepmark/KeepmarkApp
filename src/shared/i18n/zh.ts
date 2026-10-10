@@ -470,7 +470,7 @@ export const zh: Record<MessageKey, string> = {
   'val.new.different': '新密码必须与当前密码不同。',
   'val.new.mismatch': '两次输入的新密码不一致。',
   'val.target.passwordRequired': '需要目标同步的密码。',
-  'container.menu': '书签菜单',
-  'container.other': '其他书签',
-  'container.toolbar': '书签工具栏',
+  'container.menu': 'Menu',
+  'container.other': 'Other',
+  'container.toolbar': 'Toolbar',
 };

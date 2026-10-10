@@ -469,7 +469,7 @@ export const it: Record<MessageKey, string> = {
   'val.new.different': 'La nuova password deve essere diversa da quella attuale.',
   'val.new.mismatch': 'Le nuove password non coincidono.',
   'val.target.passwordRequired': 'La password della sincronizzazione di destinazione è obbligatoria.',
-  'container.menu': 'Menu segnalibri',
-  'container.other': 'Altri segnalibri',
-  'container.toolbar': 'Barra dei segnalibri',
+  'container.menu': 'Menu',
+  'container.other': 'Other',
+  'container.toolbar': 'Toolbar',
 };

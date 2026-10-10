@@ -469,8 +469,8 @@ export const en = {
   'val.new.different': 'The new password must be different from the current one.',
   'val.new.mismatch': 'New passwords do not match.',
   'val.target.passwordRequired': 'The target sync password is required.',
-  'container.menu': 'Bookmarks Menu',
-  'container.other': 'Other Bookmarks',
-  'container.toolbar': 'Bookmarks Toolbar',
+  'container.menu': 'Menu',
+  'container.other': 'Other',
+  'container.toolbar': 'Toolbar',
 } as const;
 export type MessageKey = keyof typeof en;
