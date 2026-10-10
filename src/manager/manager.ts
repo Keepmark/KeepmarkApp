@@ -955,6 +955,7 @@ function renderDuplicates(): void {
     });
     footer.append(del);
     div.append(footer);
+    box.append(div);
   }
 }
 
