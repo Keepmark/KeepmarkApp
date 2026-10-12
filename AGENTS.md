@@ -18,6 +18,13 @@ interop).
 - License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.18`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
+- Distribution: Chromium on the Chrome Web Store
+  (<https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb>,
+  item id `jaaekkbgpeiikepahjelfbkfgpjphbhb`); Firefox on AMO pending review
+  (add-on id `keepmark@proton.me`). GitHub releases
+  (<https://github.com/Keepmark/KeepmarkApp/releases>, tag `vX.Y.Z`) carry the
+  Chromium `.zip` uploaded to the store + the Mozilla-signed `.xpi`
+  (v0.1.18 ships the 0.1.17 `.xpi`). Create them with `gh release create`.
 
 ## 2. Commands (run from `KeepmarkApp/` only)
 
