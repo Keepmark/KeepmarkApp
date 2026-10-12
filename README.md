@@ -111,10 +111,12 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
 - **Chrome, Edge, Brave:** install from the
   [Chrome Web Store](https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb).
 - **Firefox:** coming soon on addons.mozilla.org. Meanwhile the
-  Mozilla-signed `.xpi` is on the [Releases](../../releases) page.
+  Mozilla-signed `.xpi` is in the
+  [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest).
 
-Every release also carries the Chromium `.zip`, the same package uploaded to
-the Chrome Web Store.
+Every [release](https://github.com/Keepmark/KeepmarkApp/releases) also
+carries the Chromium `.zip`, the same package uploaded to the Chrome Web
+Store.
 
 Project home: <https://github.com/Keepmark>.
 
@@ -151,7 +153,8 @@ Load an unpacked build for testing:
 
 - **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on →
   `build/firefox/manifest.json`. A temporary add-on is removed when Firefox
-  closes; for a permanent install use the signed `.xpi` from Releases.
+  closes; for a permanent install use the signed `.xpi` from the
+  [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest).
 - **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load
   unpacked → `build/chromium`.
 
