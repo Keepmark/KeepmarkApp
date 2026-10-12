@@ -11,6 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Firefox-MV2-e66000" alt="Firefox" />
+  <a href="https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb"><img src="https://img.shields.io/badge/Chrome%20Web%20Store-available-1a73e8" alt="Chrome Web Store" /></a>
   <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Brave-MV3-1a73e8" alt="Chromium-based browsers" />
   <img src="https://img.shields.io/badge/license-GPL--3.0--only-243878" alt="GPL-3.0-only" />
   <img src="https://img.shields.io/badge/languages-en%20%C2%B7%20it%20%C2%B7%20fr%20%C2%B7%20es%20%C2%B7%20de%20%C2%B7%20ja%20%C2%B7%20pt--BR%20%C2%B7%20ru%20%C2%B7%20zh-4a5170" alt="Languages" />
@@ -107,22 +108,52 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
 
 ## Get it
 
-Download the latest build from the [Releases](../../releases) page, or build
-it yourself:
+- **Chrome, Edge, Brave:** install from the
+  [Chrome Web Store](https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb).
+- **Firefox:** coming soon on addons.mozilla.org. Meanwhile the
+  Mozilla-signed `.xpi` is on the [Releases](../../releases) page.
 
-```sh
-npm install
-npm run build      # build/firefox and build/chromium
-```
-
-Then load it:
-
-- **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on →
-  `build/firefox/manifest.json`.
-- **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load
-  unpacked → `build/chromium`.
+Every release also carries the Chromium `.zip`, the same package uploaded to
+the Chrome Web Store.
 
 Project home: <https://github.com/Keepmark>.
+
+## Build from source
+
+Requirements: Node.js 22 (LTS) with npm, and `zip` or `python3` for
+packaging. Run everything from the repository root.
+
+```sh
+npm ci               # install the locked dependencies
+npm test             # unit and UI tests (Vitest, no browser needed)
+npm run lint         # type-check both targets
+```
+
+Build one browser or both:
+
+```sh
+npm run build:firefox    # build/firefox  (Manifest V2)
+npm run build:chromium   # build/chromium (Manifest V3)
+npm run build            # both
+```
+
+Package for the stores (builds both, then zips them):
+
+```sh
+npm run package      # dist/keepmark-firefox-<version>.zip
+                     # dist/keepmark-chromium-<version>.zip
+```
+
+`<version>` comes from `package.json`. The packaging step refuses a build
+whose manifest version differs from it.
+
+Load an unpacked build for testing:
+
+- **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on →
+  `build/firefox/manifest.json`. A temporary add-on is removed when Firefox
+  closes; for a permanent install use the signed `.xpi` from Releases.
+- **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load
+  unpacked → `build/chromium`.
 
 ## Documentation
 
