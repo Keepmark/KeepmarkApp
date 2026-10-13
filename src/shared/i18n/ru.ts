@@ -452,8 +452,6 @@ export const ru: Record<MessageKey, string> = {
   'ui.pill.checking': 'Проверка…',
   'ui.pill.behind': 'Отстаёт',
   'ui.pill.synced': 'Синхронизировано',
-  'ui.badge.official': 'Официальный сервис',
-  'ui.badge.custom': 'Свой сервис',
   'ui.space.of': '{used} из {max}',
   'ui.bookmarksCount_one': '{count} закладка',
   'ui.bookmarksCount_other': 'Закладок: {count}',

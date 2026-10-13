@@ -450,8 +450,6 @@ export const ja: Record<MessageKey, string> = {
   'ui.pill.checking': '確認中…',
   'ui.pill.behind': '遅れあり',
   'ui.pill.synced': '同期済み',
-  'ui.badge.official': '公式サービス',
-  'ui.badge.custom': 'カスタムサービス',
   'ui.space.of': '{used} / {max}',
   'ui.bookmarksCount_one': '{count} 件のブックマーク',
   'ui.bookmarksCount_other': '{count} 件のブックマーク',

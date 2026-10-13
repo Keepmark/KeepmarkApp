@@ -139,13 +139,11 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const serviceUrl = status.serviceUrl ?? DefaultServiceUrl;
   $(`${prefix}-server`).textContent = serviceUrl;
   if (swversion) swversion.textContent = status.serviceVersion ?? ping?.version ?? '—';
-  const official = serviceUrl.replace(/\/+$/, '') === DefaultServiceUrl;
   // Stored flag is the offline fallback: without it an unreachable service
-  // would flicker the contract suffix on every failed probe.
+  // would flicker the contract badge on every failed probe.
   const v12 = ping?.supportsV12 ?? status?.supportsV12 ?? false;
-  const contract = v12 ? ' · API v1.2' : '';
-  badge.textContent = `${official ? t('ui.badge.official') : t('ui.badge.custom')}${contract}`;
-  badge.className = `badge ${official ? 'official' : 'custom'}`;
+  badge.textContent = v12 ? 'API v1.2' : '';
+  badge.className = 'badge';
   $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
   $(`${prefix}-last`).textContent = status.lastUpdated ? formatDateTime(status.lastUpdated) : '—';
 

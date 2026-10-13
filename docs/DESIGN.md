@@ -51,8 +51,7 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 |---|---|
 | `.card` + `.status-row` + `.pill` + `.badge` + `.status-grid` + `.meter` | status card, rendered only by shared `renderStatusCard(prefix)` |
 | `.pill.ok/.warn/.bad/.busy` | Synced / Behind / Not connected+Offline / Syncing+Checking |
-| `.badge` (`.official` = solid border for the official service, default
-  dashed for custom services) | `Official/Custom service [· API v1.2]`, counts, contract tag |
+| `.badge` (hidden when `:empty`) | `API v1.2` service tag, counts, contract tag |
 | `.row` | button clusters (`gap 8px`, wrap in manager) |
 | `.mini` | inline small buttons (Copy, Restore/Delete, Undo) |
 | `.check` | radio/checkbox label rows |
@@ -127,10 +126,9 @@ Gates: `npm test` 268 pass / 4 skip (live e2e) · `npm run lint` clean
 1. **Popup tokens incomplete** — fixed: `--ok`/`--warn` added to popup
    `:root`, `.pill.ok/.warn`/`.warning`/`.undo` now use `var()` like the
    manager. Rule: new pages must define the full token set in `:root`.
-2. **Dead `official`/`custom` classes** — fixed: `.badge.official`
-   (solid border) defined in both CSS files; custom keeps the default
-   dashed badge. Rule: every class assigned in `ui.ts` must exist in both
-   page stylesheets.
+2. **Dead `official`/`custom` classes** — obsolete: the official/custom
+   service classification was removed (badge now only `API v1.2`). Rule:
+   every class assigned in `ui.ts` must exist in both page stylesheets.
 3. **Dead dup CSS in popup** — fixed: `.dup-group` rules removed from
    `popup.css` (popup never renders duplicates). Rule: don't copy
    component CSS to pages that don't render the component.

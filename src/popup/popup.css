@@ -481,13 +481,6 @@ button.mini {
 
 .badge:empty { display: none; }
 
-/* Custom services: outlined instead of filled. */
-.badge.custom {
-  background: transparent;
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
 dl {
   display: grid;
   grid-template-columns: auto 1fr;

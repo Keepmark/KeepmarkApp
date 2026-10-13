@@ -450,8 +450,6 @@ export const it: Record<MessageKey, string> = {
   'ui.pill.checking': 'Verifica…',
   'ui.pill.behind': 'Da aggiornare',
   'ui.pill.synced': 'Sincronizzato',
-  'ui.badge.official': 'Servizio ufficiale',
-  'ui.badge.custom': 'Servizio personalizzato',
   'ui.space.of': '{used} di {max}',
   'ui.bookmarksCount_one': '{count} segnalibro',
   'ui.bookmarksCount_other': '{count} segnalibri',

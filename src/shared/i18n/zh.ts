@@ -451,8 +451,6 @@ export const zh: Record<MessageKey, string> = {
   'ui.pill.checking': '正在检查…',
   'ui.pill.behind': '待更新',
   'ui.pill.synced': '已同步',
-  'ui.badge.official': '官方服务',
-  'ui.badge.custom': '自定义服务',
   'ui.space.of': '{used} / {max}',
   'ui.bookmarksCount_one': '{count} 个书签',
   'ui.bookmarksCount_other': '{count} 个书签',

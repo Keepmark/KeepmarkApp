@@ -81,7 +81,7 @@ re-running vectors + e2e (§11), and breaking them is a major finding.
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `DefaultServiceUrl` | `https://api.xbrowsersync.org` | default + "Official service" badge identity |
+| `DefaultServiceUrl` | `https://api.xbrowsersync.org` | default service URL |
 | `MinApiVersion` | `1.1.9` | minimum service API; older → `UnsupportedApiVersionException`, link blocked |
 | `ApiVersion` | `1.1.13` | `Accept-Version` header on all legacy calls |
 | `ApiVersion12` | `1.2.0` | `Accept-Version` on extended calls, only after capability probe |
@@ -402,8 +402,8 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
   `validateSwitch` (confirm in BOTH modes; id for existing),
   `validatePasswordChange` (current required, next ≠ current, confirm match).
 - Status card (`renderStatusCard`, prefixes `p`/`m`/`t`): unlinked clears EVERY
-  field to `—` (regression-pinned); badge `Official/Custom service` + `· API
-  v1.2` suffix (live probe wins, stored flag is the offline fallback); pill
+  field to `—` (regression-pinned); service badge shows only `API
+  v1.2` (empty/hidden on v1.1; no official/custom classification) (live probe wins, stored flag is the offline fallback); pill
   priority `Offline > Syncing… > Checking… > Behind > Synced`; space
   `used of max` with meter, count `N bookmarks`, optional service-version row.
 - `contractGate({liveV12, storedV12, syncEnabled})`: enabled iff v1.2;

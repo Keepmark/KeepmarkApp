@@ -450,8 +450,6 @@ export const pt: Record<MessageKey, string> = {
   'ui.pill.checking': 'Verificando…',
   'ui.pill.behind': 'Atrasado',
   'ui.pill.synced': 'Sincronizado',
-  'ui.badge.official': 'Serviço oficial',
-  'ui.badge.custom': 'Serviço personalizado',
   'ui.space.of': '{used} de {max}',
   'ui.bookmarksCount_one': '{count} favorito',
   'ui.bookmarksCount_other': '{count} favoritos',

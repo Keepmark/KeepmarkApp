@@ -382,12 +382,6 @@ button.danger:hover { background: color-mix(in srgb, var(--danger) 10%, var(--su
 
 .badge:empty { display: none; }
 
-.badge.custom {
-  background: transparent;
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
 dl {
   display: grid;
   grid-template-columns: auto 1fr;

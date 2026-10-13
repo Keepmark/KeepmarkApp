@@ -68,24 +68,25 @@ describe('status card (popup + manager share this renderer)', () => {
     expect((document.getElementById('t-space-fill') as HTMLElement).style.width).toBe('0%');
   });
 
-  it('renders synced state with official badge and space bar', () => {
+  it('renders synced state with space bar and no service badge on legacy', () => {
     renderStatusCard('t', {
       status: linked(),
       ping: { reachable: true, maxSyncSize: 1048576, remoteLastUpdated: '2026-09-25T10:39:48.000Z' },
     });
     expect(document.getElementById('t-pill')!.textContent).toBe('Synced');
     expect(document.getElementById('t-pill')!.className).toContain('ok');
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('');
     expect(document.getElementById('t-space')!.textContent).toContain('of');
     expect(document.getElementById('t-count')!.textContent).toBe('2089 bookmarks');
   });
 
-  it('flags custom services', () => {
+  it('does not classify services as official or custom', () => {
     renderStatusCard('t', {
       status: { ...linked(), serviceUrl: 'https://sync.example.com/' },
       ping: { reachable: true },
     });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Custom service');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('');
+    expect(document.getElementById('t-service-badge')!.className).toBe('badge');
   });
 
   it('shows Behind when the remote moved', () => {
@@ -112,9 +113,9 @@ describe('status card (popup + manager share this renderer)', () => {
 
   it('contract suffix falls back to the stored flag when offline', () => {
     renderStatusCard('t', { status: { ...linked(), supportsV12: true }, ping: undefined });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service · API v1.2');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('API v1.2');
     renderStatusCard('t', { status: { ...linked(), supportsV12: true }, ping: { reachable: true, supportsV12: false } });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('');
   });
 
   it('works without max size and without the count element', () => {
@@ -126,11 +127,11 @@ describe('status card (popup + manager share this renderer)', () => {
 
   it('tags the v1.2 contract on the badge, legacy badge unchanged', () => {
     renderStatusCard('t', { status: linked(), ping: { reachable: true, supportsV12: true } });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service · API v1.2');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('API v1.2');
     renderStatusCard('t', { status: linked(), ping: { reachable: true } });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('');
     renderStatusCard('t', { status: linked(), ping: { reachable: true, supportsV12: false } });
-    expect(document.getElementById('t-service-badge')!.textContent).toBe('Official service');
+    expect(document.getElementById('t-service-badge')!.textContent).toBe('');
   });
 
   it('shows the service version when the row exists, ignores its absence', () => {

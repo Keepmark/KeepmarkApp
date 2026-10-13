@@ -450,8 +450,6 @@ export const en = {
   'ui.pill.checking': 'Checking…',
   'ui.pill.behind': 'Behind',
   'ui.pill.synced': 'Synced',
-  'ui.badge.official': 'Official service',
-  'ui.badge.custom': 'Custom service',
   'ui.space.of': '{used} of {max}',
   'ui.bookmarksCount_one': '{count} bookmark',
   'ui.bookmarksCount_other': '{count} bookmarks',
