@@ -216,6 +216,16 @@ export function contractGate(input: {
  * the popup/manager surfaces). */
 export { describeMoveResult } from '../shared/sync.js';
 
+/** The "Last action" banner is a short-lived notice: it hides this long
+ * after the action (the undo slot itself stays; safety backups cover later
+ * rollbacks). */
+export const UndoBannerMs = 60_000;
+
+/** Time left before the undo banner for an action at `when` hides (0 = gone). */
+export function undoBannerRemainingMs(when: number, now = Date.now()): number {
+  return Math.max(0, when + UndoBannerMs - now);
+}
+
 /** Human-readable undo slot description for banners. */
 export function describeUndo(kind: string, count: number | undefined, when: number): string {
   const what = undoWhat(kind);

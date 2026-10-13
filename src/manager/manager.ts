@@ -11,6 +11,7 @@ import {
   describeMoveResult,
   describeSyncExpiry,
   describeUndo,
+  undoBannerRemainingMs,
   formatBytes,
   validatePasswordChange,
   validateServiceUrl,
@@ -25,7 +26,7 @@ import {
 import { StoreKey } from '../shared/store.js';
 import { displayPath, formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
-import { cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
+import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from '../popup/flow.js';
 import {
   ChangePasswordDone,
   ChangePasswordImplication,
@@ -197,7 +198,7 @@ async function refreshUndoBanner(): Promise<void> {
   }
   undoKind = undo.kind;
   $('undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
-  banner.hidden = false;
+  showFor('undo-banner', undoBannerRemainingMs(undo.timestamp), 'm-btn-undo');
 }
 
 /** Fetch detailed conflict preview from background. */
@@ -850,6 +851,8 @@ async function scanDuplicates(): Promise<void> {
 /** "N marked" counter + Delete-marked button state. */
 function updateDupBar(): void {
   const btn = $('m-btn-duplicates-delete-all') as HTMLButtonElement;
+  // Nothing to delete without duplicate groups: hide instead of a dead button.
+  btn.hidden = lastDupGroups.length === 0;
   btn.disabled = dupMarked.size === 0;
   btn.textContent = dupMarked.size > 0 ? t('mgr.dup.deleteMarkedCount', { count: dupMarked.size }) : t('manager.dup.deleteMarked');
 }
@@ -982,6 +985,10 @@ function initDuplicatesSection(): void {
         showError('dup-error', (err as Error).message);
       }
     });
+    // withBusy restores the pre-click label + enabled state last: re-assert
+    // the bar after it, or the rescan's empty selection is overwritten by a
+    // stale "Delete N marked" that still accepts clicks.
+    updateDupBar();
   });
 }
 

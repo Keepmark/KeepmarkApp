@@ -75,6 +75,35 @@ export function cancelConfirm(anchorId: string): void {
   pending.get(anchorId)?.(false);
 }
 
+const hideTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Show element `id` now and hide it after `ms` (re-arming replaces the
+ * previous timer; `ms <= 0` hides at once). An open confirmation on
+ * `anchorId` is cancelled first; a busy (disabled) anchor postpones it. */
+export function showFor(id: string, ms: number, anchorId: string): void {
+  clearTimeout(hideTimers.get(id));
+  hideTimers.delete(id);
+  const el = $(id) as HTMLElement;
+  const hide = (): void => {
+    // confirmInline also disables the anchor; only a disabled anchor with no
+    // open confirmation means the action itself is running.
+    const anchor = document.getElementById(anchorId) as HTMLButtonElement | null;
+    if (anchor?.disabled && !document.getElementById(`${anchorId}-confirm`)) {
+      hideTimers.set(id, setTimeout(hide, 1000));
+      return;
+    }
+    hideTimers.delete(id);
+    cancelConfirm(anchorId);
+    el.hidden = true;
+  };
+  if (ms <= 0) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  hideTimers.set(id, setTimeout(hide, ms));
+}
+
 /** Show `message` in the error box `id` (`<base>-error[-n]`, next to the
  * action that failed). */
 export function showError(id: string, message: string): void {

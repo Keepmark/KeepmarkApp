@@ -13,7 +13,7 @@
   </header>
 
   <main>
-  <section id="view-connect">
+  <section id="view-connect" hidden>
     <div id="p-removed" class="warning removed" hidden>
       <p><strong data-i18n="popup.removed.title">Your sync is gone from the service.</strong></p>
       <p id="p-removed-text"></p>
@@ -37,15 +37,6 @@
       <label><span data-i18n="common.syncId">Sync ID</span>
         <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" data-i18n-placeholder="popup.connect.syncIdPlaceholder" />
       </label>
-      <fieldset class="options" role="radiogroup" aria-label="Link direction" data-i18n-aria-label="popup.connect.directionLabel">
-        <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
-        <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
-          <span><b><span data-i18n="common.keepServerCopy">Keep the server copy</span> <span class="tag ok" data-i18n="common.recommended">Recommended</span></b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
-        <label class="check option"><input type="radio" name="conn-direction" value="merge" />
-          <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="popup.connect.mergeDesc">Nothing is deleted: items from both copies are kept. Shows the counts first.</small></span></label>
-        <label class="check option"><input type="radio" name="conn-direction" value="push" />
-          <span><b class="danger-text" data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
-      </fieldset>
     </div>
     <label><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
@@ -55,6 +46,17 @@
         <input id="confirm-password" type="password" autocomplete="new-password" />
       </label>
       <p class="hint" data-i18n="popup.connect.passwordHint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
+    </div>
+    <div id="conn-existing-direction" hidden>
+      <fieldset class="options" role="radiogroup" aria-label="Link direction" data-i18n-aria-label="popup.connect.directionLabel">
+        <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
+        <label class="check option"><input type="radio" name="conn-direction" value="pull" checked />
+          <span><b><span data-i18n="common.keepServerCopy">Keep the server copy</span> <span class="tag ok" data-i18n="common.recommended">Recommended</span></b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
+        <label class="check option"><input type="radio" name="conn-direction" value="merge" />
+          <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="popup.connect.mergeDesc">Nothing is deleted: items from both copies are kept. Shows the counts first.</small></span></label>
+        <label class="check option"><input type="radio" name="conn-direction" value="push" />
+          <span><b class="danger-text" data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
+      </fieldset>
     </div>
     <div id="connect-error" class="error" role="alert" hidden></div>
     <div class="row actions">

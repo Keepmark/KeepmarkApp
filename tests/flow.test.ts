@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('webextension-polyfill', () => ({ default: { runtime: { sendMessage: async () => ({ ok: true }) } } }));
 
-import { cancelConfirm, clearMessages, confirmInline, showError } from '../src/popup/flow';
+import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from '../src/popup/flow';
 
 function click(id: string): void {
   (document.getElementById(id) as HTMLButtonElement).click();
@@ -93,5 +93,49 @@ describe('showError / clearMessages', () => {
     expect(el.hidden).toBe(true);
     expect(el.textContent).toBe('');
     expect(document.getElementById('a-result')!.hidden).toBe(true);
+  });
+});
+
+describe('showFor (auto-hiding banner)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div id="banner" hidden><span class="row"><button id="act">Undo</button></span></div>';
+  });
+
+  it('shows now and hides after the given time', () => {
+    showFor('banner', 60_000, 'act');
+    expect(document.getElementById('banner')!.hidden).toBe(false);
+    vi.advanceTimersByTime(59_999);
+    expect(document.getElementById('banner')!.hidden).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(document.getElementById('banner')!.hidden).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('hides at once when the time is already over', () => {
+    document.getElementById('banner')!.hidden = false;
+    showFor('banner', 0, 'act');
+    expect(document.getElementById('banner')!.hidden).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('cancels an open confirmation when it hides', async () => {
+    showFor('banner', 1000, 'act');
+    const answer = confirmInline('act', { message: 'Undo?', confirmLabel: 'Yes, undo' });
+    vi.advanceTimersByTime(1000);
+    expect(await answer).toBe(false);
+    expect(document.getElementById('banner')!.hidden).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('waits while the action is busy', () => {
+    showFor('banner', 1000, 'act');
+    (document.getElementById('act') as HTMLButtonElement).disabled = true;
+    vi.advanceTimersByTime(5000);
+    expect(document.getElementById('banner')!.hidden).toBe(false);
+    (document.getElementById('act') as HTMLButtonElement).disabled = false;
+    vi.advanceTimersByTime(1000);
+    expect(document.getElementById('banner')!.hidden).toBe(true);
+    vi.useRealTimers();
   });
 });

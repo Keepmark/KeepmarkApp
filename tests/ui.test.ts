@@ -13,6 +13,7 @@ import {
   describeMoveResult,
   describeSyncExpiry,
   describeUndo,
+  undoBannerRemainingMs,
   formatBytes,
   renderStatusCard,
   validateConnect,
@@ -256,6 +257,15 @@ describe('describeUndo', () => {
       expect(text).toContain('Undo restores');
     }
     expect(describeUndo('connect-pull', undefined, 0)).not.toContain('bookmarks)');
+  });
+});
+
+describe('undoBannerRemainingMs', () => {
+  it('counts down one minute from the action, never below zero', () => {
+    expect(undoBannerRemainingMs(1_000, 1_000)).toBe(60_000);
+    expect(undoBannerRemainingMs(1_000, 31_000)).toBe(30_000);
+    expect(undoBannerRemainingMs(1_000, 61_000)).toBe(0);
+    expect(undoBannerRemainingMs(1_000, 999_999)).toBe(0);
   });
 });
 

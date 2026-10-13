@@ -10,6 +10,7 @@ import {
   $,
   copyText,
   describeUndo,
+  undoBannerRemainingMs,
   input,
   validateConnect,
   renderStatusCard,
@@ -26,7 +27,7 @@ import {
   type StatusResponse,
   type UndoState,
 } from '../shared/messages.js';
-import { cancelConfirm, clearMessages, confirmInline, showError } from './flow.js';
+import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from './flow.js';
 import {
   type Direction,
   RemovedSyncDismissImplication,
@@ -56,7 +57,9 @@ let ping: PingResponse | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
 let refreshSeq = 0;
 
-async function refreshAll(): Promise<void> {
+/** `pickView`: choose connect vs main as soon as GetStatus answers, before
+ * the slower service ping (the popup opens with both views hidden). */
+async function refreshAll(pickView = false): Promise<void> {
   const my = ++refreshSeq;
   let statusErr: string | undefined;
   try {
@@ -66,6 +69,7 @@ async function refreshAll(): Promise<void> {
     statusErr = (err as Error)?.message ?? String(err);
   }
   if (my !== refreshSeq) return;
+  if (pickView) showView(status?.syncEnabled ? 'main' : 'connect');
   renderStatusCard('p', { status, ping: undefined });
   let pingErr: string | undefined;
   try {
@@ -185,7 +189,7 @@ async function refreshUndoBanner(): Promise<void> {
   }
   undoKind = undo.kind;
   $('p-undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
-  banner.hidden = false;
+  showFor('p-undo', undoBannerRemainingMs(undo.timestamp), 'btn-undo');
 }
 
 async function initConnect(): Promise<void> {
@@ -193,6 +197,7 @@ async function initConnect(): Promise<void> {
   const updateMode = (): void => {
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
     ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
+    ($('conn-existing-direction') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
     updateDirection();
   };
@@ -373,8 +378,7 @@ async function init(): Promise<void> {
   await initConnect();
   initMain();
   initRemovedCard();
-  await refreshAll();
-  showView(status?.syncEnabled ? 'main' : 'connect');
+  await refreshAll(true);
 }
 
 void init();
