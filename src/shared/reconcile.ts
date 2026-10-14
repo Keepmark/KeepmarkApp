@@ -94,14 +94,18 @@ export function reconcileContainer(
       if (!current || current.title !== meta.title || current.url !== meta.url) changed = true;
       // Preserve description/tags: native nodes don't carry them, the synced
       // side owns them. Dropping them here deleted metadata on every push.
+      // dateAdded too: the synced value is the original creation time (a
+      // native created by a pull only knows when it was populated).
       const node: BookmarkNode = {
         ...meta,
         description: current?.description,
         tags: current?.tags,
+        dateAdded: current?.dateAdded,
         id: knownId,
       };
       if (node.description === undefined) delete node.description;
       if (node.tags === undefined) delete node.tags;
+      if (node.dateAdded === undefined) delete node.dateAdded;
       liveSynced.add(knownId);
       if (isFolder) {
         // Folder: children follow the native side exactly (empty stays empty).
@@ -127,6 +131,7 @@ export function reconcileContainer(
     const id = freshId();
     const node = newBookmark(native.title, url);
     node.id = id;
+    if (url !== SeparatorUrl) node.dateAdded = typeof native.dateAdded === 'number' ? native.dateAdded : Date.now();
     liveSynced.add(id);
     if (native.children?.length) node.children = native.children.map(convert);
     else if (!url && !Array.isArray(node.children)) node.children = [];

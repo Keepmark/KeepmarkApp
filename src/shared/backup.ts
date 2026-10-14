@@ -79,6 +79,9 @@ export function validateTree(nodes: BookmarkNode[]): void {
     if (node.tags !== undefined && (!Array.isArray(node.tags) || node.tags.some((t) => typeof t !== 'string'))) {
       throw new Error(t('err.backupBadTags'));
     }
+    if (node.dateAdded !== undefined && typeof node.dateAdded !== 'number') {
+      throw new Error(t('err.backupInvalidNode'));
+    }
     seen += 1;
     if (seen > MaxBackupNodes) throw new Error(t('err.backupNodeLimit'));
     if (node.children !== undefined) {

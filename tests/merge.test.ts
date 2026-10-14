@@ -92,6 +92,21 @@ describe('mergeTrees', () => {
     expect(docs.children!.map((b) => b.url)).toEqual(['https://manual.test', 'https://guide.test']);
   });
 
+  it('keeps dateAdded of adopted local nodes', () => {
+    const loc: BookmarkNode[] = [
+      {
+        title: BookmarkContainer.Other,
+        children: [
+          { title: 'Local only', url: 'https://only-local.test', dateAdded: 123 },
+          { title: 'Brand new folder', dateAdded: 456, children: [] },
+        ],
+      },
+    ];
+    const other = mergeTrees(loc, remote).tree.find((c) => c.title === BookmarkContainer.Other)!.children!;
+    expect(other.find((n) => n.url === 'https://only-local.test')!.dateAdded).toBe(123);
+    expect(other.find((n) => n.title === 'Brand new folder')!.dateAdded).toBe(456);
+  });
+
   it('handles empty sides', () => {
     const onlyRemote = mergeTrees([], remote);
     expect(urls(onlyRemote.tree)).toEqual(urls(remote));

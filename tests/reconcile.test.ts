@@ -80,6 +80,27 @@ describe('reconcileContainer', () => {
     expect(res.bookmarks[0].children![0]).toMatchObject({ description: 'keep me', tags: ['k'] });
   });
 
+  it('keeps the synced dateAdded (never a diff source) and stamps new natives', () => {
+    const tree = syncedTree();
+    tree[0].children![0].dateAdded = 1000;
+    const nn: NativeNode[] = [
+      { ...natives()[0], dateAdded: 999_999 },
+      natives()[1],
+      { id: 'n8', title: 'Dated', url: 'https://dated.test', dateAdded: 5000 },
+      { id: 'n9', title: 'Undated', url: 'https://undated.test' },
+    ];
+    const before = Date.now();
+    const res = reconcileContainer(nn, BookmarkContainer.Other, tree, mappings(), NEW_TAB);
+    const kids = res.bookmarks[0].children!;
+    expect(kids[0].dateAdded).toBe(1000);
+    expect('dateAdded' in kids[1]).toBe(false);
+    expect(kids[2].dateAdded).toBe(5000);
+    expect(kids[3].dateAdded).toBeGreaterThanOrEqual(before);
+    // Only a known node with a native-side date: no push.
+    const same = reconcileContainer([{ ...natives()[0], dateAdded: 7 }, natives()[1]], BookmarkContainer.Other, tree, mappings(), NEW_TAB);
+    expect(same.changed).toBe(false);
+  });
+
   it('folder<->bookmark type flip is a change with normalized shape', () => {
     // Synced folder id 2 becomes a plain bookmark natively.
     const nn: NativeNode[] = [

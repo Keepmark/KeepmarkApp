@@ -74,6 +74,11 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (52 checks, 
 - Queue lives only in the background context; popup talks via messages.
 - Native edits (listener debounce, popup add/remove) reconcile native→synced
   through stored id mappings (stable ids), then push.
+- `dateAdded` (optional Keepmark field, Unix ms, shared with KeepmarkMobile):
+  new natives take the browser's `dateAdded` (else now); known nodes keep the
+  synced value, like description/tags, and it is never a diff source. Full
+  native reads (`readAll`: first upload, conflict upload/merge) copy the
+  native date, which on a pulled device is the populate time.
 - 409: the conflict is persisted (survives worker sleeps/restarts), the
   uncommitted tree is stashed as a `keepmark-conflict-*.json` download and a
   notification points to the manager, where you pick Take remote / Upload

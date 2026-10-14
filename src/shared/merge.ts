@@ -110,6 +110,7 @@ export function mergeTrees(local: BookmarkNode[], remote: BookmarkNode[]): Merge
     if (node.url !== undefined) out.url = node.url;
     if (node.description !== undefined) out.description = node.description;
     if (node.tags !== undefined) out.tags = [...node.tags];
+    if (node.dateAdded !== undefined) out.dateAdded = node.dateAdded;
     if (node.children) {
       out.children = [];
       for (const child of node.children) {
@@ -145,6 +146,7 @@ export function mergeTrees(local: BookmarkNode[], remote: BookmarkNode[]): Merge
           const adopted: BookmarkNode = { title: node.title, url: node.url, id: freshId() };
           if (node.description !== undefined) adopted.description = node.description;
           if (node.tags !== undefined) adopted.tags = [...node.tags];
+          if (node.dateAdded !== undefined) adopted.dateAdded = node.dateAdded;
           target.children.push(adopted);
           stats.localOnly += 1;
         }
@@ -164,6 +166,7 @@ export function mergeTrees(local: BookmarkNode[], remote: BookmarkNode[]): Merge
         const created: BookmarkNode = { title: node.title, children: [], id: freshId() };
         if (node.description !== undefined) created.description = node.description;
         if (node.tags !== undefined) created.tags = [...node.tags];
+        if (node.dateAdded !== undefined) created.dateAdded = node.dateAdded;
         target.children.push(created);
         foldersByPath.set(pathKey(childTrail), created);
         stats.foldersCreated += 1;

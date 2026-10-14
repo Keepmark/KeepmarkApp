@@ -10,6 +10,9 @@ export interface BookmarkNode {
   url?: string;
   description?: string;
   tags?: string[];
+  /** Keepmark extension: creation time in Unix ms (browser dateAdded).
+   *  Optional; legacy clients may drop it. Never a diff source. */
+  dateAdded?: number;
   children?: BookmarkNode[];
 }
 

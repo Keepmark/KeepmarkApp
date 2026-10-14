@@ -98,4 +98,19 @@ describe('bookmark helpers', () => {
     expect(synced[1]).toEqual({ url: 'xbs:separator' });
     expect(synced[2].children).toHaveLength(1);
   });
+
+  it('nativeToSynced copies dateAdded except on separators', () => {
+    const synced = nativeToSynced(
+      [
+        { id: '1', title: 'A', url: 'https://a.test', dateAdded: 123 },
+        { id: '2', title: '', type: 'separator', dateAdded: 456 },
+        { id: '3', title: 'F', dateAdded: 789, children: [{ id: '4', title: 'B', url: 'https://b.test' }] },
+      ],
+      'about:newtab',
+    );
+    expect(synced[0].dateAdded).toBe(123);
+    expect(synced[1]).toEqual({ url: 'xbs:separator' });
+    expect(synced[2].dateAdded).toBe(789);
+    expect('dateAdded' in synced[2].children![0]).toBe(false);
+  });
 });

@@ -120,7 +120,7 @@ export function newBookmark(
 
 /** Drop invalid keys, undefined, empty descriptions and empty tag lists. */
 export function cleanBookmark(node: BookmarkNode): BookmarkNode {
-  const validKeys = ['children', 'description', 'id', 'tags', 'title', 'url'];
+  const validKeys = ['children', 'dateAdded', 'description', 'id', 'tags', 'title', 'url'];
   const out: BookmarkNode = {};
   for (const key of validKeys as (keyof BookmarkNode)[]) {
     const value = node[key];
@@ -213,7 +213,7 @@ export function nativeIsSeparator(node: NativeNode, newTabUrl: string): boolean 
   );
 }
 
-/** Convert native nodes to synced bookmarks (no ids — assigned by dateAdded order). */
+/** Convert native nodes to synced bookmarks (no ids — assigned by dateAdded order; dateAdded copied). */
 export function nativeToSynced(
   nodes: NativeNode[],
   newTabUrl: string,
@@ -222,6 +222,7 @@ export function nativeToSynced(
   return nodes.map((native) => {
     const url = isSeparator(native) ? SeparatorUrl : native.url?.trim();
     const node = newBookmark(native.title, url);
+    if (url !== SeparatorUrl && typeof native.dateAdded === 'number') node.dateAdded = native.dateAdded;
     if (native.children?.length) node.children = nativeToSynced(native.children, newTabUrl, isSeparator);
     else if (!url) node.children = [];
     return node;
