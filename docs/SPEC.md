@@ -531,13 +531,13 @@ white-mark in-page chip.
   confirms, per-section evidence), rendering incl. dark mode, MV3 sleep/wake
   (alarms fire, debounce survives), real conflict (two clients racing → 409
   file + notify), real 401 (server wipe → snapshot + unlink), quota/413/429
-  paths if reproducible, AMO signing blocked (needs account/API keys;
-  release Firefox ignores `xpinstall.signatures.required=false`).
+  paths if reproducible, signed AMO install (release Firefox ignores
+  `xpinstall.signatures.required=false`, so only AMO builds install permanently).
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 52/52 on Firefox 157 + Chromium 153); remaining manual items in §11.3; permanent Firefox install
-blocked on AMO signing; no multi-account/auto-backup/QR; toolbar toggle +
+Browser QA automated (§11.2b, last run 52/52 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox listed on AMO
+since 0.1.22; no multi-account/auto-backup/QR; toolbar toggle +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
 assuming state.

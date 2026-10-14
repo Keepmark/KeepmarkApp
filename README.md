@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Firefox-MV2-e66000" alt="Firefox" />
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/keepmark/"><img src="https://img.shields.io/badge/Firefox%20Add--ons-available-e66000" alt="Firefox Add-ons" /></a>
   <a href="https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb"><img src="https://img.shields.io/badge/Chrome%20Web%20Store-available-1a73e8" alt="Chrome Web Store" /></a>
   <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Brave-MV3-1a73e8" alt="Chromium-based browsers" />
   <img src="https://img.shields.io/badge/license-GPL--3.0--only-243878" alt="GPL-3.0-only" />
@@ -110,17 +110,17 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
 
 - **Chrome, Edge, Brave:** install from the
   [Chrome Web Store](https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb).
-- **Firefox:** coming soon on addons.mozilla.org. Meanwhile the
-  Mozilla-signed `.xpi` is in the
-  [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest).
+- **Firefox:** install from
+  [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/keepmark/).
 
 Latest release:
 [v0.1.22](https://github.com/Keepmark/KeepmarkApp/releases/tag/v0.1.22),
 with the Firefox and Chromium packages both at 0.1.22.
 
 Every [release](https://github.com/Keepmark/KeepmarkApp/releases) also
-carries the Chromium `.zip`, the same package uploaded to the Chrome Web
-Store, and a `SHA256SUMS` file to verify the downloads.
+carries the Chromium `.zip` (the same package uploaded to the Chrome Web
+Store), the Mozilla-signed Firefox `.xpi` and a `SHA256SUMS` file to verify
+the downloads.
 
 Project home: <https://github.com/Keepmark>.
 
@@ -157,8 +157,8 @@ Load an unpacked build for testing:
 
 - **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on →
   `build/firefox/manifest.json`. A temporary add-on is removed when Firefox
-  closes; for a permanent install use the signed `.xpi` from the
-  [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest).
+  closes; for a permanent install use
+  [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/keepmark/).
 - **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → Load
   unpacked → `build/chromium`.
 

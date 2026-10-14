@@ -20,8 +20,9 @@ interop).
 - Commit + push whenever something stable lands (explicit user rule).
 - Distribution: Chromium on the Chrome Web Store
   (<https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb>,
-  item id `jaaekkbgpeiikepahjelfbkfgpjphbhb`); Firefox on AMO pending review
-  (add-on id `keepmark@proton.me`; 0.1.22 submitted with the source package
+  item id `jaaekkbgpeiikepahjelfbkfgpjphbhb`); Firefox on AMO
+  (<https://addons.mozilla.org/en-US/firefox/addon/keepmark/>, add-on id
+  `keepmark@proton.me`, listed since 0.1.22; submitted with the source package
   `https://github.com/Keepmark/KeepmarkApp/archive/refs/tags/v0.1.22.zip` and
   reviewer build steps `npm ci` + `npm run build:firefox`). GitHub releases
   (<https://github.com/Keepmark/KeepmarkApp/releases>, tag `vX.Y.Z`) carry the
