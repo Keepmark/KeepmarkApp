@@ -114,9 +114,13 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
   Mozilla-signed `.xpi` is in the
   [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest).
 
+Latest release:
+[v0.1.22](https://github.com/Keepmark/KeepmarkApp/releases/tag/v0.1.22),
+with the Firefox and Chromium packages both at 0.1.22.
+
 Every [release](https://github.com/Keepmark/KeepmarkApp/releases) also
 carries the Chromium `.zip`, the same package uploaded to the Chrome Web
-Store.
+Store, and a `SHA256SUMS` file to verify the downloads.
 
 Project home: <https://github.com/Keepmark>.
 
