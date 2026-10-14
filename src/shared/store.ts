@@ -24,6 +24,9 @@ export enum StoreKey {
   LastUpdated = 'lastUpdated',
   LastUpgradeVersion = 'lastUpgradeVersion',
   LogVerbosity = 'logVerbosity',
+  /** Native root folder ids the id mappings were built against (Chromium
+   *  roots move when the browser switches local/account bookmark storage). */
+  NativeRootKey = 'nativeRootKey',
   RemovedSync = 'removedSync',
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',

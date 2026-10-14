@@ -242,6 +242,9 @@ function renderConflictSection(): void {
   }
   section.hidden = false;
   const { mergeStats } = conflictPreview;
+  $('m-conflict-intro').textContent = t(
+    conflictPreview.reason === 'roots' ? 'manager.conflict.introRoots' : 'manager.conflict.intro',
+  );
   $('m-conflict-local-count').textContent = String(mergeStats.localCount);
   $('m-conflict-remote-count').textContent = String(mergeStats.remoteCount);
   $('m-conflict-remote-time').textContent = mergeStats.remoteCount > 0 ? t('common.items') : t('mgr.conflict.itemsEmpty');

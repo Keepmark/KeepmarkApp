@@ -161,7 +161,12 @@ export interface ConflictStateResponse {
 }
 
 /** Detailed merge preview for the conflict resolution UI. */
+/** Why a conflict was captured beyond a server change ('roots': this browser's
+ *  bookmark root folders moved, e.g. Chrome account sign-in/out). */
+export type ConflictReason = 'roots';
+
 export interface ConflictPreviewResponse {
+  reason?: ConflictReason;
   /** Content diff beyond URLs (moves, metadata, order, identical). When
    *  `diff.identical`, the background already cleared the conflict. */
   diff: TreeDiff;

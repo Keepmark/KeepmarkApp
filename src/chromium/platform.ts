@@ -1,5 +1,6 @@
 // Chromium platform specifics. Mirrors chromium-platform.service.ts:
-// fixed root ids Other=2 + Toolbar=1, no native Menu root (Menu ships as a
+// legacy root ids Other=2 + Toolbar=1 (fallback only: roots are resolved by
+// folderType in bookmarks.ts, account storage uses other ids), no native Menu root (Menu ships as a
 // folder inside Other), chrome:// or edge:// new tab.
 
 export const ChromiumRootIds = {

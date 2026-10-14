@@ -12,6 +12,9 @@ import { InMemoryLogger } from '../src/shared/logging';
 import { MessageCommand } from '../src/shared/messages';
 import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
 import { makeMockApi } from './firefox-bookmarks.test';
+import { makeChromiumMockApi } from './chromium-bookmarks.test';
+import { makeChromiumAdapter } from '../src/chromium/adapter';
+import type { NativeNode } from '../src/shared/bookmarks';
 
 const PASSWORD = 'correct horse battery staple';
 const SYNC_ID = 'core-test-id';
@@ -1830,5 +1833,79 @@ describe('phantom conflicts (review follow-up)', () => {
     expect(p.mergeStats.localOnly + p.mergeStats.remoteOnly).toBe(0);
     expect(p.diff.moved).toBe(1);
     expect(p.diff.movedSample[0]).toContain('Sub');
+  });
+});
+
+describe('chromium root switch (local <-> account storage)', () => {
+  async function linkedChromium(state: FakeApiState) {
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    const mockApi = makeChromiumMockApi();
+    await mockApi.create({ parentId: '2', title: 'A', url: 'https://a.test' });
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeChromiumAdapter(mockApi),
+      ports,
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
+    return { core, store, ports, mockApi };
+  }
+
+  /** Chrome signed in: account roots with new ids replace the local ones. */
+  async function switchToAccountRoots(mockApi: ReturnType<typeof makeChromiumMockApi>): Promise<void> {
+    const root = mockApi.nodes.get('0')!;
+    const accountRoot = (id: string, folderType: NativeNode['folderType']): NativeNode => ({
+      id, parentId: '0', title: id, folderType, syncing: true, children: [],
+    });
+    root.children = [accountRoot('4', 'bookmarks-bar'), accountRoot('5', 'other')];
+    for (const r of root.children) mockApi.nodes.set(r.id, r);
+    await mockApi.create({ parentId: '5', title: 'B', url: 'https://b.test' });
+  }
+
+  it('records the native roots the mappings were built on', async () => {
+    const { store } = await linkedChromium(baseState());
+    expect(await store.get(StoreKey.NativeRootKey)).toBe('2|1');
+  });
+
+  it('captures a conflict instead of pushing when the roots move', async () => {
+    const state = baseState();
+    const { core, store, ports, mockApi } = await linkedChromium(state);
+    const putsBefore = state.puts.length;
+    await switchToAccountRoots(mockApi);
+    await expect(core.pushAfterNativeChange()).resolves.toEqual({ pushed: false, conflict: true });
+    expect(state.puts).toHaveLength(putsBefore);
+    expect(await store.get(StoreKey.ConflictState)).toBeDefined();
+    expect(ports.notices.length).toBeGreaterThan(0);
+    expect(ports.notices.at(-1)!.message).toContain('bookmark folders changed');
+    expect((await store.get<{ reason?: string }>(StoreKey.ConflictState))?.reason).toBe('roots');
+    const preview = (await core.handleMessage({ command: MessageCommand.GetConflictPreview })) as { reason?: string };
+    expect(preview.reason).toBe('roots');
+  });
+
+  it('pull resolution repopulates the new roots and re-anchors the key', async () => {
+    const state = baseState();
+    const { core, store, mockApi } = await linkedChromium(state);
+    await switchToAccountRoots(mockApi);
+    await core.pushAfterNativeChange();
+    await core.handleMessage({ command: MessageCommand.ResolveConflict, direction: 'pull' });
+    expect(await store.get(StoreKey.NativeRootKey)).toBe('5|4');
+    const other = await mockApi.getChildren('5');
+    expect(other.map((n) => n.url)).toEqual(['https://a.test']);
+    const putsBefore = state.puts.length;
+    await expect(core.pushAfterNativeChange()).resolves.toEqual({ pushed: false });
+    expect(state.puts).toHaveLength(putsBefore);
+  });
+
+  it('a link made before the key existed adopts the current roots once', async () => {
+    const state = baseState();
+    const { core, store } = await linkedChromium(state);
+    await store.remove(StoreKey.NativeRootKey);
+    await expect(core.pushAfterNativeChange()).resolves.toEqual({ pushed: false });
+    expect(await store.get(StoreKey.NativeRootKey)).toBe('2|1');
+    expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
   });
 });

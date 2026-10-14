@@ -28,6 +28,11 @@ export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
     isSeparatorNode: opts.isSeparatorNode,
     syncContainers: [BookmarkContainer.Menu, BookmarkContainer.Other, BookmarkContainer.Toolbar],
 
+    rootKey: async () => {
+      const c = await ids();
+      return `${c.menu}|${c.other}|${c.toolbar}`;
+    },
+
     readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),
 
     clearAndPopulate: async (bookmarks, syncToolbar) => {

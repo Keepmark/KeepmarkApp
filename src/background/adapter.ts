@@ -22,6 +22,8 @@ export interface NativeAdapter extends NativeOps {
   readonly isSeparatorNode: (node: NativeNode) => boolean;
   /** Containers reconciled on native changes (chromium Menu = folder in Other). */
   readonly syncContainers: BookmarkContainer[];
+  /** Stable key of the native root folders the containers live in right now. */
+  rootKey(): Promise<string>;
   /** Native children of one synced container (chromium Menu = folder in Other). */
   readContainer(container: BookmarkContainer): Promise<NativeNode[]>;
   /** Remove the native node mapped to a synced id (folder = whole subtree). */

@@ -56,6 +56,7 @@ import {
   type ConflictStateResponse,
   type ConflictPreviewResponse,
   type ConflictResolutionDirection,
+  type ConflictReason,
 } from '../shared/messages.js';
 import { reconcileContainer } from '../shared/reconcile.js';
 import { Store, StoreKey, type SyncInfo } from '../shared/store.js';
@@ -157,6 +158,8 @@ interface StoredConflict {
   localCount: number;
   remoteLastUpdated: string;
   capturedAt: string;
+  /** Set when the conflict comes from native roots moving, not a server change. */
+  reason?: ConflictReason;
 }
 
 interface ConflictData {
@@ -164,6 +167,7 @@ interface ConflictData {
   localEncrypted: string;
   localCount: number;
   remoteLastUpdated: string;
+  reason?: ConflictReason;
 }
 
 export class BackgroundCore {
@@ -195,6 +199,7 @@ export class BackgroundCore {
     private options: CoreOptions = {},
   ) {
     this.queue = new SyncQueue((job) => this.runJob(job), log, (err) => this.disableSync(err));
+    idMapper.onFullSet = async () => this.store.set(StoreKey.NativeRootKey, await this.adapter.rootKey());
     const onEvent = (): void => this.onNativeEvent();
     ports.listeners.created.add(onEvent);
     ports.listeners.changed.add(onEvent);
@@ -388,6 +393,7 @@ export class BackgroundCore {
       this.log.log(XbsLogLevel.Info, 'sync', 'Pull skipped: conflict pending user resolution');
       return;
     }
+    if (await this.captureIfRootsMoved(info, syncToolbar)) throw new ConflictCapturedException();
     // Native edits that never reached the server (offline push, then the
     // in-memory queue died with an MV3 worker sleep / browser restart) would
     // be wiped by clearAndPopulate. Surface them as a conflict instead.
@@ -531,6 +537,7 @@ export class BackgroundCore {
       this.dirtyDuringSuspend = true;
       return { pushed: false };
     }
+    if (await this.captureIfRootsMoved(info, syncToolbar)) return { pushed: false, conflict: true };
     const { next: reconciled, mappings, changed } = await this.reconcileNatives(info, syncToolbar);
     if (await this.hasConflict()) {
       // Conflict pending: keep the stored local side current (the user's
@@ -565,6 +572,35 @@ export class BackgroundCore {
       }
       throw err;
     }
+  }
+
+  /**
+   * The id mappings point into the native roots they were built against. When
+   * Chrome switches between local and account bookmark storage the roots get
+   * new ids: reconciling would read every bookmark as removed + re-added and
+   * push that over the server copy. Surface it as a conflict instead (the user
+   * picks pull/push/merge, each of which rebuilds the mappings). Links made
+   * before the key existed adopt the current roots once.
+   */
+  private async captureIfRootsMoved(info: SyncInfo, syncToolbar: boolean): Promise<boolean> {
+    const current = await this.adapter.rootKey();
+    const recorded = await this.store.get<string>(StoreKey.NativeRootKey);
+    if (recorded === undefined) {
+      await this.store.set(StoreKey.NativeRootKey, current);
+      return false;
+    }
+    if (recorded === current) return false;
+    this.log.log(XbsLogLevel.Warning, 'sync', `Native bookmark roots changed (${recorded} -> ${current}): conflict captured`);
+    const pending = await this.hasConflict();
+    const local = ensureContainersExist(await this.adapter.readAll(syncToolbar));
+    if (pending) {
+      await this.captureConflict(info, local, undefined, false, 'roots');
+    } else {
+      const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
+      const { res } = await this.fetchRemote(api, info);
+      await this.captureConflict(info, local, res.lastUpdated ?? '', true, 'roots');
+    }
+    return true;
   }
 
   /** Pure native -> synced pass over the cached tree (nothing persisted). */
@@ -611,14 +647,17 @@ export class BackgroundCore {
     localTree: BookmarkNode[],
     remoteLastUpdated?: string,
     notify = true,
+    reason?: ConflictReason,
   ): Promise<void> {
     const prev = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    const why = reason ?? prev?.reason;
     await this.store.set(StoreKey.ConflictState, {
       syncId: info.id!,
       localEnc: await encryptData(JSON.stringify(localTree), info.password!),
       localCount: countNodes(localTree),
       remoteLastUpdated: remoteLastUpdated ?? prev?.remoteLastUpdated ?? '',
       capturedAt: prev?.capturedAt ?? new Date().toISOString(),
+      ...(why ? { reason: why } : {}),
     } satisfies StoredConflict);
     if (!notify) return;
     this.log.log(XbsLogLevel.Warning, 'sync', 'Sync conflict captured, waiting for user resolution');
@@ -626,7 +665,7 @@ export class BackgroundCore {
       .download(`keepmark-conflict-${Date.now()}.json`, JSON.stringify(localTree))
       .catch(() => undefined);
     await this.ports.chrome
-      .notify(t('manager.conflict.title'), t('core.conflictBody'))
+      .notify(t('manager.conflict.title'), t(why === 'roots' ? 'core.conflictRootsBody' : 'core.conflictBody'))
       .catch(() => undefined);
   }
 
@@ -644,6 +683,7 @@ export class BackgroundCore {
       localEncrypted: stored.localEnc,
       localCount: stored.localCount,
       remoteLastUpdated: stored.remoteLastUpdated,
+      reason: stored.reason,
     };
   }
 
@@ -2051,6 +2091,7 @@ export class BackgroundCore {
       remoteOnlySample: this.collectRemoteOnlyPaths(local, remoteTree).slice(0, 5),
       titleConflictsSample: this.collectTitleConflicts(local, remoteTree).slice(0, 5),
       foldersCreatedSample: this.collectFoldersCreated(local, remoteTree).slice(0, 5),
+      ...(conflict.reason ? { reason: conflict.reason } : {}),
     };
   }
 
@@ -2357,6 +2398,7 @@ export class BackgroundCore {
     await this.ports.alarms.clear(UpdatesAlarmName);
     await this.ports.alarms.clear(NativeDebounceAlarmName);
     await this.store.remove(StoreKey.BookmarkIdMappings);
+    await this.store.remove(StoreKey.NativeRootKey);
     await this.store.remove(StoreKey.Bookmarks);
     await this.store.remove(StoreKey.LastUpdated);
     await this.store.remove(StoreKey.SyncRevision);

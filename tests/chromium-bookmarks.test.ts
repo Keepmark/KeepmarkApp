@@ -6,25 +6,25 @@ import {
   getContainerIds,
   getNativeBookmarksAsBookmarks,
   type BookmarkApi,
+  ContainerNotFoundError,
 } from '../src/chromium/bookmarks';
 import { getNewTabUrl, urlIsNativeConfigPage, urlIsSupported } from '../src/chromium/platform';
 import { makeChromiumAdapter } from '../src/chromium/adapter';
 import { chromiumIsSeparator } from '../src/shared/native';
+import { SeparatorUrl } from '../src/shared/constants';
 import type { BookmarkIdMapping } from '../src/shared/id-mapper';
 import { BookmarkContainer, type NativeNode } from '../src/shared/bookmarks';
 
 /** In-memory chrome.bookmarks mock with Chromium root ids. */
-function makeChromiumMockApi(): BookmarkApi & { nodes: Map<string, NativeNode> } {
+export function makeChromiumMockApi(
+  roots: NativeNode[] = [
+    { id: '1', parentId: '0', title: 'Bookmarks bar', children: [] },
+    { id: '2', parentId: '0', title: 'Other bookmarks', children: [] },
+  ],
+): BookmarkApi & { nodes: Map<string, NativeNode> } {
   const nodes = new Map<string, NativeNode>();
   let counter = 0;
-  const root: NativeNode = {
-    id: '0',
-    title: '',
-    children: [
-      { id: '1', parentId: '0', title: 'Bookmarks bar', children: [] },
-      { id: '2', parentId: '0', title: 'Other bookmarks', children: [] },
-    ],
-  };
+  const root: NativeNode = { id: '0', title: '', children: roots };
   const index = (n: NativeNode): void => {
     nodes.set(n.id, n);
     n.children?.forEach(index);
@@ -73,6 +73,75 @@ function makeChromiumMockApi(): BookmarkApi & { nodes: Map<string, NativeNode> }
 describe('chromium native service', () => {
   it('reads fixed container ids', async () => {
     await expect(getContainerIds(makeChromiumMockApi())).resolves.toEqual({ other: '2', toolbar: '1' });
+  });
+
+  const rootNode = (id: string, folderType: NativeNode['folderType'], syncing?: boolean): NativeNode => ({
+    id,
+    parentId: '0',
+    title: id,
+    folderType,
+    syncing,
+    children: [],
+  });
+
+  it('resolves roots by folderType when ids differ from 1/2', async () => {
+    const api = makeChromiumMockApi([rootNode('7', 'bookmarks-bar', true), rootNode('8', 'other', true), rootNode('9', 'mobile', true)]);
+    await expect(getContainerIds(api)).resolves.toEqual({ other: '8', toolbar: '7' });
+  });
+
+  it('prefers account (syncing) roots over local ones', async () => {
+    const api = makeChromiumMockApi([
+      rootNode('1', 'bookmarks-bar', false),
+      rootNode('2', 'other', false),
+      rootNode('3', 'mobile', false),
+      rootNode('4', 'bookmarks-bar', true),
+      rootNode('5', 'other', true),
+      rootNode('6', 'mobile', true),
+    ]);
+    await expect(getContainerIds(api)).resolves.toEqual({ other: '5', toolbar: '4' });
+  });
+
+  it('ignores managed roots and falls back to the first typed match', async () => {
+    const api = makeChromiumMockApi([rootNode('10', 'managed'), rootNode('11', 'bookmarks-bar', false), rootNode('12', 'other', false)]);
+    await expect(getContainerIds(api)).resolves.toEqual({ other: '12', toolbar: '11' });
+  });
+
+  it('falls back to root position when neither folderType nor legacy ids exist', async () => {
+    const api = makeChromiumMockApi([
+      { id: 'a', parentId: '0', title: 'Bar', children: [] },
+      { id: 'b', parentId: '0', title: 'Other', children: [] },
+    ]);
+    await expect(getContainerIds(api)).resolves.toEqual({ other: 'b', toolbar: 'a' });
+  });
+
+  it('throws when a typed tree lacks the other root', async () => {
+    const api = makeChromiumMockApi([rootNode('7', 'bookmarks-bar', true), rootNode('9', 'mobile', true)]);
+    await expect(getContainerIds(api)).rejects.toThrow(ContainerNotFoundError);
+  });
+
+  it('detects chromium separators inside nested folders too', async () => {
+    const api = makeChromiumMockApi();
+    const other = api.nodes.get('2')!;
+    const sep = (id: string): NativeNode => ({ id, parentId: 'f', title: '-----', dateAdded: 2 });
+    const folder: NativeNode = { id: 'f', parentId: '2', title: 'F', dateAdded: 1, children: [sep('s1')] };
+    other.children!.push(sep('s0'), folder);
+    api.nodes.set('f', folder);
+    const bookmarks = await getNativeBookmarksAsBookmarks(api, false);
+    const otherNodes = bookmarks.find((b) => b.title === BookmarkContainer.Other)!.children!;
+    expect(otherNodes[0].url).toBe(SeparatorUrl);
+    expect(otherNodes[1].children![0].url).toBe(SeparatorUrl);
+    expect(otherNodes[1].children![0].children).toBeUndefined();
+  });
+
+  it('syncs end-to-end on an account-storage tree', async () => {
+    const api = makeChromiumMockApi([rootNode('4', 'bookmarks-bar', true), rootNode('5', 'other', true)]);
+    const synced = [
+      { title: BookmarkContainer.Other, children: [{ title: 'a', url: 'https://a.example/' }] },
+      { title: BookmarkContainer.Toolbar, children: [{ title: 'b', url: 'https://b.example/' }] },
+    ];
+    await createNativeBookmarksFromBookmarks(api, synced, true);
+    expect(api.nodes.get('5')!.children!.map((c) => c.title)).toEqual(['a']);
+    expect(api.nodes.get('4')!.children!.map((c) => c.title)).toEqual(['b']);
   });
 
   it('ships Menu as a folder inside Other and reads it back', async () => {

@@ -31,6 +31,10 @@ export interface NativeNode {
   children?: NativeNode[];
   dateAdded?: number;
   index?: number;
+  /** Chromium 134+: permanent root kind (ids are not stable across storages). */
+  folderType?: 'bookmarks-bar' | 'other' | 'mobile' | 'managed';
+  /** Chromium 134+: true when the node lives in account (synced) storage. */
+  syncing?: boolean;
 }
 
 export function eachBookmark<T extends { children?: T[] }>(
@@ -218,7 +222,7 @@ export function nativeToSynced(
   return nodes.map((native) => {
     const url = isSeparator(native) ? SeparatorUrl : native.url?.trim();
     const node = newBookmark(native.title, url);
-    if (native.children?.length) node.children = nativeToSynced(native.children, newTabUrl);
+    if (native.children?.length) node.children = nativeToSynced(native.children, newTabUrl, isSeparator);
     else if (!url) node.children = [];
     return node;
   });

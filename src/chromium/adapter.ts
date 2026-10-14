@@ -58,6 +58,11 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
     // readContainer(Other) hides it, readContainer(Menu) reads it.
     syncContainers: [BookmarkContainer.Menu, BookmarkContainer.Other, BookmarkContainer.Toolbar],
 
+    rootKey: async () => {
+      const c = await ids();
+      return `${c.other}|${c.toolbar}`;
+    },
+
     readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),
 
     clearAndPopulate: async (bookmarks, syncToolbar) => {

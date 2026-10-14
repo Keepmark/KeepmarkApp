@@ -15,7 +15,7 @@ interop).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.19`)
+- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.21`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 - Distribution: Chromium on the Chrome Web Store
@@ -75,13 +75,18 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - `src/firefox/`: `platform.ts` (roots `menu________/unfiled_____/toolbar_____`,
   `about:newtab`, `about:` config pages), `bookmarks.ts` (3 containers,
   `type:'separator'`), `adapter.ts` (`makeAdapter` → `NativeAdapter`).
-- `src/chromium/`: `platform.ts` (roots Other=`2`/Toolbar=`1`, no Menu root,
+- `src/chromium/`: `platform.ts` (roots found by `folderType`, account-synced
+  first, legacy ids Other=`2`/Toolbar=`1` only as fallback; no Menu root,
   `chrome://` or `edge://` newtab), `bookmarks.ts` (Menu = `[xbs] Menu` folder
   inside Other, `───`/`|` bookmark separators), `adapter.ts`.
 - Both adapters implement `src/background/adapter.ts` (`NativeAdapter`):
   `NativeOps` + `newTabUrl` + `syncContainers` + `readContainer` +
   `removeBySyncedId` + `addNative`. Chromium `readContainer(Menu)` reads the
-  Menu folder; `addNative` to Menu creates it if missing.
+  Menu folder; `addNative` to Menu creates it if missing. `rootKey()` names the
+  current native roots: every full `idMapper.set` records it
+  (`StoreKey.NativeRootKey`); if the roots move (Chrome local <-> account
+  storage) the core captures a conflict with `reason: 'roots'` instead of
+  reconciling stale mappings (`captureIfRootsMoved` in `core.ts`).
 
 ### Background + popup
 

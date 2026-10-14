@@ -150,7 +150,8 @@ Android requires) and legacy `"KeepmarkApp"` files still import here.
 
 - Firefox: roots `menu________/unfiled_____/toolbar_____`, all 3 containers,
   native separators, `about:newtab`.
-- Chromium: roots Other=`2` + Toolbar=`1`, no Menu root (folder `[xbs] Menu`
+- Chromium: roots Other + Toolbar resolved by `folderType` (Chrome 134+;
+  account-synced roots preferred, legacy ids `2`/`1` as fallback), no Menu root (folder `[xbs] Menu`
   inside Other), separators are `───` / `|` bookmarks, `chrome://newtab/`.
 
 ## Install for testing

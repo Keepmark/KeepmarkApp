@@ -14,6 +14,9 @@ export function createMapping(syncedId: number, nativeId: string): BookmarkIdMap
 
 export class BookmarkIdMapper {
   constructor(private store: Store) {}
+  /** Runs after every full set() (not add/remove): the owner records which
+   * native roots the mappings belong to. */
+  onFullSet?: () => Promise<void>;
   /** Serializes read-modify-write cycles: concurrent add/set/remove calls
    * otherwise interleave on the same `existing` snapshot and lose batches. */
   private tail: Promise<unknown> = Promise.resolve();
@@ -28,7 +31,7 @@ export class BookmarkIdMapper {
     const arr = Array.isArray(mappings) ? mappings : [mappings];
     return this.serialized(async () => {
       const existing = (await this.store.get<BookmarkIdMapping[]>(StoreKey.BookmarkIdMappings)) ?? [];
-      await this.set([...existing, ...arr]);
+      await this.write([...existing, ...arr]);
     });
   }
 
@@ -66,11 +69,18 @@ export class BookmarkIdMapper {
           mappings = mappings.filter((x) => x.nativeId !== id);
         }
       }
-      await this.set(mappings);
+      await this.write(mappings);
     });
   }
 
+  /** Replace all mappings (a full rebuild: also re-anchors the native roots). */
   async set(mappings: BookmarkIdMapping[]): Promise<void> {
+    await this.write(mappings);
+    await this.onFullSet?.();
+  }
+
+  /** Incremental writes keep the recorded roots: they never prove the roots are current. */
+  private async write(mappings: BookmarkIdMapping[]): Promise<void> {
     const sorted = [...mappings].sort((x, y) => x.syncedId - y.syncedId);
     await this.store.set(StoreKey.BookmarkIdMappings, sorted);
   }
