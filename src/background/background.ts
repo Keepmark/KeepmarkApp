@@ -135,7 +135,9 @@ function ports(): CorePorts {
   const applyIcon = async (): Promise<void> => {
     if (!action) return;
     const name = theme.dark ? `${iconState}-dark` : iconState;
-    await action.setIcon({ path: { '16': `assets/${name}16.png`, '32': `assets/${name}32.png` } }).catch(() => undefined);
+    // 32px only: the browser downscales it on 1x toolbars, which looks sharper
+    // than the hand-reduced 16px variant (Firefox on 1x picked that one).
+    await action.setIcon({ path: { '32': `assets/${name}32.png` } }).catch(() => undefined);
   };
   theme.onChange = () => void applyIcon();
   return {

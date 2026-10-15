@@ -24,11 +24,9 @@
   },
   "browser_action": {
     "default_icon": {
-      "16": "assets/notsynced16.png",
       "32": "assets/notsynced32.png"
     },
     "theme_icons": [
-      { "light": "assets/notsynced-dark16.png", "dark": "assets/notsynced16.png", "size": 16 },
       { "light": "assets/notsynced-dark32.png", "dark": "assets/notsynced32.png", "size": 32 }
     ],
     "default_popup": "popup.html",
