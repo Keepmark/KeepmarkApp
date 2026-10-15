@@ -15,21 +15,23 @@ interop).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.23`)
+- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (source of truth)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 - Distribution: Chromium on the Chrome Web Store
   (<https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb>,
   item id `jaaekkbgpeiikepahjelfbkfgpjphbhb`); Firefox on AMO
   (<https://addons.mozilla.org/en-US/firefox/addon/keepmark/>, add-on id
-  `keepmark@proton.me`, listed since 0.1.22; each version is submitted with the source package
+  `keepmark@proton.me`). Each version is submitted with the source package
   `https://github.com/Keepmark/KeepmarkApp/archive/refs/tags/vX.Y.Z.zip` and
-  reviewer build steps `npm ci` + `npm run build:firefox`). GitHub releases
+  reviewer build steps `npm ci` + `npm run build:firefox`. GitHub releases
   (<https://github.com/Keepmark/KeepmarkApp/releases>, tag `vX.Y.Z`) carry the
   Chromium `.zip` uploaded to the store + the Mozilla-signed `.xpi` +
   `SHA256SUMS`, notes in the v0.1.18 format (what's new, install, SHA-256
-  table). Latest: v0.1.23 (both packages 0.1.23; v0.1.18 shipped the 0.1.17
-  `.xpi`). Create them with `gh release create`.
+  table). Create them with `gh release create`.
+- Keep landing pages and ecosystem links version-independent: link to stores
+  and `/releases/latest`. Put release-specific changes in release notes; keep
+  version numbers in docs only for compatibility, contracts or historical context.
 
 ## 2. Commands (run from `KeepmarkApp/` only)
 

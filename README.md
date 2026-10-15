@@ -113,11 +113,7 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
 - **Firefox:** install from
   [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/keepmark/).
 
-Latest release:
-[v0.1.23](https://github.com/Keepmark/KeepmarkApp/releases/tag/v0.1.23),
-with the Firefox and Chromium packages both at 0.1.23.
-
-Every [release](https://github.com/Keepmark/KeepmarkApp/releases) also
+The [latest release](https://github.com/Keepmark/KeepmarkApp/releases/latest) also
 carries the Chromium `.zip` (the same package uploaded to the Chrome Web
 Store), the Mozilla-signed Firefox `.xpi` and a `SHA256SUMS` file to verify
 the downloads.
@@ -152,6 +148,21 @@ npm run package      # dist/keepmark-firefox-<version>.zip
 
 `<version>` comes from `package.json`. The packaging step refuses a build
 whose manifest version differs from it.
+
+For Firefox review, submit a separate source archive from the release tag:
+
+```sh
+mkdir -p dist
+git archive --format=zip --prefix=KeepmarkApp-X.Y.Z/ \
+  --output=dist/keepmark-firefox-X.Y.Z-source.zip vX.Y.Z
+```
+
+This contains the original sources and lockfile, without dependencies or build
+output. Reviewers extract it, enter `KeepmarkApp-X.Y.Z`, run `npm ci`, then
+`npm run build:firefox`. The extension is generated in `build/firefox/`;
+archive its contents with `manifest.json` at the ZIP root. For another release,
+replace `X.Y.Z` in the tag, prefix and filename with the submitted version. Source code and build instructions must match
+the submitted extension version.
 
 Load an unpacked build for testing:
 
