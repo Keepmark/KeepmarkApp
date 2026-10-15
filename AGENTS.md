@@ -22,13 +22,13 @@ interop).
   (<https://chromewebstore.google.com/detail/jaaekkbgpeiikepahjelfbkfgpjphbhb>,
   item id `jaaekkbgpeiikepahjelfbkfgpjphbhb`); Firefox on AMO
   (<https://addons.mozilla.org/en-US/firefox/addon/keepmark/>, add-on id
-  `keepmark@proton.me`, listed since 0.1.22; submitted with the source package
-  `https://github.com/Keepmark/KeepmarkApp/archive/refs/tags/v0.1.22.zip` and
+  `keepmark@proton.me`, listed since 0.1.22; each version is submitted with the source package
+  `https://github.com/Keepmark/KeepmarkApp/archive/refs/tags/vX.Y.Z.zip` and
   reviewer build steps `npm ci` + `npm run build:firefox`). GitHub releases
   (<https://github.com/Keepmark/KeepmarkApp/releases>, tag `vX.Y.Z`) carry the
   Chromium `.zip` uploaded to the store + the Mozilla-signed `.xpi` +
   `SHA256SUMS`, notes in the v0.1.18 format (what's new, install, SHA-256
-  table). Latest: v0.1.22 (both packages 0.1.22; v0.1.18 shipped the 0.1.17
+  table). Latest: v0.1.23 (both packages 0.1.23; v0.1.18 shipped the 0.1.17
   `.xpi`). Create them with `gh release create`.
 
 ## 2. Commands (run from `KeepmarkApp/` only)

@@ -114,8 +114,8 @@ Details per permission: [developer guide](docs/DEVELOPMENT.md#permissions-why-ea
   [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/keepmark/).
 
 Latest release:
-[v0.1.22](https://github.com/Keepmark/KeepmarkApp/releases/tag/v0.1.22),
-with the Firefox and Chromium packages both at 0.1.22.
+[v0.1.23](https://github.com/Keepmark/KeepmarkApp/releases/tag/v0.1.23),
+with the Firefox and Chromium packages both at 0.1.23.
 
 Every [release](https://github.com/Keepmark/KeepmarkApp/releases) also
 carries the Chromium `.zip` (the same package uploaded to the Chrome Web
