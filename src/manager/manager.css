@@ -455,6 +455,8 @@ dd:last-of-type { border-bottom: 0; }
 
 /* ---- Duplicates ---- */
 .dup-group {
+  /* Long URLs have no break points: wrap anywhere instead of overflowing. */
+  overflow-wrap: anywhere;
   margin: 10px 0;
   padding: 10px 14px;
   border-radius: 12px;
@@ -477,10 +479,11 @@ dd:last-of-type { border-bottom: 0; }
 }
 
 .dup-toggle {
+  /* Fixed width: ✕, 🔒 and empty glyphs keep the titles aligned. */
   flex: 0 0 auto;
-  min-width: 2.4em;
+  width: 38px;
   height: 30px;
-  padding: 0 8px;
+  padding: 0;
   font-weight: 700;
 }
 
@@ -497,7 +500,8 @@ dd:last-of-type { border-bottom: 0; }
 
 .dup-text {
   flex: 1 1 auto;
-  overflow-wrap: break-word;
+  /* Flex items default to min-width:auto and would not shrink below a URL. */
+  min-width: 0;
 }
 
 .dup-sub {

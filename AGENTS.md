@@ -15,7 +15,7 @@ interop).
 - Own git repo, branch `master`, remote
   `ssh://git@git.example/KeepmarkApp.git`.
 - Root `$HOME/Projects/xBrowserSync` is NOT a git repo. Work here only.
-- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.22`)
+- License GPL-3.0-only (see `LICENSE.md`; © 2026 Yari Melzani). Name/version in `package.json` (`keepmark-app@0.1.23`)
   and in both manifests (keep them in sync; bump patch on every deploy/package so the user can test it).
 - Commit + push whenever something stable lands (explicit user rule).
 - Distribution: Chromium on the Chrome Web Store
