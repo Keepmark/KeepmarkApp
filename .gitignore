@@ -6,3 +6,4 @@ build/
 
 ## Local agent settings
 .claude/
+.aura/
