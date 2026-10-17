@@ -42,6 +42,9 @@ Keepmark opens there, and the other way round. Nothing to migrate.
   backed up first.
 - **Set and forget.** Toolbar, menu and other bookmarks sync automatically,
   with a periodic check for changes made elsewhere and a "Sync now" button.
+- **Put your phone on the same sync without typing anything.** The manager
+  shows a connection QR; Keepmark for Android scans it and reviews the service
+  before linking. It is on screen for 60 seconds and nothing is stored for it.
 - **Fits your browser.** The toolbar icon follows the light or dark theme
   and shows at a glance whether you are in sync.
 
@@ -50,17 +53,37 @@ Keepmark opens there, and the other way round. Nothing to migrate.
 | | |
 |---|---|
 | **Connect** | Create a new sync or link an existing one: download, upload or merge with preview |
+| **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and password in one step |
+| **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
 | **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
-| **Backup** | Encrypted export and import, compatible with Keepmark for Android |
+| **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
-| **Move service** | Move your bookmarks to another service, into a new or existing sync |
+| **Move service** | Move your bookmarks to another service, into a new or existing sync, with one reviewed confirmation |
 | **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |
 
 With **Keepmark Server** you also get revision-based conflict detection,
 faster "nothing changed" checks and the option to delete your sync from the
 server. On other services Keepmark falls back automatically.
+
+## Link Android by QR
+
+Already syncing on Android and want the phone on the same sync? The manager
+hands the credentials over in one scan, without typing them anywhere:
+
+1. In the manager, the Android card says **Connect Keepmark on your phone**.
+   Choose **Show connection QR** and verify your current password.
+2. In Keepmark for Android, open **Connect → Existing sync → Scan QR from
+   browser**.
+3. Review the service the phone shows, tap **Connect**, then pick the direction
+   (keep the server copy, merge, or keep the phone's copy).
+
+The QR carries the service, the sync ID and the password in readable form, so
+show it only to your own device: nothing is stored for it, it disappears after
+60 seconds or when the manager loses focus, and a captured copy stays usable —
+treat it like the password itself. Manual linking remains available, and in
+**Move service** the same QR button sits before the manual target credentials.
 
 ## Screenshots
 
@@ -208,18 +231,3 @@ implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
 from its use. See sections 15–17 of the GPL v3. Keep your own backups.
-
-### Link Android by QR
-
-In the manager’s Status section, Sync now and Refresh status sit beside the sync
-status. Below, the Android card says “Connect Keepmark on your phone”; choose
-“Show connection QR” to open the dialog, then verify your current password.
-In Keepmark for Android, open Connect → Existing sync → Scan QR from browser
-and review the service before linking. The dialog closes when you click outside
-it, press Escape or leave the window.
-The QR includes the service, sync ID and plaintext password. It is hidden after
-60 seconds or when the manager loses focus; a captured copy remains reusable.
-Nothing is saved for the QR, and manual linking remains available.
-
-The connection dialog keeps password errors next to the key-icon input, so you
-can retry directly. Its QR carries a small Keepmark logo.

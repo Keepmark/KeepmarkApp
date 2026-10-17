@@ -90,6 +90,28 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   uploaded right away). The mobile app also restores while unlinked, on this
   device only; its implication line says which case applies.
 
+## Service selection (connect and move)
+
+Every editable service URL uses the same selector: eight curated public services,
+with the first one selected by default, followed by locally saved custom services
+and “Custom URL…”. Each entry shows the host (marked as the default or as saved)
+with its country, size limit and API version; a service that accepts existing
+syncs only says so, and any message the service reports is shown with the endpoint.
+Only the selected service is probed, and a stale reply cannot unlock another URL.
+Public and saved entries are checked automatically; custom URLs expose a manual
+connection check and adjacent API/limit/location feedback, and editing a custom URL
+invalidates its proof. Offline or incompatible services block progress; a service
+accepting existing syncs only blocks new-sync creation.
+
+The move “Continue” action still verifies target credentials and prepares the
+consequence review; it is not a manual connection-test button. The selector must
+pass first. A custom URL is saved only after a successful connect/create/move,
+never after a probe or preview, and stays in the catalog if temporarily offline.
+Saved entries keep the location, size limit and API version verified when they were
+paired, and are local to this installation; URLs are normalized and deduplicated,
+preserving reverse-proxy paths. No catalog request contacts every listed service or
+depends on either discovery website at runtime.
+
 ## Browser → Android QR linking
 
 - Browser manager Status → Connect Keepmark on your phone (Android icon) → Show connection QR →
@@ -132,23 +154,3 @@ delete is through Backup → Safety backups. Back exits selection without change
 Back inside picker/confirmation preserves selection. New sync contents invalidate
 selection and ask you to select again. The selection remains local to the current
 folder/search/results list; there is no selection carried across navigation.
-
-
-## Service selection (connect and move)
-
-Every editable service URL uses the same selector: eight curated public services,
-with api.xbrowsersync.org first and selected by default, followed by locally saved
-custom services and “Custom URL…”. The menu shows URL, country, size limit and API
-version. Only the selected service is probed; stale replies cannot unlock another
-URL. Public and saved entries are checked automatically. Custom URLs expose a
-manual connection check and adjacent API/limit/location feedback. Editing a custom
-URL invalidates its proof. Offline/incompatible services block progress; a service
-accepting existing syncs only blocks new-sync creation.
-
-The existing move “Continue” action still verifies target credentials and prepares
-the consequence review; it is not a manual connection-test button. The selector
-must pass first. A custom URL is saved only after a successful connect/create/move,
-never after a probe or preview, and remains in the catalog if temporarily offline.
-Saved addresses are local to this extension installation; URLs are normalized and
-deduplicated, preserving reverse-proxy paths. No catalog request contacts every
-listed service or depends on either discovery website at runtime.
