@@ -751,15 +751,26 @@ dd:last-of-type { border-bottom: 0; }
 #qr-password { max-width: 24rem; }
 
 /* Android linking is a focused, transient dialog; no credentials outside it. */
-.qr-connect-card { border: 1px solid var(--border); border-left: 4px solid var(--accent); }
+.status-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: .4rem; }
+.status-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+.status-actions svg, .qr-open > svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.qr-connect-card { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; align-items: center; gap: 1.5rem; border: 1px solid var(--border); padding: 1.5rem; margin-top: .75rem; }
+.qr-card-content { min-width: 0; }
+.qr-card-preview { display: grid; place-items: center; padding: 1rem; border-radius: 1rem; background: var(--tint); color: var(--tint-ink); }
+.qr-card-preview svg { width: 100%; height: auto; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Solidi del glifo QR (moduli pieni): il fill/stroke del contenitore vale per il contorno,
+ * i moduli pieni vanno riempiti esplicitamente. */
+.qr-card-preview svg .solid, .qr-open > svg .solid { fill: currentColor; stroke: none; }
 .qr-card-heading { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.qr-card-heading h3 { margin: 0 0 .35rem; font-size: 1.15rem; }
+.qr-card-heading h3 { margin: 0 0 .6rem; font-size: 1.45rem; line-height: 1.25; }
 .qr-card-heading p { margin: 0; }
 .qr-android-badge { display: grid; place-items: center; flex: 0 0 3.5rem; height: 3.5rem; border-radius: 1rem; background: var(--tint); color: var(--tint-ink); }
 .qr-android-icon { width: 1.6rem; height: 1.6rem; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .qr-android-icon circle { fill: currentColor; stroke: none; }
 .qr-android-badge .qr-android-icon { width: 2.3rem; height: 2.3rem; }
 .qr-open { display: inline-flex; align-items: center; gap: .65rem; }
+.qr-connect-card > #qr-feedback { grid-column: 1 / -1; }
+@media (max-width: 600px) { .qr-connect-card { grid-template-columns: minmax(0, 1fr); padding: 1.1rem; } .qr-card-preview { display: none; } .status-actions { margin-left: 0; } }
 #qr-panel { width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem; background: var(--surface); color: var(--fg); overflow-y: auto; box-shadow: 0 1rem 4rem #0005; }
 #qr-panel::backdrop { background: #080c20b8; }
 .qr-dialog-heading { display: flex; align-items: center; gap: .7rem; color: var(--fg); }

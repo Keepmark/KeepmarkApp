@@ -1253,6 +1253,7 @@ async function submitMove(): Promise<void> {
   moveService.setBusy(false);
   updateMoveServiceGate();
   if (movedId) {
+    await moveService.refreshCatalog().catch(err => showError('move-error', (err as Error).message));
     // Consume the preview AFTER withBusy (it restores the pre-click state
     // last): the unlocked button must never re-fire with stale inputs.
     updateMoveForm();

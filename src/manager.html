@@ -26,6 +26,10 @@
           <div class="status-row">
             <span id="m-pill" class="pill">…</span>
             <span id="m-service-badge" class="badge"></span>
+            <div class="status-actions">
+              <button id="m-btn-sync-now" class="mini"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg><span data-i18n="common.syncNow">Sync now</span></button>
+              <button id="m-btn-refresh" class="mini" aria-label="Refresh status" data-i18n-aria-label="manager.status.refresh" title="Refresh status" data-i18n-title="manager.status.refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4v6h-6M20 10a8 8 0 1 0 0 5"/></svg></button>
+            </div>
           </div>
           <dl class="status-grid">
             <dt data-i18n="common.service">Service</dt><dd id="m-server">…</dd>
@@ -41,15 +45,17 @@
           </dl>
         </div>
         <div id="connect-qr" class="card qr-connect-card" hidden>
-          <div class="qr-card-heading">
+          <div class="qr-card-content"><div class="qr-card-heading">
             <span class="qr-android-badge"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg></span>
-            <div><h3 data-i18n="qr.title">Connect to Keepmark for Android</h3>
-              <p class="hint" data-i18n="qr.intro">Use the same bookmarks in Keepmark for Android. Scan a QR to connect without typing your credentials.</p>
+            <div><h3 data-i18n="qr.title">Connect Keepmark on your phone</h3>
+              <p class="hint" data-i18n="qr.intro">Scan a QR code to sync your bookmarks. No credentials to type.</p>
             </div>
           </div>
-          <button id="qr-open" class="primary qr-open"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><span data-i18n="qr.open">Connect Keepmark for Android…</span></button>
+          <button id="qr-open" class="primary qr-open"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.1"/><rect x="14" y="3" width="7" height="7" rx="1.1"/><rect x="3" y="14" width="7" height="7" rx="1.1"/><rect class="solid" x="5.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="16.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="5.4" y="16.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="14" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="14" y="18.3" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="18.3" width="2.7" height="2.7" rx=".6" opacity=".45"/></svg><span data-i18n="qr.open">Show connection QR</span></button>
+          </div>
+          <div class="qr-card-preview" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.1"/><rect x="14" y="3" width="7" height="7" rx="1.1"/><rect x="3" y="14" width="7" height="7" rx="1.1"/><rect class="solid" x="5.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="16.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="5.4" y="16.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="14" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="14" y="18.3" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="18.3" width="2.7" height="2.7" rx=".6" opacity=".45"/></svg></div>
           <dialog id="qr-panel" aria-labelledby="qr-dialog-title" aria-describedby="qr-instructions" hidden>
-            <div class="qr-dialog-heading"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><h2 id="qr-dialog-title" data-i18n="qr.title">Connect to Keepmark for Android</h2></div>
+            <div class="qr-dialog-heading"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><h2 id="qr-dialog-title" data-i18n="qr.title">Connect Keepmark on your phone</h2></div>
             <p id="qr-instructions" data-i18n="qr.scan">In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.</p>
             <p id="qr-destination" class="hint"></p>
             <form autocomplete="off">
@@ -108,10 +114,7 @@
         <div id="conflict-result" class="result" role="status" hidden></div>
         <p id="m-notlinked-hint" class="hint" hidden data-i18n="manager.status.notLinkedHint">Not connected — open the Keepmark popup to connect a sync first.
           (“Move service” needs an existing link to move from.)</p>
-        <div class="row">
-          <button id="m-btn-sync-now" class="primary" data-i18n="common.syncNow">Sync now</button>
-          <button id="m-btn-refresh" data-i18n="manager.status.refresh">Refresh status</button>
-        </div>
+
         <div id="status-error" class="error" role="alert" hidden></div>
         <div id="undo-banner" class="undo" hidden>
           <span id="undo-text"></span>

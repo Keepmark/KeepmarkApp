@@ -26,6 +26,8 @@ beforeEach(async () => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   harness.send.mockReset().mockImplementation(async (msg) => {
     switch (msg.command) {
+      case MessageCommand.GetServices: return [];
+      case MessageCommand.ProbeService: return { reachable: true, versionCompatible: true, version: '1.1.13', status: 1 };
       case MessageCommand.GetStatus: return { syncEnabled: true, serviceUrl: 'https://old.test', syncId: 'old', queueLength: 0, syncing: false, supportsV12: true, bookmarkCount: 3 };
       case MessageCommand.SwitchPreview: return { reachable: true, versionCompatible: true, localCount: 3, remoteExists: true };
       case MessageCommand.PreviewMerge: return { localOnly: 1, remoteOnly: 2, localCount: 3, remoteCount: 4, titleConflicts: 0 };
@@ -35,7 +37,9 @@ beforeEach(async () => {
   });
   await import('../src/manager/manager');
   await settle();
+  el('m-switch-url-label').closest('.service-picker')!.querySelector<HTMLInputElement>('input[value="custom"]')!.click();
   field('m-switch-url', 'https://target.test');
+  el('m-switch-url-check').click(); await settle();
   field('m-switch-password', 'password123');
   field('m-switch-confirm', 'password123');
 });

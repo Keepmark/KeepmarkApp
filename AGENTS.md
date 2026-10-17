@@ -243,3 +243,11 @@ the focused dialog; backdrop click, Escape and focus loss close and clear it. `P
 verifies the current password locally and decrypts one remote GET without
 mutating sync state. qrcode 1.5.4 is imported only by `manager/render-connect-qr.ts` (local Keepmark logo, adaptive H/Q/M correction). The QR carries
 the original password voluntarily to Android, never to the service or storage.
+
+
+## Service picker
+
+Use `popup/service-picker.ts` for every editable service URL (popup connect and
+manager move). Catalog/probe/persistence live in `shared/service-catalog.ts` and
+background `GetServices`/`ProbeService`; only completed links save a custom URL in
+`StoreKey.RememberedServices`. See `docs/WORKFLOWS.md` “Service selection”.

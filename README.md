@@ -211,8 +211,9 @@ from its use. See sections 15–17 of the GPL v3. Keep your own backups.
 
 ### Link Android by QR
 
-In the manager’s Status section, choose “Connect Android app…” to open the
-“Connect to Keepmark for Android” dialog, then verify your current password.
+In the manager’s Status section, Sync now and Refresh status sit beside the sync
+status. Below, the Android card says “Connect Keepmark on your phone”; choose
+“Show connection QR” to open the dialog, then verify your current password.
 In Keepmark for Android, open Connect → Existing sync → Scan QR from browser
 and review the service before linking. The dialog closes when you click outside
 it, press Escape or leave the window.

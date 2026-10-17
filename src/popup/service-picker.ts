@@ -66,6 +66,7 @@ export class ServicePicker {
       this.generation++;
       this.checkedUrl = '';
       this.result = undefined;
+      this.test.disabled = this.busy;
       this.config.onChange();
       this.show(t('servicePicker.needsCheck'));
       this.notify();
@@ -110,11 +111,30 @@ export class ServicePicker {
     this.config.input.value = match?.url ?? value;
     this.customLabel.hidden = this.test.hidden = !this.custom;
     this.menu.open = false;
+    this.test.disabled = this.busy;
     this.renderOptions();
     if (emit) this.config.onChange();
     this.show(t('servicePicker.needsCheck'));
     this.notify();
     if (!this.custom) await this.probe();
+  }
+
+  async refreshCatalog(): Promise<void> {
+    const entries = await send<ServiceOption[]>({ command: MessageCommand.GetServices });
+    this.entries = mergeServiceCatalog(entries ?? []);
+    try {
+      const match = this.entries.find(entry => entry.url === normalizeServiceUrl(this.url));
+      if (match) {
+        const wasChecked = this.checkedUrl === this.url;
+        this.custom = false;
+        this.config.input.value = match.url;
+        if (wasChecked) this.checkedUrl = match.url;
+        this.customLabel.hidden = this.test.hidden = true;
+      }
+    } catch { /* An unfinished custom URL remains editable. */ }
+    this.renderOptions();
+    this.renderFeedback();
+    this.notify();
   }
 
   updateMode(): void { this.renderFeedback(); this.notify(); }
@@ -132,7 +152,8 @@ export class ServicePicker {
 
   private location(entry: ServiceOption): string {
     const key = { GB: 'servicePicker.countryGB', CA: 'servicePicker.countryCA', DE: 'servicePicker.countryDE', IT: 'servicePicker.countryIT' } as const;
-    const country = entry.location;
+    const aliases: Record<string, string> = { 'United Kingdom': 'GB', Canada: 'CA', Germany: 'DE', Italy: 'IT' };
+    const country = aliases[entry.location ?? ''] ?? entry.location;
     if (!country) return t('servicePicker.unknown');
     if (country in key) return t(key[country as keyof typeof key]);
     // /info may return a country name rather than a country code.
@@ -188,6 +209,7 @@ export class ServicePicker {
       this.config.input.value = '';
       this.menu.open = false;
       this.customLabel.hidden = this.test.hidden = false;
+      this.test.disabled = this.busy;
       this.renderOptions();
       this.config.onChange();
       this.show(t('servicePicker.needsCheck'));

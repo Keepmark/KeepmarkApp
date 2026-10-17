@@ -198,3 +198,16 @@ small local Keepmark icon with white backing within 10% of canvas width.
 An integer scale of at least three pixels per module avoids blurred dense codes; QR
 correction is H up to 1200 UTF-8 bytes, Q up to 1600, M up to the 1800-byte cap.
 The logo does not change the payload.
+
+
+### Shared service selector
+
+`shared/service-catalog.ts` contains the eight curated public endpoints from
+xBrowserSync and MarkSync (verified 2026-10-17). `popup/service-picker.ts` and its
+stylesheet are used by the connect popup/full page and the move manager.
+`GetServices` merges public entries with `StoreKey.RememberedServices`;
+`ProbeService` checks one candidate with the short service-probe timeout, without
+linking or writing preferences. Background connect/create/move completion alone
+remembers custom services. The UI uses a generation token and exact checked URL
+to ignore stale results; new/existing mode also gates NoNewSyncs. The normal URL
+policy remains HTTPS, with HTTP loopback for local development/QA.

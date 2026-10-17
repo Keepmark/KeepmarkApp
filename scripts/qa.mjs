@@ -260,11 +260,11 @@ try {
   if (!existsSync(path.join(root, zip))) {
     fail(`missing ${zip} — run npm run package first`);
   } else {
-    const out = execFileSync('node_modules/.bin/addons-linter', [zip, '--self-hosted'], {
+    const out = execFileSync('node_modules/.bin/addons-linter', [zip, '--self-hosted', '--output', 'json'], {
       cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
-    const errors = out.match(/errors\s+(\d+)/)?.[1];
-    if (errors !== '0') fail(`addons-linter reports ${errors} errors`);
+    const errors = JSON.parse(out).summary?.errors;
+    if (errors !== 0) fail(`addons-linter reports ${errors} errors`);
     else ok('addons-linter: 0 errors');
   }
 } catch (e) {

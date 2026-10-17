@@ -92,7 +92,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 
 ## Browser → Android QR linking
 
-- Browser manager Status → Connect Keepmark for Android (Android icon) →
+- Browser manager Status → Connect Keepmark on your phone (Android icon) → Show connection QR →
   focused dialog → current password → Show QR. The launch button is hidden
   while the dialog is open. Password errors stay next to the key-icon input
   inside the dialog and allow retry. The QR includes a small Keepmark logo.
@@ -132,3 +132,23 @@ delete is through Backup → Safety backups. Back exits selection without change
 Back inside picker/confirmation preserves selection. New sync contents invalidate
 selection and ask you to select again. The selection remains local to the current
 folder/search/results list; there is no selection carried across navigation.
+
+
+## Service selection (connect and move)
+
+Every editable service URL uses the same selector: eight curated public services,
+with api.xbrowsersync.org first and selected by default, followed by locally saved
+custom services and “Custom URL…”. The menu shows URL, country, size limit and API
+version. Only the selected service is probed; stale replies cannot unlock another
+URL. Public and saved entries are checked automatically. Custom URLs expose a
+manual connection check and adjacent API/limit/location feedback. Editing a custom
+URL invalidates its proof. Offline/incompatible services block progress; a service
+accepting existing syncs only blocks new-sync creation.
+
+The existing move “Continue” action still verifies target credentials and prepares
+the consequence review; it is not a manual connection-test button. The selector
+must pass first. A custom URL is saved only after a successful connect/create/move,
+never after a probe or preview, and remains in the catalog if temporarily offline.
+Saved addresses are local to this extension installation; URLs are normalized and
+deduplicated, preserving reverse-proxy paths. No catalog request contacts every
+listed service or depends on either discovery website at runtime.

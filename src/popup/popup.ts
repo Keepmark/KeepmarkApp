@@ -313,6 +313,7 @@ async function submitConnect(): Promise<void> {
       } else {
         await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
       }
+      await connectService.refreshCatalog().catch(err => showError('connect-error', (err as Error).message));
       input('password').value = '';
       input('confirm-password').value = '';
       showView('main');

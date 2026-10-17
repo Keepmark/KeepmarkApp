@@ -83,15 +83,20 @@ export function formatBytes(bytes: number): string {
  * the v1.2-only delete or the move-wizard preview lock must survive. */
 export async function withBusy(buttonId: string, busyLabel: string, fn: () => Promise<void>): Promise<void> {
   const btn = $(buttonId) as HTMLButtonElement;
-  const original = btn.textContent;
+  const original = btn.innerHTML;
   const wasDisabled = btn.disabled;
   btn.disabled = true;
-  btn.textContent = busyLabel;
+  const label = btn.querySelector('span');
+  if (label) {
+    label.textContent = busyLabel;
+  } else {
+    btn.textContent = busyLabel;
+  }
   try {
     await fn();
   } finally {
     btn.disabled = wasDisabled;
-    btn.textContent = original;
+    btn.innerHTML = original;
   }
 }
 

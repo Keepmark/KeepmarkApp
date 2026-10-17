@@ -3,12 +3,12 @@ import type { MessageKey } from './en.js';
 // Simplified Chinese (zh-CN); also served to zh-TW/zh-HK until a Traditional catalog exists.
 export const zh: Record<MessageKey, string> = {
   'qr.scan': "在 Android 版 Keepmark 中打开「连接」→「现有同步」→「扫描浏览器二维码」。",
-  'qr.intro': "在 Android 版 Keepmark 中使用相同的书签。扫描二维码即可连接，无需输入凭据。",
+  'qr.intro': "扫描二维码即可同步书签，无需输入凭据。",
   'qr.hidden': "二维码已隐藏。请重新输入密码以显示。",
   'qr.unlinked': "请先将此浏览器连接到同步。",
-  'qr.title': "连接 Android 版 Keepmark",
+  'qr.title': "连接手机上的 Keepmark",
   'qr.explanation': "二维码包含服务、同步 ID 和密码。任何持有副本的人都可以重复使用。60 秒后或离开此视图时隐藏。",
-  'qr.open': "连接 Android 版 Keepmark…",
+  'qr.open': "显示连接二维码",
   'qr.password': "当前同步密码",
   'qr.generate': "显示二维码",
   'qr.close': "关闭",

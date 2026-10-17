@@ -196,10 +196,18 @@ async function head(id) {
 async function section(p, name) { await click(p, `#sidebar button[data-section="${name}"]`); await sleep(700); }
 
 // ---------------------------------------------------------------- flows
+async function chooseService(p) {
+  await click(p, '.service-picker-menu > summary');
+  await click(p, 'input[name="service-url-provider"][value="custom"]');
+  await setVal(p, '#service-url', SERVICE);
+  await click(p, '#service-url-check');
+  const ready = await waitFor(() => p.evaluate(() => !document.querySelector('#btn-connect').disabled), 15000);
+  check('service selector: custom URL verified before continuing', ready);
+}
 async function connectNew(ctx) {
   const p = await open(ctx, 'popup.html?fullpage=1');
   await click(p, 'input[name="conn-mode"][value="new"]');
-  await setVal(p, '#service-url', SERVICE);
+  await chooseService(p);
   await setVal(p, '#password', PASSWORD);
   await setVal(p, '#confirm-password', PASSWORD);
   await click(p, '#btn-connect');
@@ -214,7 +222,7 @@ async function connectNew(ctx) {
 async function connectExisting(ctx, id) {
   const p = await open(ctx, 'popup.html?fullpage=1');
   await click(p, 'input[name="conn-mode"][value="existing"]');
-  await setVal(p, '#service-url', SERVICE);
+  await chooseService(p);
   await setVal(p, '#sync-id', id);
   await click(p, 'input[name="conn-direction"][value="pull"]');
   await setVal(p, '#password', PASSWORD);
