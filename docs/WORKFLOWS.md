@@ -112,6 +112,12 @@ paired, and are local to this installation; URLs are normalized and deduplicated
 preserving reverse-proxy paths. No catalog request contacts every listed service or
 depends on either discovery website at runtime.
 
+The selector opens on the service this installation is already linked to, and on the
+catalog default while nothing is linked. Wherever a destination is named in words —
+the Android move review and the confirm that precedes the move, and the completion
+message on both platforms — the full normalized service URL is used, never the bare
+host.
+
 ## Browser → Android QR linking
 
 - Browser manager Status → Connect Keepmark on your phone (Android icon) → Show connection QR →
