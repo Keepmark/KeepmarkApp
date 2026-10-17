@@ -1,0 +1,22 @@
+.service-picker { margin: 12px 0; min-width: 0; }
+.service-picker-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.service-picker-menu { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.service-picker-menu > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px; list-style: none; cursor: pointer; }
+.service-picker-menu > summary::-webkit-details-marker { display: none; }
+.service-picker-menu > summary::after { content: '⌄'; flex: none; }
+.service-picker-menu > summary[aria-disabled="true"] { opacity: .65; cursor: default; }
+.service-picker-menu small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.service-picker-menu > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.service-picker-options { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--border); min-width: 0; }
+.service-picker-option { display: flex; align-items: center; gap: 10px; padding: 11px; min-height: 44px; border-bottom: 1px solid var(--border); color: var(--fg); cursor: pointer; font-size: 13px; font-weight: 400; }
+.service-picker-option:last-child { border-bottom: 0; }
+.service-picker-option > input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.service-picker-option > span { min-width: 0; }
+.service-picker-host { display: block; overflow-wrap: anywhere; font-weight: 600; }
+.service-picker-option:has(input:checked) { background: var(--tint); }
+.service-picker > label { margin-top: 12px; }
+.service-picker-test { margin-top: 10px; }
+.service-picker-feedback { margin: 9px 0; color: var(--ok); font-size: 12px; overflow-wrap: anywhere; }
+.service-picker-feedback small { display: block; margin-top: 5px; color: var(--muted); white-space: pre-wrap; }
+.service-picker-error { color: var(--danger); }
+.service-picker .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

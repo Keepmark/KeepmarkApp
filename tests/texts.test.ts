@@ -15,8 +15,8 @@ import {
 
 describe('workflow texts', () => {
   it('unlink says what is needed to link again and what is lost', () => {
-    expect(UnlinkImplication()).toContain('sync ID and its password');
-    expect(UnlinkImplication()).toContain('not yet synced');
+    expect(UnlinkImplication()).toContain('sync ID and password');
+    expect(UnlinkImplication()).toContain('Unsynced edits stay only here');
     expect(UnlinkImplication()).toContain('Undo is cleared');
   });
 
@@ -43,14 +43,14 @@ describe('workflow texts', () => {
       'Yes, merge',
       'Yes, upload',
     ]);
-    expect(directionConfirm('pull').implication).toContain('not yet synced are lost');
-    expect(directionConfirm('push').implication).toContain('other devices');
-    expect(directionConfirm('merge').implication).toContain('Nothing is deleted');
+    expect(directionConfirm('pull').implication).toContain('bookmarks will be replaced');
+    expect(directionConfirm('push').implication).toContain('Other linked devices');
+    expect(directionConfirm('merge').implication).toContain('Items deleted from only one copy may return');
   });
 
   it('move says the old sync and the other devices stay', () => {
     expect(MoveImplication()).toContain('old sync stays');
-    expect(MoveImplication()).toContain('other devices stay linked');
+    expect(MoveImplication()).toContain('Other devices keep using it until you move them');
   });
 
   it('undo names the action in words, never the raw key', () => {

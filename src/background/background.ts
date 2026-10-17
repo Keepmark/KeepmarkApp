@@ -1,3 +1,4 @@
+import { isConnectQrSender } from './connect-qr-sender.js';
 // Background entry shared by Firefox (MV2 page) and Chromium (MV3 worker).
 // The platform adapter resolves through the '@platform' vite alias, set per
 // build config. No DOM access here — this also runs as a service worker.
@@ -5,7 +6,7 @@
 import browser from 'webextension-polyfill';
 import { makeAdapter } from '@platform/adapter';
 import type { BookmarkApi } from '../shared/native.js';
-import { toWireError } from '../shared/messages.js';
+import { MessageCommand, toWireError } from '../shared/messages.js';
 import type { MessagePayload } from '../shared/messages.js';
 import { BookmarkIdMapper } from '../shared/id-mapper.js';
 import { InMemoryLogger } from '../shared/logging.js';
@@ -55,10 +56,13 @@ async function main(): Promise<void> {
     { uiLanguage: () => browser.i18n.getUILanguage() },
   );
 
-  browser.runtime.onMessage.addListener((msg: unknown) => {
+  browser.runtime.onMessage.addListener((msg: unknown, sender: browser.Runtime.MessageSender) => {
     if (isThemeReport(msg)) {
       theme.set(msg.dark);
       return undefined;
+    }
+    if ((msg as MessagePayload)?.command === MessageCommand.PrepareConnectQr && !isConnectQrSender(sender, browser.runtime.id, browser.runtime.getURL('manager.html'))) {
+      return Promise.resolve({ ok: false as const, ...toWireError(new Error('Unauthorized QR request')) });
     }
     return core
       .handleMessage(msg as MessagePayload)

@@ -25,8 +25,8 @@
 
 Keepmark keeps the same bookmarks on all your browsers and your phone.
 Everything is encrypted in the browser before it leaves: the service that
-stores your data sees only ciphertext, and your password never leaves the
-device.
+stores your data sees only ciphertext; your password is never sent to the
+server. QR linking voluntarily transfers it from the browser to Android.
 
 It works with **any xBrowserSync service** (the official one, a community
 host or your own) and with the official xBrowserSync apps. A sync created in
@@ -208,3 +208,17 @@ implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
 from its use. See sections 15–17 of the GPL v3. Keep your own backups.
+
+### Link Android by QR
+
+In the manager’s Status section, choose “Connect Android app…” to open the
+“Connect to Keepmark for Android” dialog, then verify your current password.
+In Keepmark for Android, open Connect → Existing sync → Scan QR from browser
+and review the service before linking. The dialog closes when you click outside
+it, press Escape or leave the window.
+The QR includes the service, sync ID and plaintext password. It is hidden after
+60 seconds or when the manager loses focus; a captured copy remains reusable.
+Nothing is saved for the QR, and manual linking remains available.
+
+The connection dialog keeps password errors next to the key-icon input, so you
+can retry directly. Its QR carries a small Keepmark logo.

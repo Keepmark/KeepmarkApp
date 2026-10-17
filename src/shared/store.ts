@@ -3,6 +3,7 @@
 // All storage keys belong here — never scatter string literals.
 
 export enum StoreKey {
+  RememberedServices = 'rememberedServices',
   AlternateSearchBarPosition = 'alternateSearchBarPosition',
   AutoFetchMetadata = 'autoFetchMetadata',
   AutoBackUpSchedule = 'autoBackUpSchedule',

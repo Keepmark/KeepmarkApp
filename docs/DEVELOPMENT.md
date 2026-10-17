@@ -19,7 +19,7 @@ Popup is vanilla TS (no framework, for MV3 longevity).
 
 - API `v1.1.13`, header `Accept-Version`, base default
   `https://api.xbrowsersync.org`. Min supported `1.1.9`.
-- Password never leaves the client. Key = PBKDF2-SHA256/250k,
+- Password is never sent to the service; QR linking explicitly transfers it to Android. Key = PBKDF2-SHA256/250k,
   salt = UTF-8(sync ID) → base64. Legacy syncs without version rejected.
 - Wire blob = `base64(IV16B || AES-GCM-256(lzutf8(JSON bookmarks)))`.
 - Vectors: `tests/vectors.json` (copied from Keepmark, generated from the
@@ -60,7 +60,7 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (52 checks, 
   status card + sync now + undo banner + open manager. Display only;
   mutations via messages.
 - `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
-  (export, two-step import with preview, safety list/restore/delete),
+  (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Move (wizard with target +
   merge preview), Logs, Settings (toolbar toggle via background, password
   change), About.
@@ -169,3 +169,32 @@ Android requires) and legacy `"KeepmarkApp"` files still import here.
 ## License and notices
 
 License, third-party notices and disclaimer: see the [README](../README.md#license).
+
+## Browser → Android QR
+
+Status → Connect Keepmark for Android opens a native modal `<dialog>` with password
+verification followed by the QR. The launch button is hidden while the dialog
+is open; backdrop clicks, Escape and focus loss close it and clear transient
+state. The dialog gives instructions for Keepmark for Android. Verification
+checks the current password against the derived key and the live remote
+encrypted blob. No sync mutation or capability probe runs.
+The manager-only command returns exactly `{app:"Keepmark",format:1,
+serviceType:"xbrowsersync",serviceUrl,id,version,password}`. The numeric dotted
+version is the sync data format; ID is ASCII `[A-Za-z0-9_-]{1,128}`. Payloads
+are limited to 1800 UTF-8 bytes; HTTPS service URL must have no credentials,
+query, fragment, whitespace or backslash. Password text is preserved literally.
+
+qrcode 1.5.4 renders a black-on-white canvas locally (M correction, quiet zone
+4). Generation guards discard late verification/render results. Close, Escape,
+section navigation, blur, hidden, pagehide and BFCache restore clear the canvas
+and inputs; 60 seconds limits display only. A captured QR stays reusable.
+No new extension permissions, storage keys or service endpoints are required.
+
+The QR dialog retains contextual verification errors beside its key-icon password
+field and permits retry without reopening. Known wrong-password errors use the
+localized message; arbitrary exception text is never displayed. Close/backdrop,
+Escape and focus loss still erase transient data. `render-connect-qr.ts` draws a
+small local Keepmark icon with white backing within 10% of canvas width.
+An integer scale of at least three pixels per module avoids blurred dense codes; QR
+correction is H up to 1200 UTF-8 bytes, Q up to 1600, M up to the 1800-byte cap.
+The logo does not change the payload.

@@ -229,6 +229,17 @@ connect + move flows (unit + `qa:browser`). First check whether CORS alone
 already lets the MV3 worker reach the service without any host grant.
 
 **Known limitations / next features (not started):** manual browser QA
-(see README "Get it"); QR connect (only `QrDelimiter` constant exists);
+(see README "Get it"); QR connection hardware QA;
 no multi-account; no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.
+
+## QR linking
+
+`shared/connect-qr.ts` builds an allowlisted Keepmark format-1 JSON (1800 UTF-8
+bytes maximum); `manager/connect-qr.ts` owns the native modal dialog, canvas
+lifetime and generation guards. Status presents an Android-specific launch
+button, hidden while the dialog is open. Password verification and QR share
+the focused dialog; backdrop click, Escape and focus loss close and clear it. `PrepareConnectQr` is manager-only (sender gate in background wiring),
+verifies the current password locally and decrypts one remote GET without
+mutating sync state. qrcode 1.5.4 is imported only by `manager/render-connect-qr.ts` (local Keepmark logo, adaptive H/Q/M correction). The QR carries
+the original password voluntarily to Android, never to the service or storage.

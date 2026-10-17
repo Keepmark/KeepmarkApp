@@ -1909,3 +1909,27 @@ describe('chromium root switch (local <-> account storage)', () => {
     expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
   });
 });
+
+describe('service selection and custom retention', () => {
+  it('probes without linking or remembering, and remembers only a completed link', async () => {
+    const state = baseState();
+    const store = new Store(new MemoryBackend());
+    const core = new BackgroundCore(store, new BookmarkIdMapper(store), new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()), makePorts(), makeFakeApi(state));
+    const result = await core.handleMessage({ command: MessageCommand.ProbeService, serviceUrl: 'https://custom.test' });
+    expect(result).toMatchObject({ reachable: true, versionCompatible: true, version: '1.1.13' });
+    expect(await store.get(StoreKey.RememberedServices)).toBeUndefined();
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+    state.info.version = '1.0.0';
+    await expect(core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://custom.test/', password: PASSWORD })).rejects.toThrow();
+    expect(await store.get(StoreKey.RememberedServices)).toBeUndefined();
+    state.info.version = '1.1.13';
+    await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://CUSTOM.test:443', password: PASSWORD });
+    expect(await core.handleMessage({ command: MessageCommand.GetServices })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ url: 'https://custom.test/', saved: true, version: '1.1.13' }),
+    ]));
+    state.info.version = '1.0.0';
+    expect(await core.handleMessage({ command: MessageCommand.ProbeService, serviceUrl: 'https://custom.test/' })).toMatchObject({ versionCompatible: false });
+    expect(await core.handleMessage({ command: MessageCommand.GetServices })).toHaveLength(9);
+  });
+});

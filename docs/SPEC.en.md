@@ -36,8 +36,7 @@ Goals:
   zero silent data loss (never auto-merge, never drop silently).
 - G2. Management UI (status, connection, space, backup, duplicates, move,
   logs, settings), not bookmark browsing.
-- G3. Same end-to-end encryption as the official xBrowserSync clients (password never leaves
-  the device).
+- G3. Same end-to-end encryption as the official xBrowserSync clients (password is never sent to the service; QR linking explicitly transfers it to Android).
 - G4. Behavioral parity between Firefox and Chromium builds.
 
 Non-goals (explicitly out of scope, must NOT be reported as missing):
@@ -325,11 +324,12 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   new-mode: create+upload on target (v1.2 iff probed) → `switch-new` undo →
   returns `{id}`. Existing-pull: version gate → password check by decrypt →
   `switch-pull` undo → overwrite natives. Existing-push: undo only after the
-  PUT lands (`switch-push`). UI: `Check target` preflight pins
-  `{newServiceUrl, mode, syncId}`; submit with changed inputs is refused
-  (`Inputs changed since the check`); `Move sync` is enabled only on a
-  successful preview and consumed after success; the sync-ID row is visible in
-  existing mode only; success shows `Moved. New sync ID: …` + Copy button.
+  PUT lands (`switch-push`). UI: destination and credentials are entered together; `Continue`
+  verifies the target and, in existing mode, decrypts its copy read-only.
+  The verified review shows consequences and merge counts. `Move and connect`
+  executes directly, without another confirmation. Changed inputs invalidate
+  verification; the sync-ID field appears only in existing mode. Success shows
+  the new sync ID with Copy and instructions for the other devices.
 - `ChangePassword {currentPassword, newPassword}`: the current derived key
   must equal the stored key (else `InvalidCredentialsException`, nothing
   touched) → quiesce → safety download → re-encrypt tree under the new key →

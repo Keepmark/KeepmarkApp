@@ -745,3 +745,39 @@ dd:last-of-type { border-bottom: 0; }
 
 .confirm p { margin: 0; }
 .confirm .row { margin-top: 8px; }
+
+#qr-output canvas { display: block; max-width: 100%; height: auto; background: #fff; image-rendering: pixelated; margin: 1rem auto; }
+#qr-panel form { display: grid; gap: .6rem; margin-top: 1rem; }
+#qr-password { max-width: 24rem; }
+
+/* Android linking is a focused, transient dialog; no credentials outside it. */
+.qr-connect-card { border: 1px solid var(--border); border-left: 4px solid var(--accent); }
+.qr-card-heading { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.qr-card-heading h3 { margin: 0 0 .35rem; font-size: 1.15rem; }
+.qr-card-heading p { margin: 0; }
+.qr-android-badge { display: grid; place-items: center; flex: 0 0 3.5rem; height: 3.5rem; border-radius: 1rem; background: var(--tint); color: var(--tint-ink); }
+.qr-android-icon { width: 1.6rem; height: 1.6rem; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.qr-android-icon circle { fill: currentColor; stroke: none; }
+.qr-android-badge .qr-android-icon { width: 2.3rem; height: 2.3rem; }
+.qr-open { display: inline-flex; align-items: center; gap: .65rem; }
+#qr-panel { width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem; background: var(--surface); color: var(--fg); overflow-y: auto; box-shadow: 0 1rem 4rem #0005; }
+#qr-panel::backdrop { background: #080c20b8; }
+.qr-dialog-heading { display: flex; align-items: center; gap: .7rem; color: var(--fg); }
+.qr-dialog-heading h2 { font-size: 1.25rem; margin: 0; }
+#qr-destination { overflow-wrap: anywhere; }
+#qr-countdown { text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
+.qr-security-note { font-size: .85rem; color: var(--muted); }
+#qr-close { display: block; margin-left: auto; }
+@media (max-width: 480px) { #qr-panel { padding: 1rem; } .qr-card-heading { align-items: flex-start; } .qr-open { width: 100%; justify-content: center; } }
+
+/* Single password action, with contextual feedback kept inside the dialog. */
+.qr-password-entry { display: flex; align-items: center; gap: .65rem; padding: .4rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--bg); transition: border-color .15s; }
+.qr-password-entry:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--tint); }
+.qr-key-icon { width: 1.35rem; height: 1.35rem; flex: 0 0 1.35rem; margin-left: .45rem; stroke: var(--muted); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#qr-panel .qr-password-entry input { min-width: 0; width: 100%; flex: 1; padding: .6rem 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; }
+.qr-password-entry:has(input[aria-invalid="true"]) { border-color: var(--danger); }
+#qr-panel .qr-password-entry button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; flex-shrink: 0; padding: .65rem .8rem; border-radius: .6rem; }
+.qr-password-entry button svg { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+#qr-panel #qr-error { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .qr-password-entry { transition: none; } }
+@media (max-width: 380px) { .qr-password-entry { flex-wrap: wrap; } #qr-panel .qr-password-entry input { width: calc(100% - 3rem); } #qr-panel .qr-password-entry button { width: 100%; } }

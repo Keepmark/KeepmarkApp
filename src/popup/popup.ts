@@ -3,7 +3,7 @@
 // with the manager via ./ui.js.
 
 import browser from 'webextension-polyfill';
-import { DefaultServiceUrl } from '../shared/constants.js';
+import { ServicePicker } from './service-picker.js';
 import { formatDate, formatTime, t } from '../shared/i18n.js';
 import type { BookmarkNode } from '../shared/models.js';
 import {
@@ -56,6 +56,8 @@ let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
 let refreshSeq = 0;
+let connectService: ServicePicker;
+let connecting = false;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -69,7 +71,10 @@ async function refreshAll(pickView = false): Promise<void> {
     statusErr = (err as Error)?.message ?? String(err);
   }
   if (my !== refreshSeq) return;
-  if (pickView) showView(status?.syncEnabled ? 'main' : 'connect');
+  if (pickView) {
+    showView(status?.syncEnabled ? 'main' : 'connect');
+    if (!status?.syncEnabled) void connectService.load();
+  }
   renderStatusCard('p', { status, ping: undefined });
   let pingErr: string | undefined;
   try {
@@ -193,13 +198,21 @@ async function refreshUndoBanner(): Promise<void> {
 }
 
 async function initConnect(): Promise<void> {
-  input('service-url').value = DefaultServiceUrl;
+  connectService = new ServicePicker({
+    input: input('service-url'),
+    mode: () => (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as 'new' | 'existing',
+    onChange: () => cancelConfirm('btn-connect'),
+    onState: () => {
+      if (!connecting) ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
+    },
+  });
   const updateMode = (): void => {
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
     ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-existing-direction') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
     updateDirection();
+    connectService.updateMode();
   };
   const updateDirection = (): void => {
     const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value;
@@ -246,7 +259,8 @@ async function submitConnect(): Promise<void> {
     | 'existing';
   const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement)
     .value as Direction;
-  const serviceUrl = input('service-url').value.trim() || DefaultServiceUrl;
+  if (!connectService.ready) return;
+  const serviceUrl = connectService.url;
   const syncId = input('sync-id').value.trim();
   const password = input('password').value;
   const invalid = validateConnect({
@@ -289,6 +303,9 @@ async function submitConnect(): Promise<void> {
     });
     if (!ok) return;
   }
+  if (!connectService.ready || connectService.url !== serviceUrl) return;
+  connecting = true;
+  connectService.setBusy(true);
   await withBusy('btn-connect', t('busy.connecting'), async () => {
     try {
       if (mode === 'new') {
@@ -307,6 +324,9 @@ async function submitConnect(): Promise<void> {
       showError('connect-error', (err as Error).message);
     }
   });
+  connecting = false;
+  connectService.setBusy(false);
+  ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
 }
 
 function initMain(): void {

@@ -36,9 +36,6 @@ export const DescriptionMaxLength = 300;
 /** Separator bookmark marker (bookmarks with this URL render as separators). */
 export const SeparatorUrl = 'xbs:separator';
 
-/** Delimiter used in QR payloads joining sync fields (reserved, not implemented yet). */
-export const QrDelimiter = '|$$|';
-
 /** Default auto-sync poll interval, mirrors the 15-minute background alarm. */
 export const SyncPollIntervalMs = 15 * 60 * 1000;
 

@@ -1,3 +1,6 @@
+import { mergeServiceCatalog, normalizeServiceUrl, PublicServices, type ServiceOption } from '../shared/service-catalog.js';
+import type { ServiceProbeResponse } from '../shared/messages.js';
+import { buildConnectQrPayload, type ConnectQrPayload } from '../shared/connect-qr.js';
 // Background core: owns the sync queue, alarms, native listeners and all
 // popup message handling. Platform-agnostic (works in a MV2 background page
 // and in a MV3 service worker — no DOM access here).
@@ -176,6 +179,7 @@ export class BackgroundCore {
   /** Native change arrived while suspended: re-schedule on release. */
   private dirtyDuringSuspend = false;
   private connecting = false;
+  private changingCredentials = false;
   private started = false;
   /** In-flight drain shared by concurrent callers (no false "did not drain"). */
   private drainFlight?: Promise<Error | undefined>;
@@ -228,6 +232,12 @@ export class BackgroundCore {
   async handleMessage(msg: MessagePayload): Promise<unknown> {
     await this.loadLanguage();
     switch (msg.command) {
+      case MessageCommand.GetServices:
+        return mergeServiceCatalog(await this.store.get<ServiceOption[]>(StoreKey.RememberedServices));
+      case MessageCommand.ProbeService:
+        return this.probeService(msg.serviceUrl);
+      case MessageCommand.PrepareConnectQr:
+        return this.prepareConnectQr(msg.currentPassword);
       case MessageCommand.SyncBookmarks:
         return this.queueSync(msg.sync.type, msg.sync.bookmarks);
       case MessageCommand.RestoreBookmarks:
@@ -255,7 +265,7 @@ export class BackgroundCore {
       case MessageCommand.ImportBackup:
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.SwitchService:
-        return this.switchService(msg.switch);
+        return this.withCredentialChange(() => this.switchService(msg.switch));
       case MessageCommand.DeleteRemoteSync:
         return this.deleteRemoteSync();
       case MessageCommand.SwitchPreview:
@@ -276,7 +286,7 @@ export class BackgroundCore {
         await this.store.remove(StoreKey.RemovedSync);
         return { cleared: true };
       case MessageCommand.ChangePassword:
-        return this.changePassword(msg.currentPassword, msg.newPassword);
+        return this.withCredentialChange(() => this.changePassword(msg.currentPassword, msg.newPassword));
       case MessageCommand.GetToolbarSync:
         return { enabled: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true };
       case MessageCommand.SetToolbarSync:
@@ -876,6 +886,7 @@ export class BackgroundCore {
         ...prev,
       });
       await this.afterLink(svc.version);
+      await this.rememberService(serviceUrl, svc);
       return { id };
     } finally {
       this.connecting = false;
@@ -964,6 +975,7 @@ export class BackgroundCore {
         }
       }
       await this.afterLink(svc.version);
+      await this.rememberService(serviceUrl, svc);
       return { id: syncId };
     } finally {
       this.connecting = false;
@@ -1212,6 +1224,34 @@ export class BackgroundCore {
     await this.store.set(StoreKey.SyncEnabled, true);
   }
 
+  private async probeService(serviceUrl: string): Promise<ServiceProbeResponse> {
+    const url = normalizeServiceUrl(serviceUrl);
+    try {
+      const api = this.makeApi(url, ServiceProbeTimeoutMs);
+      const service = await api.getInfoV12().catch((err: unknown) =>
+        err instanceof UnsupportedVersionException ? api.getInfo() : Promise.reject(err));
+      return {
+        reachable: true,
+        versionCompatible: !!service.version && compareVersions(service.version, MinApiVersion) >= 0,
+        version: service.version, status: service.status, location: service.location,
+        maxSyncSize: service.maxSyncSize, message: service.message,
+        supportsV12: service.capabilities?.revision === true,
+        syncExpiryDays: validExpiryDays(service.capabilities?.syncExpiryDays),
+      };
+    } catch {
+      return { reachable: false, versionCompatible: false };
+    }
+  }
+
+  private async rememberService(serviceUrl: string, service: import('../shared/models.js').ServiceInfo): Promise<void> {
+    const url = normalizeServiceUrl(serviceUrl);
+    if (PublicServices.some(entry => entry.url === url)) return;
+    const saved = await this.store.get<ServiceOption[]>(StoreKey.RememberedServices) ?? [];
+    const entries = mergeServiceCatalog(saved).filter(entry => entry.saved && entry.url !== url);
+    entries.push({ url, location: service.location, maxSyncSize: service.maxSyncSize, version: service.version, saved: true });
+    await this.store.set(StoreKey.RememberedServices, entries);
+  }
+
   private async afterLink(serviceVersion?: string): Promise<void> {
     // Remember the service version for the status card (offline fallback —
     // the live ping refreshes it whenever reachable).
@@ -1269,6 +1309,39 @@ export class BackgroundCore {
    * Dual-stack: revision CAS on v1.2 links (timestamp fallback on 412),
    * timestamp on legacy links.
    */
+  private async withCredentialChange<T>(action: () => Promise<T>): Promise<T> {
+    if (this.changingCredentials || this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
+    this.changingCredentials = true;
+    try { return await action(); } finally { this.changingCredentials = false; }
+  }
+
+  private async prepareConnectQr(currentPassword: string): Promise<ConnectQrPayload> {
+    if (!currentPassword || typeof currentPassword !== 'string') throw new IncompleteSyncInfoException(t('val.current.required'));
+    if (this.connecting || this.changingCredentials || this.disabling || this.suspended > 0) throw new UnexpectedResponseException(t('core.connectBusy'));
+    const { info } = await this.requireCreds();
+    const identity = (value: SyncInfo): string => JSON.stringify([value.serviceUrl ?? DefaultServiceUrl, value.id, value.password, value.version]);
+    const captured = identity(info);
+    const check = async (): Promise<void> => {
+      const fresh = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      if (!fresh || identity(fresh) !== captured || !(await this.store.get<boolean>(StoreKey.SyncEnabled)) || this.connecting || this.changingCredentials || this.disabling || this.suspended > 0) {
+        throw new UnexpectedResponseException(t('core.connectBusy'));
+      }
+    };
+    await check();
+    const derived = await deriveKey(currentPassword, info.id!, info.version ?? SyncClientVersion);
+    if (derived !== info.password) throw new InvalidCredentialsException(t('core.currentPwWrong'));
+    await check();
+    const remote = await this.makeApi(info.serviceUrl ?? DefaultServiceUrl).getBookmarks(info.id!);
+    if (!remote.version || !/^\d+\.\d+\.\d+$/.test(remote.version) || compareVersions(remote.version, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(t('err.syncInfoIncomplete'));
+    }
+    // Read-only verification deliberately avoids fetchRemote (which may persist a downgrade).
+    if (!remote.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
+    await decryptData(remote.bookmarks, derived);
+    await check();
+    return buildConnectQrPayload({ serviceUrl: info.serviceUrl ?? DefaultServiceUrl, id: info.id!, version: remote.version, password: currentPassword });
+  }
+
   private async changePassword(currentPassword: string, newPassword: string): Promise<{ lastUpdated: string }> {
     if (!currentPassword) throw new IncompleteSyncInfoException(t('val.current.required'));
     if (!newPassword) throw new IncompleteSyncInfoException(t('val.new.required'));
@@ -1560,6 +1633,7 @@ export class BackgroundCore {
         ...prev,
       });
       await this.afterLink(svc.version);
+    await this.rememberService(target.newServiceUrl, svc);
       await this.notifyMoveDone(target, id, countNodes(tree));
       return { id };
     }
@@ -1589,7 +1663,8 @@ export class BackgroundCore {
       remote = await newApi.getBookmarks(syncId);
     }
     // Password check first: throws InvalidCredentials before anything is overwritten.
-    await decryptData(remote.bookmarks ?? '', derived);
+    if (!remote.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
+    await decryptData(remote.bookmarks, derived);
 
     if (target.direction === 'pull') {
       const natives = await this.adapter.readAll(syncToolbar);
@@ -1751,6 +1826,7 @@ export class BackgroundCore {
       await this.store.set(StoreKey.SyncEnabled, true);
     }
     await this.afterLink(svc.version);
+    await this.rememberService(target.newServiceUrl, svc);
     await this.notifyMoveDone(target, syncId, target.direction === 'push' ? countNodes(tree) : undefined);
     return { id: syncId };
   }

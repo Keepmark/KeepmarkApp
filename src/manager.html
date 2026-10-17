@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title data-i18n="manager.pageTitle">Keepmark — Manager</title>
   <link rel="stylesheet" href="./manager/manager.css" />
+  <link rel="stylesheet" href="./popup/service-picker.css" />
 </head>
 <body>
   <div class="layout">
@@ -38,6 +39,34 @@
               <span id="m-space">…</span>
             </dd>
           </dl>
+        </div>
+        <div id="connect-qr" class="card qr-connect-card" hidden>
+          <div class="qr-card-heading">
+            <span class="qr-android-badge"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg></span>
+            <div><h3 data-i18n="qr.title">Connect to Keepmark for Android</h3>
+              <p class="hint" data-i18n="qr.intro">Use the same bookmarks in Keepmark for Android. Scan a QR to connect without typing your credentials.</p>
+            </div>
+          </div>
+          <button id="qr-open" class="primary qr-open"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><span data-i18n="qr.open">Connect Keepmark for Android…</span></button>
+          <dialog id="qr-panel" aria-labelledby="qr-dialog-title" aria-describedby="qr-instructions" hidden>
+            <div class="qr-dialog-heading"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><h2 id="qr-dialog-title" data-i18n="qr.title">Connect to Keepmark for Android</h2></div>
+            <p id="qr-instructions" data-i18n="qr.scan">In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.</p>
+            <p id="qr-destination" class="hint"></p>
+            <form autocomplete="off">
+              <label for="qr-password" data-i18n="qr.password">Current sync password</label>
+              <div class="qr-password-entry">
+                <svg class="qr-key-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8h3v-3h-3v-3h-3"/></svg>
+                <input id="qr-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="qr-error" required>
+                <button id="qr-generate" class="primary" type="submit"><span data-i18n="qr.generate">Show QR</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+              </div>
+              <div id="qr-error" class="error" role="alert" hidden></div>
+            </form>
+            <div id="qr-output"></div>
+            <p id="qr-countdown"></p>
+            <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and password. Anyone with a copy can reuse it. It is hidden after 60 seconds or when you leave this view.</p>
+            <button id="qr-close" data-i18n="qr.close">Close</button>
+          </dialog>
+          <p id="qr-feedback" class="hint" role="status" hidden></p>
         </div>
         <!-- Conflict resolution section (shown when status.conflict === true) -->
         <div id="m-conflict-section" class="conflict-section" hidden>
@@ -166,6 +195,16 @@
         </fieldset>
         <label id="m-switch-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-switch-id" type="text" class="mono" /></label>
         <div id="m-switch-existing-pw-slot"></div>
+          <label id="m-switch-password-row"><span id="m-switch-password-label" data-i18n="manager.move.newPassword">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
+          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
+          <p id="m-switch-pw-hint" class="hint" data-i18n="manager.move.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link data-i18n="manager.move.check">Check target</button></div>
+        <div id="move-error" class="error" role="alert" hidden></div>
+        <details><summary data-i18n="common.details">Details</summary><div id="move-preview" class="preview" hidden></div></details>
+        <p id="move-gate-hint" class="hint" data-i18n="manager.move.gateHint">Step 2 opens once the check passes, and only for these exact inputs —
+          change anything and check again.</p>
+        <div id="move-step2" hidden>
+          <h3 data-i18n="manager.move.step2">2. Confirm</h3>
         <div id="m-switch-direction-row" hidden>
           <fieldset class="options" role="radiogroup" aria-label="Move direction" data-i18n-aria-label="manager.move.directionLabel">
             <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
@@ -177,17 +216,9 @@
               <span><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
           </fieldset>
         </div>
-        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link data-i18n="manager.move.check">Check target</button></div>
-        <div id="move-error" class="error" role="alert" hidden></div>
-        <div id="move-preview" class="preview" hidden></div>
-        <p id="move-gate-hint" class="hint" data-i18n="manager.move.gateHint">Step 2 opens once the check passes, and only for these exact inputs —
-          change anything and check again.</p>
-        <div id="move-step2" hidden>
-          <h3 data-i18n="manager.move.step2">2. Confirm</h3>
-          <label id="m-switch-password-row"><span id="m-switch-password-label" data-i18n="manager.move.newPassword">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
-          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
-          <p id="m-switch-pw-hint" class="hint" data-i18n="manager.move.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
           <div id="move-summary" class="hint"></div>
+          <p id="move-merge-counts" class="hint"></p>
+          <p id="move-implication" class="hint"></p>
           <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled data-i18n="manager.move.now">Move now…</button></div>
           <div id="move-error-2" class="error" role="alert" hidden></div>
         </div>

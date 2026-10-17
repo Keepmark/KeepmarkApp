@@ -26,6 +26,9 @@ import type { MergeStats } from './merge.js';
 import type { SafetyEntry } from './safety.js';
 
 export enum MessageCommand {
+  GetServices = 'get-services',
+  ProbeService = 'probe-service',
+  PrepareConnectQr = 'prepare-connect-qr',
   SyncBookmarks = 'sync-bookmarks',
   RestoreBookmarks = 'restore-bookmarks',
   ConnectNew = 'connect-new',
@@ -135,6 +138,10 @@ export interface SwitchPreviewResult {
 }
 
 /** Live server probe result (fast timeout, never throws). */
+export interface ServiceProbeResponse extends PingResponse {
+  versionCompatible: boolean;
+}
+
 export interface PingResponse {
   reachable: boolean;
   status?: ServiceStatus;
@@ -229,7 +236,12 @@ export interface DuplicateGroup {
   entries: DuplicateEntry[];
 }
 
+export type { ConnectQrPayload } from './connect-qr.js';
+
 export type MessagePayload =
+  | { command: MessageCommand.GetServices }
+  | { command: MessageCommand.ProbeService; serviceUrl: string }
+  | { command: MessageCommand.PrepareConnectQr; currentPassword: string }
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | { command: MessageCommand.ConnectNew; serviceUrl: string; password: string }

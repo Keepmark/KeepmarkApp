@@ -3,6 +3,9 @@
 // popup via ../popup/ui.js. Display only; mutations go through background.
 
 import browser from 'webextension-polyfill';
+import { ServicePicker } from '../popup/service-picker.js';
+import { ConnectQrController } from './connect-qr.js';
+import type { ConnectQrPayload } from '../shared/connect-qr.js';
 import { ApiVersion, ApiVersion12, MinApiVersion, PasswordTooShort, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
@@ -38,7 +41,6 @@ import {
   directionConfirm,
   dupDeleteConfirm,
   dupDeleteDone,
-  moveNewConfirm,
   UnlinkDone,
   UnlinkImplication,
   ImportImplication,
@@ -68,28 +70,31 @@ import {
 import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
 import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
 
+let connectQr: ConnectQrController | undefined;
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 let preview: SwitchPreviewResult | undefined;
+let moveGeneration = 0;
 /** Merge dry-run from the last Check target (merge direction only). */
 let mergeStats: MergePreview | undefined;
 /** Move URL prefilled once from the current link (never clobbers typing). */
 let moveUrlPrefilled = false;
+let moveService: ServicePicker;
+let checkingTarget = false;
+let moving = false;
 /** Current conflict preview (fetched when status.conflict === true). */
 let conflictPreview: ConflictPreviewResponse | undefined;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
 function prefillMoveUrl(): void {
-  if (moveUrlPrefilled) return;
-  if (input('m-switch-url').value.trim()) {
-    moveUrlPrefilled = true;
-    return;
-  }
-  if (status?.serviceUrl) {
-    input('m-switch-url').value = status.serviceUrl;
-    moveUrlPrefilled = true;
-  }
+  if (moveUrlPrefilled || !moveService || $('sec-move').hidden) return;
+  moveUrlPrefilled = true;
+  void moveService.load(status?.serviceUrl).then(updateMoveServiceGate);
+}
+function updateMoveServiceGate(): void {
+  if (!moveService || checkingTarget || moving) return;
+  ($('m-btn-preview') as HTMLButtonElement).disabled = !status?.syncEnabled || !moveService.ready;
 }
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
@@ -97,6 +102,7 @@ let statusSeq = 0;
 let previewFor: { newServiceUrl: string; mode: string; syncId?: string; direction: 'push' | 'pull' | 'merge' } | undefined;
 
 function showSection(name: string, moveFocus = false): void {
+  connectQr?.close();
   document.querySelectorAll('#sidebar button').forEach((b) => {
     const active = (b as HTMLElement).dataset.section === name;
     b.classList.toggle('active', active);
@@ -117,7 +123,7 @@ function showSection(name: string, moveFocus = false): void {
   }
   if (name === 'status') void refreshStatus();
   if (name === 'backup') void refreshSafety();
-  if (name === 'move') updateMoveForm();
+  if (name === 'move') { updateMoveForm(); prefillMoveUrl(); }
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
@@ -144,6 +150,7 @@ async function refreshStatus(): Promise<void> {
     if (my !== statusSeq) return;
     // Never leave a stale linked card: redraw cleared, then report.
     status = undefined;
+    connectQr?.updateStatus();
     ping = undefined;
     conflictPreview = undefined;
     renderStatusCard('m', { status, ping });
@@ -156,6 +163,7 @@ async function refreshStatus(): Promise<void> {
     return;
   }
   if (my !== statusSeq) return;
+  connectQr?.updateStatus(status);
   const view: StatusView = { status, ping: undefined };
   renderStatusCard('m', view);
   prefillMoveUrl();
@@ -348,6 +356,7 @@ function initConflictSection(): void {
 
 function initUndoBanner(): void {
   $('m-btn-undo').addEventListener('click', async () => {
+    connectQr?.close();
     clearMessages();
     // Asked BEFORE withBusy (confirmInline owns the button while open).
     if (!(await confirmInline('m-btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
@@ -415,6 +424,7 @@ function initStatusSection(): void {
 }
 
 async function unlink(): Promise<void> {
+  connectQr?.close();
   // Disabled buttons don't fire clicks anyway; deleting the server sync
   // already unlinks, so there is nothing left to unlink afterwards.
   // Checked BEFORE withBusy (it disables the button while running, so a
@@ -442,14 +452,13 @@ async function unlink(): Promise<void> {
 }
 
 async function deleteRemote(): Promise<void> {
+  connectQr?.close();
   // Defense in depth (checked BEFORE withBusy: the wrapper disables the
   // button while running, so a check inside would always self-trigger).
   // Disabled buttons don't fire clicks anyway; the background re-gates.
   if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
   clearMessages();
-  // No undo exists for this (the server has no undelete): two explicit
-  // confirms plus the fail-closed safety backup of the server copy in the
-  // background.
+  // One explicit confirmation names the global deletion; backup remains fail-closed.
   const first = await confirmInline('m-btn-delete-remote', {
     message: t('mgr.status.deleteMessage'),
     implication: DeleteRemoteImplication(),
@@ -457,12 +466,6 @@ async function deleteRemote(): Promise<void> {
     danger: true,
   });
   if (!first) return;
-  const second = await confirmInline('m-btn-delete-remote', {
-    message: t('mgr.status.deleteLastChance'),
-    confirmLabel: t('common.yesDeleteForGood'),
-    danger: true,
-  });
-  if (!second) return;
   await withBusy('m-btn-delete-remote', t('busy.deleting'), async () => {
     try {
       await send({ command: MessageCommand.DeleteRemoteSync });
@@ -543,6 +546,7 @@ function updateLinkGates(): void {
     }
   }
   for (const notice of document.querySelectorAll<HTMLElement>('.needs-link-notice')) notice.hidden = linked;
+  updateMoveServiceGate();
 }
 
 function showResult(id: string, text: string): void {
@@ -553,9 +557,8 @@ function showResult(id: string, text: string): void {
 
 function initBackupSection(): void {
   $('m-btn-export').addEventListener('click', () => void exportBackup());
-  // Restore is three visible steps: choose file → type its password and Check
-  // (dry-run, nothing changes) → Replace (inline confirm). Choosing a file
-  // again always starts over.
+  // Choose file and verify its password, then apply directly from the review.
+  // Choosing another file always invalidates the review.
   $('m-btn-import').addEventListener('click', () => {
     resetImport();
     clearMessages();
@@ -564,6 +567,7 @@ function initBackupSection(): void {
   ($('m-import-file') as HTMLInputElement).addEventListener('change', (e) => {
     clearMessages();
     const file = (e.target as HTMLInputElement).files?.[0];
+    backToPasswordStep();
     if (!file) return;
     if (file.size > MaxBackupBytes) {
       resetImport();
@@ -613,6 +617,7 @@ async function checkImport(): Promise<void> {
   if (!file) return showError('backup-error-2', t('mgr.backup.chooseFirst'));
   const password = input('m-import-password').value;
   if (!password) return showError('backup-error-2', t('mgr.backup.enterPassword'));
+  const generation = importGeneration;
   await withBusy('m-btn-import-check', t('busy.checking'), async () => {
     try {
       const preview = await send<{ count: number }>({
@@ -620,21 +625,23 @@ async function checkImport(): Promise<void> {
         json: await file.text(),
         password,
       });
+      if (generation !== importGeneration || input('m-import-password').value !== password) return;
       importPreview = { name: file.name, size: file.size, lastModified: file.lastModified, password, count: preview.count };
       input('m-import-password').disabled = true;
       ($('m-btn-import-check') as HTMLElement).hidden = true;
       const box = $('m-import-preview');
-      box.textContent = importChecked(file.name, preview.count);
+      box.textContent = `${importChecked(file.name, preview.count)} ${ImportImplication()}`;
       box.hidden = false;
       ($('m-import-confirm-row') as HTMLElement).hidden = false;
     } catch (err) {
+      if (generation !== importGeneration) return;
       input('m-import-password').value = '';
       showError('backup-error-2', (err as Error).message);
     }
   });
 }
 
-/** Step 3: inline confirm, then replace local + server with the checked file. */
+/** The checked summary is the confirmation: its final button applies directly. */
 async function confirmImport(): Promise<void> {
   clearMessages();
   const file = ($('m-import-file') as HTMLInputElement).files?.[0];
@@ -649,13 +656,6 @@ async function confirmImport(): Promise<void> {
     resetImport();
     return showError('backup-error-2', t('mgr.backup.fileChanged'));
   }
-  const ok = await confirmInline('m-btn-import-confirm', {
-    message: tn('mgr.backup.replaceMessage', pending.count),
-    implication: ImportImplication(),
-    confirmLabel: t('common.yesRestore'),
-    danger: true,
-  });
-  if (!ok) return;
   await withBusy('m-btn-import-confirm', t('busy.restoring'), async () => {
     try {
       const res = await send<{ count: number; safety: string }>({
@@ -685,6 +685,7 @@ function resetImport(): void {
 
 /** Back to step 2: the file stays, the password and the check are dropped. */
 function backToPasswordStep(): void {
+  importGeneration++;
   importPreview = undefined;
   const pw = input('m-import-password');
   pw.value = '';
@@ -696,6 +697,7 @@ function backToPasswordStep(): void {
 
 /** File (and verified password) the check was made for — Replace requires
  * the same file and reuses that password. */
+let importGeneration = 0;
 let importPreview:
   | { name: string; size: number; lastModified: number; password: string; count: number }
   | undefined;
@@ -1009,15 +1011,15 @@ function switchDirection(): 'push' | 'pull' | 'merge' {
 }
 
 function updateMoveForm(): void {
+  moveGeneration++;
   const mode = switchMode();
+  moveService?.updateMode();
   ($('m-switch-id-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
   // Prepopulate once with the current link: most moves stay on the same
   // service (new sync id, same host). Never clobbers user input afterwards.
   prefillMoveUrl();
-  // Password labels follow the mode: in existing mode it is the target
-  // sync's CURRENT password, not a new one. The confirmation stays in both
-  // modes — a typo in existing mode locks you out with no recovery.
+  // Existing targets use their current password, verified before the review.
   $('m-switch-password-label').textContent = mode === 'new' ? t('manager.move.newPassword') : t('mgr.move.syncPassword');
   $('m-switch-confirm-label').textContent = mode === 'new' ? t('common.confirmPassword') : t('mgr.move.confirmTargetPassword');
   // Confirm row only when inventing a password (new mode). In existing
@@ -1025,12 +1027,6 @@ function updateMoveForm(): void {
   // InvalidCredentials, so no confirmation is asked.
   ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
   ($('m-switch-pw-hint') as HTMLElement).hidden = mode !== 'new';
-  // Existing sync: its password is part of the target (the check needs it
-  // for the merge counts), so the field sits in step 1; a new sync invents
-  // its password at confirm time, in step 2.
-  const pwRow = $('m-switch-password-row');
-  if (mode === 'existing') $('m-switch-existing-pw-slot').append(pwRow);
-  else $('m-switch-confirm-row').before(pwRow);
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
@@ -1042,6 +1038,12 @@ function updateMoveForm(): void {
   const result = $('move-result') as HTMLElement;
   result.hidden = true;
   result.textContent = '';
+  renderMoveReview();
+  updateMoveServiceGate();
+}
+
+function renderMoveReview(): void {
+  const mode = switchMode();
   const url = input('m-switch-url').value.trim() || '…';
   const n = status?.bookmarkCount;
   const direction = switchDirection();
@@ -1057,9 +1059,14 @@ function updateMoveForm(): void {
         : direction === 'merge'
           ? t('mgr.move.summaryMerge', { url })
           : t('mgr.move.summaryPull', { url });
+  $('move-implication').textContent = `${mode === 'existing' ? directionConfirm(direction).implication + ' ' : ''}${MoveImplication()}`;
+  const stats = mergeStats;
+  $('move-merge-counts').textContent = mode === 'existing' && direction === 'merge' && stats
+    ? t('popup.merge.counts', { local: stats.localOnly, remote: stats.remoteOnly, titles: stats.titleConflicts }) : '';
 }
 
 async function previewTarget(): Promise<void> {
+  if (!moveService.ready) return;
   clearMessages();
   const newServiceUrl = input('m-switch-url').value.trim();
   if (!newServiceUrl) {
@@ -1072,22 +1079,30 @@ async function previewTarget(): Promise<void> {
     showError('move-error', t('val.syncId.required'));
     return;
   }
+  const invalid = validateSwitch({ mode, newServiceUrl, syncId,
+    newPassword: input('m-switch-password').value, confirm: input('m-switch-confirm').value });
+  if (invalid) return showError('move-error', invalid);
+  const generation = moveGeneration;
   const urlErr = validateServiceUrl(newServiceUrl);
   if (urlErr) {
     showError('move-error', urlErr);
     return;
   }
+  checkingTarget = true;
   await withBusy('m-btn-preview', t('busy.checking'), async () => {
     try {
-      preview = await send<SwitchPreviewResult>({
+      const checked = await send<SwitchPreviewResult>({
         command: MessageCommand.SwitchPreview,
         newServiceUrl,
         mode,
         syncId,
       });
+      if (generation !== moveGeneration) return;
+      preview = checked;
       // Pin what the preview was made for; submitMove() refuses stale previews.
       previewFor = { newServiceUrl, mode, syncId, direction: switchDirection() };
     } catch (err) {
+      if (generation !== moveGeneration) return;
       showError('move-error', (err as Error).message);
       return;
     }
@@ -1113,11 +1128,10 @@ async function previewTarget(): Promise<void> {
       if (preview.syncExpiryDays !== undefined) {
         lines.push(t('mgr.move.previewExpiry', { state: describeSyncExpiry(preview.syncExpiryDays) }));
       }
-      // Merge direction: dry-run the union so the user sees exactly what
-      // will upload/download before the Move button unlocks. Needs the
-      // target password (already in the form for the submit step).
+      // Read-only decryption verifies existing credentials for every direction.
+      // Keep union statistics so changing direction needs no further check.
       mergeStats = undefined;
-      if (mode === 'existing' && switchDirection() === 'merge' && preview.remoteExists) {
+      if (mode === 'existing' && preview.remoteExists) {
         const mergePassword = input('m-switch-password').value;
         if (!mergePassword) {
           box.textContent = lines.join('\n') + '\n' + t('mgr.move.enterPwForMerge');
@@ -1126,12 +1140,15 @@ async function previewTarget(): Promise<void> {
           return;
         }
         try {
-          mergeStats = await send<MergePreview>({
+          const checkedMerge = await send<MergePreview>({
             command: MessageCommand.PreviewMerge,
             serviceUrl: newServiceUrl,
             syncId: syncId!,
             password: mergePassword,
           });
+          if (generation !== moveGeneration) return;
+          mergeStats = checkedMerge;
+          if (switchDirection() === 'merge')
           lines.push(
             t('mgr.move.mergePreview', {
               local: mergeStats.localOnly,
@@ -1144,6 +1161,7 @@ async function previewTarget(): Promise<void> {
             }),
           );
         } catch (err) {
+          if (generation !== moveGeneration) return;
           showError('move-error', (err as Error).message);
           return;
         }
@@ -1155,8 +1173,14 @@ async function previewTarget(): Promise<void> {
       preview.reachable &&
       preview.versionCompatible !== false &&
       (mode === 'new' || preview.remoteExists === true);
+    if (generation !== moveGeneration) return;
+    renderMoveReview();
     setMoveGate(ok);
+    if (!ok) showError('move-error', !preview.reachable ? t('mgr.move.unreachable') : preview.versionCompatible === false ? t('mgr.move.versionOld') : t('mgr.move.syncNotFound'));
+    if (ok) $('move-step2').scrollIntoView({ block: 'nearest' });
   });
+  checkingTarget = false;
+  updateMoveServiceGate();
 }
 
 /** The Move button exists only after a passing check: shown + enabled
@@ -1170,6 +1194,7 @@ function setMoveGate(ok: boolean): void {
 }
 
 async function submitMove(): Promise<void> {
+  connectQr?.close();
   clearMessages();
   const newServiceUrl = input('m-switch-url').value.trim();
   const mode = switchMode();
@@ -1183,6 +1208,7 @@ async function submitMove(): Promise<void> {
     return;
   }
   if (
+    !moveService.ready ||
     !preview ||
     !previewFor ||
     previewFor.newServiceUrl !== newServiceUrl ||
@@ -1200,35 +1226,14 @@ async function submitMove(): Promise<void> {
     showError('move-error-2', t('mgr.move.mergeUnavailable'));
     return;
   }
-  // Every move replaces or creates something: always confirm inline, with
-  // the direction's loss line plus what happens to the old sync. Asked
-  // BEFORE withBusy (confirmInline owns the button while open).
-  const counts = s
-    ? t('popup.merge.counts', { local: s.localOnly, remote: s.remoteOnly, titles: s.titleConflicts })
-    : '';
-  const ok = await confirmInline(
-    'm-btn-switch',
-    mode === 'new'
-      ? {
-          message: moveNewConfirm(newServiceUrl, status?.bookmarkCount),
-          implication: MoveImplication(),
-          confirmLabel: t('common.yesMove'),
-        }
-      : {
-          message: directionConfirm(direction).message,
-          implication: `${direction === 'merge' ? counts : ''}${directionConfirm(direction).implication} ${MoveImplication()}`,
-          confirmLabel: directionConfirm(direction).confirmLabel,
-          danger: direction !== 'merge',
-        },
-  );
-  // Inputs edited while the confirm was open re-run updateMoveForm(), which
-  // drops the preview: never move with what was not checked.
-  if (!ok || !preview) return;
+  // The visible checked summary and implication are the sole confirmation.
   // Set on success so the post-busy gate below knows the preview was spent.
   let movedId: string | undefined;
   // Local count for the success line (new/push upload exactly these; capture
   // before the move — merge/pull rewrite the local tree).
   const localCount = status?.bookmarkCount;
+  moving = true;
+  moveService.setBusy(true);
   await withBusy('m-btn-switch', t('busy.moving'), async () => {
     ($('move-result') as HTMLElement).hidden = true;
     try {
@@ -1244,6 +1249,9 @@ async function submitMove(): Promise<void> {
       showError('move-error-2', (err as Error).message);
     }
   });
+  moving = false;
+  moveService.setBusy(false);
+  updateMoveServiceGate();
   if (movedId) {
     // Consume the preview AFTER withBusy (it restores the pre-click state
     // last): the unlocked button must never re-fire with stale inputs.
@@ -1274,11 +1282,24 @@ async function submitMove(): Promise<void> {
 }
 
 function initMoveSection(): void {
-  document.querySelectorAll('input[name="m-switch-mode"], input[name="m-switch-direction"]').forEach((el) => {
+  moveService = new ServicePicker({
+    input: input('m-switch-url'), mode: switchMode,
+    onChange: () => updateMoveForm(),
+    onState: () => updateMoveServiceGate(),
+  });
+  document.querySelectorAll('input[name="m-switch-mode"]').forEach((el) => {
     el.addEventListener('change', updateMoveForm);
+  });
+  document.querySelectorAll('input[name="m-switch-direction"]').forEach((el) => {
+    el.addEventListener('change', () => {
+      if (previewFor) previewFor.direction = switchDirection();
+      renderMoveReview();
+    });
   });
   input('m-switch-url').addEventListener('input', updateMoveForm);
   input('m-switch-id').addEventListener('input', updateMoveForm);
+  input('m-switch-password').addEventListener('input', updateMoveForm);
+  input('m-switch-confirm').addEventListener('input', updateMoveForm);
   $('m-btn-preview').addEventListener('click', () => void previewTarget());
   $('m-btn-switch').addEventListener('click', () => void submitMove());
   updateMoveForm();
@@ -1395,6 +1416,7 @@ function readPasswordChange(): { current: string; next: string; confirm: string 
 
 /** Change password: validate → inline confirm with the implications → run. */
 async function changePassword(): Promise<void> {
+  connectQr?.close();
   clearMessages();
   ($('pw-result') as HTMLElement).hidden = true;
   const invalid = validatePasswordChange(readPasswordChange());
@@ -1457,6 +1479,8 @@ function renderAbout(): void {
 
 async function init(): Promise<void> {
   await initI18n();
+  connectQr = new ConnectQrController($('connect-qr'), (password) =>
+    send<ConnectQrPayload>({ command: MessageCommand.PrepareConnectQr, currentPassword: password }));
   initSidebar();
   initStatusSection();
   initUndoBanner();
@@ -1472,7 +1496,10 @@ async function init(): Promise<void> {
   // of storage events collapse onto the newest read.
   browser.storage.onChanged.addListener((changes) => {
     if (StoreKey.UiLanguage in changes) location.reload();
-    if ('syncEnabled' in changes || 'syncInfo' in changes) void refreshStatus();
+    if ('syncEnabled' in changes || 'syncInfo' in changes) {
+      connectQr?.close();
+      void refreshStatus();
+    }
   });
   void refreshStatus();
 }
