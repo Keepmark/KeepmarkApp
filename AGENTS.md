@@ -237,8 +237,9 @@ folder edge cases covered by tests but untested live.
 
 `shared/connect-qr.ts` builds an allowlisted Keepmark format-1 JSON (1800 UTF-8
 bytes maximum); `manager/connect-qr.ts` owns the native modal dialog, canvas
-lifetime and generation guards. Status presents an Android-specific launch
-button, hidden while the dialog is open. Password verification and QR share
+lifetime and generation guards. Status shows the Android card (“Connect Keepmark
+on your phone”); its “Show connection QR” button opens the dialog and is hidden
+while it is open. Password verification and QR share
 the focused dialog; backdrop click, Escape and focus loss close and clear it. `PrepareConnectQr` is manager-only (sender gate in background wiring),
 verifies the current password locally and decrypts one remote GET without
 mutating sync state. qrcode 1.5.4 is imported only by `manager/render-connect-qr.ts` (local Keepmark logo, adaptive H/Q/M correction). The QR carries

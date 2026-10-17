@@ -172,10 +172,10 @@ License, third-party notices and disclaimer: see the [README](../README.md#licen
 
 ## Browser → Android QR
 
-Status → Connect Keepmark for Android opens a native modal `<dialog>` with password
-verification followed by the QR. The launch button is hidden while the dialog
-is open; backdrop clicks, Escape and focus loss close it and clear transient
-state. The dialog gives instructions for Keepmark for Android. Verification
+Status → the “Connect Keepmark on your phone” card → “Show connection QR” opens
+a native modal `<dialog>` with password verification followed by the QR. The card
+button is hidden while the dialog is open; backdrop clicks, Escape and focus loss
+close it and clear transient state. The dialog gives instructions for Keepmark for Android. Verification
 checks the current password against the derived key and the live remote
 encrypted blob. No sync mutation or capability probe runs.
 The manager-only command returns exactly `{app:"Keepmark",format:1,
