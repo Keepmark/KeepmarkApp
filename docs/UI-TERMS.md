@@ -23,6 +23,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
 Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete` (second step of a server delete: `Yes, delete for good`), always with `Cancel`.
+The two connect modes are `New sync` / `Existing sync`: where the question above them already carries the noun (`Into which sync?`, it «In quale sincronizzazione?»), the two segmented labels are shortened to `New` / `Existing` (`Nuova` / `Esistente`) so they fit one row.
 Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in both repos).
 Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
