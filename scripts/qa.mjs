@@ -117,6 +117,18 @@ ok('background/shared/platform DOM-free (if no failure above)');
   else ok('no console/debugger leftovers');
 }
 
+// 4b. No HTML-injection sinks in shipped code: dynamic innerHTML/outerHTML is
+// what AMO's linter reports as UNSAFE_VAR_ASSIGNMENT (store review warnings),
+// and the DOM APIs cover every case we need.
+{
+  const files = srcFiles('src');
+  // Member access only (`.innerHTML`), so prose in comments does not trip it.
+  const sink = /\.(innerHTML|outerHTML|insertAdjacentHTML)\b|document\.write\b/;
+  const bad = files.filter((f) => f.endsWith('.ts') && sink.test(readFileSync(path.join(root, f), 'utf8')));
+  if (bad.length > 0) fail(`HTML-injection sink in: ${bad.join(', ')}`);
+  else ok('no innerHTML/outerHTML/insertAdjacentHTML/document.write in src');
+}
+
 // 5. Every MessageCommand has a handler case in core, and every handled
 // command still exists in the enum (catches orphaned handlers).
 {
@@ -253,7 +265,8 @@ for (const [platform, bg] of [['firefox', 'background.html'], ['chromium', 'back
   }
 }
 
-// 8. Mozilla linter on the firefox zip (0 errors required). Local binary,
+// 8. Mozilla linter on the firefox zip (0 errors required, and no UNSAFE_*
+// warning: those are what the store shows on the listing). Local binary,
 // versioned artifact name (see scripts/package.mjs).
 try {
   const zip = `dist/keepmark-firefox-${version()}.zip`;
@@ -263,9 +276,16 @@ try {
     const out = execFileSync('node_modules/.bin/addons-linter', [zip, '--self-hosted', '--output', 'json'], {
       cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
-    const errors = JSON.parse(out).summary?.errors;
+    const report = JSON.parse(out);
+    const errors = report.summary?.errors;
     if (errors !== 0) fail(`addons-linter reports ${errors} errors`);
     else ok('addons-linter: 0 errors');
+    const unsafe = (report.warnings ?? []).filter((w) => String(w.code).startsWith('UNSAFE'));
+    if (unsafe.length > 0) {
+      fail(`addons-linter unsafe warnings: ${unsafe.map((w) => `${w.code} ${w.file}:${w.line}`).join(', ')}`);
+    } else ok('addons-linter: no unsafe-assignment warnings');
+    const other = (report.warnings ?? []).length - unsafe.length;
+    if (other > 0) console.log(`QA note: addons-linter has ${other} other warning(s)`);
   }
 } catch (e) {
   fail(`addons-linter failed to run: ${(e.message ?? e).split('\n')[0]}`);

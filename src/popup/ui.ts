@@ -83,7 +83,10 @@ export function formatBytes(bytes: number): string {
  * the v1.2-only delete or the move-wizard preview lock must survive. */
 export async function withBusy(buttonId: string, busyLabel: string, fn: () => Promise<void>): Promise<void> {
   const btn = $(buttonId) as HTMLButtonElement;
-  const original = btn.innerHTML;
+  // Snapshot the children as nodes: restoring markup through innerHTML is an
+  // unsafe dynamic assignment (AMO linter UNSAFE_VAR_ASSIGNMENT) and re-parses
+  // HTML for nothing.
+  const original = [...btn.childNodes].map((node) => node.cloneNode(true));
   const wasDisabled = btn.disabled;
   btn.disabled = true;
   const label = btn.querySelector('span');
@@ -96,7 +99,7 @@ export async function withBusy(buttonId: string, busyLabel: string, fn: () => Pr
     await fn();
   } finally {
     btn.disabled = wasDisabled;
-    btn.innerHTML = original;
+    btn.replaceChildren(...original);
   }
 }
 

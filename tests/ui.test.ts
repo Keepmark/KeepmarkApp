@@ -226,6 +226,20 @@ describe('withBusy', () => {
     expect(btn.disabled).toBe(true);
     expect(btn.textContent).toBe('Go');
   });
+
+  it('restores a labelled button from node snapshots (no innerHTML)', async () => {
+    const host = document.createElement('div');
+    host.innerHTML = '<button id="btn-markup"><span data-i18n="popup.connect">Connect</span><em>now</em></button>';
+    document.body.append(host);
+    const btn = document.getElementById('btn-markup') as HTMLButtonElement;
+    await withBusy('btn-markup', 'Working…', async () => {
+      expect(btn.querySelector('span')?.textContent).toBe('Working…');
+      expect(btn.querySelector('em')?.textContent).toBe('now');
+    });
+    expect(btn.querySelector('span')?.textContent).toBe('Connect');
+    expect(btn.querySelector('span')?.getAttribute('data-i18n')).toBe('popup.connect');
+    expect(btn.querySelector('em')?.textContent).toBe('now');
+  });
 });
 
 describe('formatBytes', () => {
