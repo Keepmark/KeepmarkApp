@@ -99,6 +99,7 @@ treat it like the password itself. Manual linking remains available, and in
 
 <p align="center">
   <img src="docs/img/screens/05-private.png" width="49%" alt="Connect a browser" />
+  <img src="docs/img/screens/06-phone.png" width="49%" alt="Connection QR for linking the phone" />
 </p>
 
 ## The Keepmark family
