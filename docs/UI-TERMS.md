@@ -6,6 +6,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Term | Meaning | Do not use |
 |---|---|---|
 | Service / Service URL | The xBrowserSync-compatible server the sync lives on | Server (as a label) |
+| Service URL scheme | The `https://` / `http://` half of a custom service URL, chosen next to the host box | protocol |
 | Sync, Sync ID | The encrypted bookmark collection on a service and its ID | sync id (lowercase) |
 | Server copy | The encrypted data currently stored on the service | remote, remote side, remote tree |
 | Local bookmarks / this device | The bookmarks in this browser or app | native bookmarks, local tree, local side |
