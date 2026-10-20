@@ -5,7 +5,10 @@ import {
   isActiveSavedSync,
   removeSavedSync as forgetSavedSync,
   sameSavedSync,
+  normalizeSavedSyncLabel,
   sanitizeSavedSyncs,
+  type SavedSyncCredential,
+  savedSyncLabelTaken,
   upsertSavedSync,
   type SavedSync,
   type SavedSyncActive,
@@ -72,6 +75,7 @@ import {
   type SavedSyncsResponse,
   type ChangeSwitchPasswordResult,
   type ResetSwitchPasswordResult,
+  type RemoveSwitchPasswordResult,
   type StatusResponse,
   type SwitchLockState,
   type SyncTargetPreview,
@@ -305,6 +309,8 @@ export class BackgroundCore {
         );
       case MessageCommand.RemoveSavedSync:
         return this.removeSavedSyncEntry(msg.serviceUrl, msg.syncId);
+      case MessageCommand.RenameSavedSync:
+        return this.renameSavedSyncEntry(msg.serviceUrl, msg.syncId, msg.label);
       case MessageCommand.GetSwitchLock:
         return this.getSwitchLockState();
       case MessageCommand.SetSwitchPassword:
@@ -313,6 +319,8 @@ export class BackgroundCore {
         return this.changeSwitchPassword(msg.current, msg.next, msg.confirm);
       case MessageCommand.ResetSwitchPassword:
         return this.resetSwitchPassword(msg.next, msg.confirm);
+      case MessageCommand.RemoveSwitchPassword:
+        return this.removeSwitchPassword(msg.current);
       case MessageCommand.CheckSyncTarget:
         return this.checkSyncTarget(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.PreviewMerge:
@@ -923,8 +931,12 @@ export class BackgroundCore {
     serviceUrl: string,
     password: string,
     switchPassword?: string,
-  ): Promise<{ id: string }> {
+    rawLabel?: string,
+  ): Promise<{ id: string; bookmarkCount: number }> {
     if (this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
+    // The row name is a label, not a secret: refuse a duplicate BEFORE any
+    // mutation so a failed link never leaves a half-named list.
+    const label = await this.assertSavedSyncLabelAvailable(rawLabel);
     // Proof of the switch lock (when set) BEFORE anything is created, plus the
     // demoted sync's key captured for its row.
     const vaultKey = await this.beginLink(switchPassword);
@@ -939,9 +951,10 @@ export class BackgroundCore {
       const v12 = await this.isV12(serviceUrl);
       const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       const prev = await this.capturePrev();
-      const { id } = await this.withSuspended(() =>
+      const created = await this.withSuspended(() =>
         createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl, v12),
       );
+      const id = created.id;
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
       if (!linked?.password) throw new IncompleteSyncInfoException(t('core.linkMissingCreate'));
       if (v12 && linked?.supportsV12 !== true) {
@@ -956,11 +969,11 @@ export class BackgroundCore {
         opSupportsV12: linked!.supportsV12 === true,
         ...prev,
       });
-      await this.afterLink(svc.version);
+      await this.afterLink(svc.version, label);
       await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
       await this.wrapActiveRow(vaultKey);
       await this.rememberService(serviceUrl, svc);
-      return { id };
+      return { id, bookmarkCount: created.bookmarkCount };
     } finally {
       this.connecting = false;
       await this.setBadge(false);
@@ -972,9 +985,17 @@ export class BackgroundCore {
     syncId: string,
     password: string,
     direction: 'pull' | 'push' | 'merge' = 'pull',
-    options: { derivedKey?: string; switchPassword?: string; vault?: CryptoKey } = {},
+    options: {
+      derivedKey?: string;
+      switchPassword?: string;
+      vault?: CryptoKey;
+      /** Optional row name; ignored on the activation path (label kept). */
+      label?: string;
+    } = {},
   ): Promise<{ id: string }> {
     if (this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
+    // Relinking the same row may reuse its own label; another row may not.
+    const label = await this.assertSavedSyncLabelAvailable(options.label, { serviceUrl, syncId });
     const vaultKey = options.vault ?? (await this.beginLink(options.switchPassword));
     const outgoing = await this.activeSavedSync();
     const outgoingKey = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))?.password;
@@ -1051,7 +1072,7 @@ export class BackgroundCore {
           await this.pushCurrent(api, linked, pulled.bookmarks);
         }
       }
-      await this.afterLink(svc.version);
+      await this.afterLink(svc.version, label);
       await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
       await this.wrapActiveRow(vaultKey);
       await this.rememberService(serviceUrl, svc);
@@ -1331,7 +1352,7 @@ export class BackgroundCore {
     await this.store.set(StoreKey.RememberedServices, entries);
   }
 
-  private async afterLink(serviceVersion?: string): Promise<void> {
+  private async afterLink(serviceVersion?: string, label?: string): Promise<void> {
     // Remember the service version for the status card (offline fallback —
     // the live ping refreshes it whenever reachable).
     if (serviceVersion) {
@@ -1340,7 +1361,7 @@ export class BackgroundCore {
         await this.store.set(StoreKey.SyncInfo, { ...linked, serviceVersion });
       }
     }
-    await this.rememberActiveSavedSync().catch((err) =>
+    await this.rememberActiveSavedSync(label).catch((err) =>
       // A registry hiccup must never turn a completed link into an error.
       this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs registry failed: ${(err as Error)?.message}`),
     );
@@ -1714,16 +1735,24 @@ export class BackgroundCore {
     const active = await this.activeSavedSync();
     if (!active) return;
     await this.upsertSavedSyncRow(active, false);
+    // No switch password = activation needs no password, so the row must hold
+    // its key in clear (same exposure as SyncInfo). Idempotent: only when the
+    // credential is missing.
+    if (await this.readSwitchLock()) return;
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    const row = findSavedSync(await this.savedSyncList(), active);
+    if (!info?.password || row?.credential) return;
+    await this.wrapRowKey(active, info.password, undefined);
   }
 
   /** Upsert the linked sync with NOW as last use (called after every link). */
-  private async rememberActiveSavedSync(): Promise<void> {
+  private async rememberActiveSavedSync(label?: string): Promise<void> {
     const active = await this.activeSavedSync();
     if (!active) return;
-    await this.upsertSavedSyncRow(active, true);
+    await this.upsertSavedSyncRow(active, true, label);
   }
 
-  private async upsertSavedSyncRow(active: SavedSyncActive, bumpLastUse: boolean): Promise<void> {
+  private async upsertSavedSyncRow(active: SavedSyncActive, bumpLastUse: boolean, label?: string): Promise<void> {
     await this.withSavedSyncs(async (list) => {
       const existing = findSavedSync(list, active);
       if (!bumpLastUse && existing) return;
@@ -1732,6 +1761,7 @@ export class BackgroundCore {
         StoreKey.SavedSyncs,
         upsertSavedSync(list, {
           ...active,
+          ...(label ? { label } : {}),
           syncVersion: info?.version,
           lastUsedAt: bumpLastUse ? new Date().toISOString() : existing?.lastUsedAt ?? new Date().toISOString(),
         }),
@@ -1776,11 +1806,9 @@ export class BackgroundCore {
   private async activateSavedSync(
     serviceUrl: string,
     syncId: string,
-    switchPassword: string,
+    switchPassword?: string,
   ): Promise<{ id: string }> {
-    if (!switchPassword) throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
-    const lock = await this.requireSwitchLock();
-    const vaultKey = await unlockSwitchLock(lock, switchPassword);
+    const lock = await this.readSwitchLock();
     const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
     const list = await this.savedSyncList();
     const row = findSavedSync(list, target);
@@ -1790,7 +1818,18 @@ export class BackgroundCore {
       throw new UnexpectedResponseException(t('core.savedAlreadyActive'));
     }
     if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
-    const derived = await unwrapCredential(vaultKey, row.credential);
+    // The switch password is opt-in: plain rows switch without one; wrapped
+    // rows need the lock and the password that opens it.
+    let vaultKey: CryptoKey | undefined;
+    let derived: string;
+    if (row.credential.scheme === 'plain') {
+      derived = row.credential.key;
+    } else {
+      if (!lock) throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'));
+      if (!switchPassword) throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
+      vaultKey = await unlockSwitchLock(lock, switchPassword);
+      derived = await unwrapCredential(vaultKey, row.credential);
+    }
     await this.verifySavedSyncTarget(target, derived);
     if (!active) {
       // Unlinked (the row survived an unlink): plain link, there is no active
@@ -1860,18 +1899,23 @@ export class BackgroundCore {
   }
 
   /**
-   * Gate for every link that would leave a dormant row: without a lock the
-   * row's key could never be wrapped, so the manager must set one first; with
-   * a lock the request must prove it. Returns the vault key for the wrap.
+   * Key used to seal row credentials. Without a switch lock the key is stored
+   * in clear (activation needs no password); with a lock the caller must have
+   * unlocked the vault.
    */
+  private sealRowKey(
+    vaultKey: CryptoKey | undefined,
+    derivedKey: string,
+  ): Promise<SavedSyncCredential> {
+    if (!vaultKey) return Promise.resolve({ scheme: 'plain', key: derivedKey });
+    return wrapCredential(vaultKey, derivedKey).then((wrapped) => ({ scheme: 'switch', ...wrapped }));
+  }
+
+  /** A link may proceed without a lock (rows stay plain); with a lock the
+   *  request must prove the switch password so the new key gets wrapped. */
   private async beginLink(switchPassword?: string): Promise<CryptoKey | undefined> {
     const lock = await this.readSwitchLock();
-    if (!lock) {
-      if ((await this.savedSyncList()).length > 0) {
-        throw new UnexpectedResponseException(t('core.switchPasswordNotSet'));
-      }
-      return undefined;
-    }
+    if (!lock) return undefined;
     if (!switchPassword) throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
     return unlockSwitchLock(lock, switchPassword);
   }
@@ -1884,14 +1928,15 @@ export class BackgroundCore {
     return unlockSwitchLock(lock, switchPassword);
   }
 
-  /** Wrap one identity's key into its row (no-op without all three). */
+  /** Store one identity's key into its row: wrapped with a lock, in clear
+   *  without one. */
   private async wrapRowKey(
     identity: SavedSyncActive | undefined,
     derivedKey: string | undefined,
     vaultKey: CryptoKey | undefined,
   ): Promise<void> {
-    if (!vaultKey || !identity || !derivedKey) return;
-    const credential = await wrapCredential(vaultKey, derivedKey);
+    if (!identity || !derivedKey) return;
+    const credential = await this.sealRowKey(vaultKey, derivedKey);
     await this.withSavedSyncs(async (list) => {
       const existing = findSavedSync(list, identity);
       await this.store.set(
@@ -1905,9 +1950,9 @@ export class BackgroundCore {
     });
   }
 
-  /** Keep the active row's credential in step with the live key. */
+  /** Keep the active row's credential in step with the live key (plain when
+   *  no switch password is configured). */
   private async wrapActiveRow(vaultKey: CryptoKey | undefined): Promise<void> {
-    if (!vaultKey) return;
     const active = await this.activeSavedSync();
     if (!active) return;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
@@ -1915,9 +1960,9 @@ export class BackgroundCore {
   }
 
   /**
-   * Manager: create the switch password. The active key is wrapped first (the
-   * row is then ready to become dormant) and the lock is written last: there is
-   * never a lock without the rows it needs.
+   * Manager: create the switch password (opt-in, offered with 2+ syncs).
+   * Every row's key is sealed under the new vault first; the lock is written
+   * last, so there is never a lock without the rows it needs.
    */
   private async setSwitchPassword(password: string, confirm: string): Promise<{ set: true }> {
     this.assertSwitchPassword(password);
@@ -1925,16 +1970,48 @@ export class BackgroundCore {
     if (await this.readSwitchLock()) {
       throw new UnexpectedResponseException(t('core.switchPasswordAlreadySet'));
     }
-    // Defensive: a dormant row without its key could never be opened.
-    const active = await this.activeSavedSync();
-    const list = await this.savedSyncList();
-    if (list.some((row) => !row.credential && !isActiveSavedSync(row, active))) {
-      throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
-    }
+    // Make sure the active row has its key stored (plain) before sealing it.
+    await this.wrapActiveRow(undefined);
     const { lock, vaultKey } = await createSwitchLock(password);
-    await this.wrapActiveRow(vaultKey);
+    await this.withSavedSyncs(async (list) => {
+      const rows: SavedSync[] = [];
+      for (const row of list) {
+        if (row.credential?.scheme !== 'plain') {
+          throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
+        }
+        rows.push({ ...row, credential: await this.sealRowKey(vaultKey, row.credential.key) });
+      }
+      await this.store.set(StoreKey.SavedSyncs, rows);
+    });
     await this.store.set(StoreKey.SwitchLock, lock);
     return { set: true };
+  }
+
+  /**
+   * Manager: remove the switch password. The current password is confirmed,
+   * then every row key is unwrapped and stored in clear, and the lock is
+   * deleted. Activation becomes passwordless again.
+   */
+  private async removeSwitchPassword(current: string): Promise<RemoveSwitchPasswordResult> {
+    this.assertSwitchPassword(current);
+    const lock = await this.requireSwitchLock();
+    const vaultKey = await unlockSwitchLock(lock, current);
+    let rows = 0;
+    await this.withSavedSyncs(async (list) => {
+      const next: SavedSync[] = [];
+      for (const row of list) {
+        if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
+        const key =
+          row.credential.scheme === 'plain'
+            ? row.credential.key
+            : await unwrapCredential(vaultKey, row.credential);
+        next.push({ ...row, credential: { scheme: 'plain', key } });
+        rows += 1;
+      }
+      await this.store.set(StoreKey.SavedSyncs, next);
+    });
+    await this.store.remove(StoreKey.SwitchLock);
+    return { rows };
   }
 
   /** Manager: rewrap only the vault key; the rows stay valid. */
@@ -1975,7 +2052,9 @@ export class BackgroundCore {
         kept = 1;
         removed = list.filter((row) => !sameSavedSync(row, active)).length;
         const existing = findSavedSync(list, active);
-        const credential = info?.password ? await wrapCredential(vaultKey, info.password) : undefined;
+        const credential: SavedSyncCredential | undefined = info?.password
+          ? { scheme: 'switch', ...(await wrapCredential(vaultKey, info.password)) }
+          : undefined;
         const syncVersion = existing?.syncVersion ?? info?.version;
         rows.push({
           serviceUrl: active.serviceUrl,
@@ -2016,18 +2095,61 @@ export class BackgroundCore {
 
   /**
    * Local-only: forget a saved row. The server copy and this device's link are
-   * untouched — the active row IS the link, so it must be unlinked first.
+   * untouched. Removing the active row necessarily unlinks this browser (the
+   * row is the link); the other rows stay dormant. Delete-from-server is the
+   * same operation plus the remote DELETE.
    */
   private async removeSavedSyncEntry(
     serviceUrl: string,
     syncId: string,
-  ): Promise<{ removed: boolean }> {
+  ): Promise<{ removed: boolean; unlinked: boolean }> {
     const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
     const active = await this.activeSavedSync();
     if (active && sameSavedSync(active, target)) {
-      throw new UnexpectedResponseException(t('core.savedActiveRemove'));
+      await this.disableSync();
+      return { removed: await this.forgetSavedSyncRow(target), unlinked: true };
     }
-    return { removed: await this.forgetSavedSyncRow(target) };
+    return { removed: await this.forgetSavedSyncRow(target), unlinked: false };
+  }
+
+  /** Optional row name: trimmed, unique (case-insensitive), 40 chars max. */
+  private async assertSavedSyncLabelAvailable(
+    rawLabel: string | undefined,
+    exclude?: SavedSyncActive,
+  ): Promise<string | undefined> {
+    const label = normalizeSavedSyncLabel(rawLabel);
+    if (!label) return undefined;
+    if (savedSyncLabelTaken(await this.savedSyncList(), exclude, label)) {
+      throw new UnexpectedResponseException(t('core.labelDuplicate'));
+    }
+    return label;
+  }
+
+  /** Rename one row (active or dormant). Pure metadata: no key, no switch
+   *  password, no effect on the link. Empty label restores the host name. */
+  private async renameSavedSyncEntry(
+    serviceUrl: string,
+    syncId: string,
+    rawLabel: string,
+  ): Promise<{ renamed: boolean }> {
+    const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
+    const label = normalizeSavedSyncLabel(rawLabel);
+    return this.withSavedSyncs(async (list) => {
+      if (!findSavedSync(list, target)) return { renamed: false };
+      if (label && savedSyncLabelTaken(list, target, label)) {
+        throw new UnexpectedResponseException(t('core.labelDuplicate'));
+      }
+      const next = list.map((row) => {
+        if (!sameSavedSync(row, target)) return row;
+        if (!label) {
+          const { label: _dropped, ...rest } = row;
+          return rest;
+        }
+        return { ...row, label };
+      });
+      await this.store.set(StoreKey.SavedSyncs, next);
+      return { renamed: true };
+    });
   }
 
   private notifyMoveDone(target: SyncTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
@@ -2057,9 +2179,15 @@ export class BackgroundCore {
     unlockedVault?: CryptoKey,
   ): Promise<{ id: string }> {
     const { info, syncToolbar } = await this.requireCreds();
-    // A move demotes the old link. With a lock the request must prove it, so
-    // the new key is wrapped; without one the old row could never be activated
-    // (no key to wrap it with), so it is replaced instead of left behind.
+    // Relinking/creating the same row may keep its own label; another row may not.
+    const label = await this.assertSavedSyncLabelAvailable(
+      target.label,
+      target.mode === 'existing' && target.syncId
+        ? { serviceUrl: target.newServiceUrl, syncId: target.syncId }
+        : undefined,
+    );
+    // A move demotes the old link into a dormant row: with a lock it needs the
+    // password to wrap the old key, without one the key is stored in clear.
     const lock = await this.readSwitchLock();
     let vaultKey = unlockedVault;
     if (!vaultKey && lock) {
@@ -2104,9 +2232,8 @@ export class BackgroundCore {
         opSupportsV12: linked!.supportsV12 === true,
         ...prev,
       });
-      await this.afterLink(svc.version);
-      if (lock) await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
-      else await this.forgetSavedSyncRow(outgoing);
+      await this.afterLink(svc.version, label);
+      await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
       await this.wrapActiveRow(vaultKey);
       await this.rememberService(target.newServiceUrl, svc);
       await this.notifyMoveDone(target, id, countNodes(tree));
@@ -2300,9 +2427,8 @@ export class BackgroundCore {
       await persistMeta(this.store, updated.meta);
       await this.store.set(StoreKey.SyncEnabled, true);
     }
-    await this.afterLink(svc.version);
-    if (lock) await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
-    else await this.forgetSavedSyncRow(outgoing);
+    await this.afterLink(svc.version, label);
+    await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
     await this.wrapActiveRow(vaultKey);
     await this.rememberService(target.newServiceUrl, svc);
     await this.notifyMoveDone(target, syncId, target.direction === 'push' ? countNodes(tree) : undefined);

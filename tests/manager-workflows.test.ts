@@ -20,6 +20,21 @@ const field = (id: string, value: string) => {
   el(id).dispatchEvent(new Event('input', { bubbles: true }));
 };
 async function settle() { for (let i = 0; i < 25; i++) await Promise.resolve(); }
+const openSyncs = async () => {
+  (document.querySelector('#sidebar button[data-section="syncs"]') as HTMLButtonElement).click();
+  await settle();
+};
+const openAdd = async () => {
+  (el('m-btn-add-sync') as HTMLButtonElement).click();
+  await settle();
+};
+const chooseExisting = async () => {
+  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
+  existing.checked = true;
+  existing.dispatchEvent(new Event('change'));
+  await settle();
+};
+
 beforeEach(async () => {
   vi.resetModules();
   document.body.innerHTML = readFileSync('src/manager.html', 'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link\b[^>]*>/g, '');
@@ -29,31 +44,94 @@ beforeEach(async () => {
       case MessageCommand.GetServices: return [];
       case MessageCommand.ProbeService: return { reachable: true, versionCompatible: true, version: '1.1.13', status: 1 };
       case MessageCommand.GetStatus: return { syncEnabled: true, serviceUrl: 'https://old.test', syncId: 'old', queueLength: 0, syncing: false, supportsV12: true, bookmarkCount: 3 };
+      case MessageCommand.GetSavedSyncs: return {
+        syncs: [{ serviceUrl: 'https://old.test', syncId: 'old', lastUsedAt: '2026-10-20T10:00:00.000Z' }],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: false,
+      };
       case MessageCommand.CheckSyncTarget: return { reachable: true, versionCompatible: true, localCount: 3, remoteExists: true };
       case MessageCommand.PreviewMerge: return { localOnly: 1, remoteOnly: 2, localCount: 3, remoteCount: 4, titleConflicts: 0 };
-      case MessageCommand.LinkSync: return { syncId: 'new' };
+      case MessageCommand.LinkSync: return { id: 'new-id' };
+      case MessageCommand.ConnectNew: return { id: 'new-id', bookmarkCount: 3 };
+      case MessageCommand.RemoveSavedSync: return { removed: true, unlinked: true };
       default: return null;
     }
   });
   await import('../src/manager/manager');
   await settle();
+  await openSyncs();
   el('m-link-url-label').closest('.service-picker')!.querySelector<HTMLInputElement>('input[value="custom"]')!.click();
   field('m-link-url', 'https://target.test');
   el('m-link-url-check').click(); await settle();
+});
+
+it('keeps the add form hidden until requested and cancels it', async () => {
+  expect(el('m-link-form').hidden).toBe(true);
+  await openAdd();
+  expect(el('m-link-form').hidden).toBe(false);
+  expect(el('m-btn-add-sync').hidden).toBe(true);
+  el('m-btn-add-cancel').click();
+  expect(el('m-link-form').hidden).toBe(true);
+  expect(el('m-btn-add-sync').hidden).toBe(false);
+});
+
+it('creates a new sync from the live bookmarks and reports the uploaded count', async () => {
+  await openAdd();
   field('m-link-password', 'password123');
   field('m-link-confirm', 'password123');
+  el('m-btn-link-direct').click(); await settle();
+  const call = harness.send.mock.calls.find(([m]) => m.command === MessageCommand.ConnectNew)?.[0];
+  expect(call).toMatchObject({ serviceUrl: 'https://target.test', password: 'password123' });
+  expect(call.label).toBe('target.test');
+  expect(el('m-link-form').hidden).toBe(true);
+  expect(el('m-syncs-result').textContent).toContain('3');
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.CheckSyncTarget)).toBe(false);
 });
-it('shows all new-sync credentials before checking, then executes from the reviewed summary', async () => {
-  expect(el('link-step2').contains(el('m-link-password'))).toBe(false);
+
+it('warns about a pending conflict but still creates the sync', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    switch (msg.command) {
+      case MessageCommand.GetStatus:
+        return { syncEnabled: true, serviceUrl: 'https://old.test', syncId: 'old', queueLength: 0, syncing: false, supportsV12: true, bookmarkCount: 3, conflict: true };
+      case MessageCommand.GetSavedSyncs:
+        return {
+          syncs: [{ serviceUrl: 'https://old.test', syncId: 'old' }],
+          active: { serviceUrl: 'https://old.test', syncId: 'old' },
+          switchLockSet: false,
+        };
+      case MessageCommand.ConnectNew: return { id: 'new-id', bookmarkCount: 2 };
+      default: return null;
+    }
+  });
+  el('m-btn-refresh').click(); await settle();
+  await openAdd();
+  expect(el('m-link-conflict').hidden).toBe(false);
+  expect((el('m-btn-link-direct') as HTMLButtonElement).disabled).toBe(false);
+  field('m-link-password', 'password123');
+  field('m-link-confirm', 'password123');
+  el('m-btn-link-direct').click(); await settle();
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.ConnectNew)).toBe(true);
+});
+
+it('runs the existing-sync review while linked and executes from it', async () => {
+  await openAdd();
+  await chooseExisting();
+  field('m-link-id', 'target-id');
+  field('m-link-password', 'password123');
   el('m-btn-link-check').click(); await settle();
   expect(el('link-step2').hidden).toBe(false);
   expect(el('link-implication').textContent).toContain('old');
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.LinkSync)).toBe(false);
   el('m-btn-link').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.LinkSync)).toHaveLength(1);
-  expect(document.querySelector('#m-btn-link-confirm')).toBeNull();
+  expect(el('m-link-form').hidden).toBe(true);
 });
+
 it('rejects stale checks after a password edit and requires another review', async () => {
+  await openAdd();
+  await chooseExisting();
+  field('m-link-id', 'target-id');
+  field('m-link-password', 'password123');
   let resolve!: (value: unknown) => void;
   harness.send.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
   el('m-btn-link-check').click();
@@ -62,30 +140,44 @@ it('rejects stale checks after a password edit and requires another review', asy
   expect(el('link-step2').hidden).toBe(true);
   expect((el('m-btn-link') as HTMLButtonElement).disabled).toBe(true);
 });
+
 it('verifies the password for an existing target before revealing its final action', async () => {
-  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
-  existing.checked = true; existing.dispatchEvent(new Event('change'));
+  await openAdd();
+  await chooseExisting();
   field('m-link-id', 'target-id');
+  field('m-link-password', 'password123');
   harness.send.mockImplementation(async (msg) => {
     if (msg.command === MessageCommand.CheckSyncTarget) return { reachable: true, remoteExists: true, versionCompatible: true };
     if (msg.command === MessageCommand.PreviewMerge) throw new Error('Wrong password');
+    return null;
   });
   el('m-btn-link-check').click(); await settle();
   expect(el('link-step2').hidden).toBe(true);
   expect(el('link-error').textContent).toBe('Wrong password');
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.LinkSync)).toBe(false);
 });
-it('asks only once before deleting the server sync', async () => {
-  el('m-btn-delete-remote').click(); await settle();
-  el('m-btn-delete-remote-yes').click(); await settle();
+
+it('asks once before deleting the server sync from the active row', async () => {
+  el('m-syncs-delete-0').click(); await settle();
+  el('m-syncs-delete-0-yes').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.DeleteRemoteSync)).toHaveLength(1);
-  expect(document.querySelector('#m-btn-delete-remote-confirm')).toBeNull();
+  expect(document.querySelector('#m-syncs-delete-0-confirm')).toBeNull();
+});
+
+it('removes the active row with a message that names the unlink', async () => {
+  el('m-syncs-rm-0').click(); await settle();
+  const prompt = document.getElementById('m-syncs-rm-0-confirm')!;
+  expect(prompt.textContent).toContain('unlink this browser');
+  el('m-syncs-rm-0-yes').click(); await settle();
+  expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.RemoveSavedSync)).toHaveLength(1);
+  expect(el('m-syncs-result').textContent).toContain('no longer linked');
 });
 
 it('changes direction within the verified review without asking to check again', async () => {
-  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
-  existing.checked = true; existing.dispatchEvent(new Event('change'));
+  await openAdd();
+  await chooseExisting();
   field('m-link-id', 'target-id');
+  field('m-link-password', 'password123');
   el('m-btn-link-check').click(); await settle();
   const checks = harness.send.mock.calls.length;
   const merge = document.querySelector<HTMLInputElement>('input[name="m-link-direction"][value="merge"]')!;

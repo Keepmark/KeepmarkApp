@@ -68,8 +68,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
 | `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ru/zh | new |
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
-| `saved-syncs.ts` | Multi-sync registry: rows (service, sync ID, label, last use) plus each dormant row's derived key wrapped under the switch lock (never the raw password), canonical identity, upsert/remove/sort/active matching | new (model A: one active sync) |
-| `switch-lock.ts` | Short switch password that gates activation: PBKDF2-SHA256 (200k) wraps a random vault key, the vault key wraps row keys. Create/unlock/change (rewrap the vault only, rows untouched)/reset (new vault). Only "non-empty" is enforced: PINs and 1-character secrets are valid | new |
+| `saved-syncs.ts` | Multi-sync registry: rows (service, sync ID, label, last use) plus each row's derived key — wrapped under the sync-change lock when set, `plain` otherwise (never the raw password) — canonical identity, label rules + host suggestion, upsert/remove/sort/active matching | new (model A: one active sync) |
+| `switch-lock.ts` | Optional short sync-change password: PBKDF2-SHA256 (200k) wraps a random vault key, the vault key wraps row keys. Create/unlock/change (rewrap the vault only, rows untouched)/remove (rows become plain)/reset (new vault). Only "non-empty" is enforced: PINs and 1-character secrets are valid | new |
 | `id-mapper.ts` | `syncedId<->nativeId` mappings, sorted, rebuilt on populate | `app/bookmark-id-mapper.service.ts` |
 | `sync.ts` | `checkService`, `createNewSync`, `pullExistingSync`, `pullWithDerivedKey`, `pushBookmarks`, `switchService` | `app/bookmark-sync-provider` + login component |
 | `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline/429→front, 409→persisted conflict for user resolution, 401→sync-lost) | `app/sync.service.ts` |
@@ -113,11 +113,14 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - `src/popup/` — small popup (`popup.html` at `src/`, `popup.ts`, `popup.css`,
   shared `ui.ts`): connect + status card + saved syncs (multi-sync) + sync now + open manager. Display
   only; mutations via messages. `saved-syncs.ts` renders the same registry in
-  both views and owns the inline "Activate" password step.
+  both views read-only (active tag, `Activate` on dormant rows only) and owns
+  the modal activation step (sync-change password only when one is set).
+  Rename/remove/add/delete live in the manager.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Move, Logs, Settings), each section with its
   own contextual busy/error/result evidence; move wizard has a read-only
-  `SwitchPreview` preflight before confirm.
+  `SwitchPreview` preflight before confirm; the Sync section owns the saved
+  registry (rows + `+ Add new sync` form + optional sync-change password).
 
 ### Build
 
@@ -158,16 +161,17 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
    **Multi-sync (one active at a time)**: `StoreKey.SavedSyncs` holds the rows;
    `SyncInfo`/`Bookmarks`/`LastUpdated`/`ConflictState`/`UndoSlot` always
-   describe the ACTIVE sync. Activation asks the short SWITCH password
-   (`StoreKey.SwitchLock`: random vault key wrapped by its PBKDF2 key), unwraps
-   the row's stored key and verifies the target (read-only: version gate + GET
-   + decrypt) → persists active (fail-closed, conflict blocks) → applies the
-   target tree. The sync's own long password is neither asked nor stored.
-   Guardrails: without a lock only the first link is allowed (the manager must
-   set one); with a lock every connect/move/long-password change proves it so
-   the new active key can be wrapped; without a lock a move replaces the old
-   row instead of leaving one that can never be activated. Reset mints a new
-   vault and drops every row but the active one. Never self-pull, never merge
+   describe the ACTIVE sync. The sync-change password is OPTIONAL
+   (`StoreKey.SwitchLock`: random vault key wrapped by its PBKDF2 key). With a
+   lock, rows hold `{scheme:'switch'}` and activation/new links prove it,
+   unwrap the row's key and verify the target (read-only: version gate + GET +
+   decrypt) → persist active (fail-closed, conflict blocks) → apply the target
+   tree. Without a lock, rows hold `{scheme:'plain', key}` and activation is a
+   plain confirmation. The sync's own long password is neither asked nor
+   stored. Removing the password unwraps the rows to plain; reset mints a new
+   vault and drops every row but the active one. Rows can be removed in any
+   state: a dormant row is forgotten, the ACTIVE row also unlinks this browser
+   (the row is the link; the server copy stays). Never self-pull, never merge
    across syncs. A row does hold the sync ID, a capability token for the
    service's `DELETE`: truncate it in UI, never log it.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
@@ -251,23 +255,25 @@ already lets the MV3 worker reach the service without any host grant.
 no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.
 
-**Multi-sync — slice 1 reviewed, slice 2 (switch password) DONE
-(`feature/multisync`):** `SavedSyncs` registry (upsert on every link, upgrade
-migration at startup), `GetSavedSyncs` / `ActivateSavedSync` /
-`RemoveSavedSync`, popup panel in both views, fail-closed push before
-switching, conflict blocks the switch, unlink keeps the rows. The review
-closed: dead rows after delete-from-server and undo, target verified BEFORE the
-active side is persisted, per-link conflicts, `quiesce` before the pre-switch
-push, serialized registry writes and sanitized reads. Slice 2 adds the short
-switch password (`switch-lock.ts`, `StoreKey.SwitchLock`,
-`GetSwitchLock`/`SetSwitchPassword`/`ChangeSwitchPassword`/
-`ResetSwitchPassword`): manager-owned, no length or complexity policy, required
-for activation, asked by any link/move/rotation that demotes or replaces the
-active key, change rewraps only the vault, reset keeps the active sync and
-deletes the rest. Next slices: editable labels (rows are named by host + ID
-prefix today), per-row "Delete sync from server" and "Show QR" menu, then
-KeepmarkMobile (credential index + one DB per sync + Syncs page + biometry gate
-+ QR add-or-activate).
+**Multi-sync — slices 1–3 DONE (`feature/multisync`):** `SavedSyncs` registry
+(upsert on every link, upgrade migration at startup), `GetSavedSyncs` /
+`ActivateSavedSync` / `RemoveSavedSync` / `RenameSavedSync`, popup panel in
+both views, fail-closed push before switching, conflict blocks the switch,
+unlink keeps the rows. Slice 2 adds the optional sync-change password
+(`switch-lock.ts`, `StoreKey.SwitchLock`, `GetSwitchLock`/
+`SetSwitchPassword`/`ChangeSwitchPassword`/`RemoveSwitchPassword`/
+`ResetSwitchPassword`): no length or complexity policy, plain rows when unset,
+wrapped rows when set; change rewraps only the vault, remove unwraps the rows,
+reset keeps the active sync and deletes the rest. Slice 3 is the UX rework:
+editable labels (max 40, case-insensitive uniqueness, host suggestion), the
+manager Sync section with `+ Add new sync` (new syncs upload the LIVE native
+tree and report the count; a pending conflict is a warning), row actions on
+three lines (status/API badge, metadata, text buttons), `Remove…` on every row
+(active = unlink + forget, no last-row rule), `Delete from server…` on the
+active row, and a read-only popup with a modal activation dialog that names the
+sync-change password. Next slices: "Show QR" per row, then KeepmarkMobile
+(credential index + one DB per sync + Syncs page + biometry gate + QR
+add-or-activate).
 
 ## QR linking
 

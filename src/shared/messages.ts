@@ -68,11 +68,13 @@ export enum MessageCommand {
   GetSavedSyncs = 'get-saved-syncs',
   ActivateSavedSync = 'activate-saved-sync',
   RemoveSavedSync = 'remove-saved-sync',
+  RenameSavedSync = 'rename-saved-sync',
   // Switch password (short, manager-owned gate for activation)
   GetSwitchLock = 'get-switch-lock',
   SetSwitchPassword = 'set-switch-password',
   ChangeSwitchPassword = 'change-switch-password',
   ResetSwitchPassword = 'reset-switch-password',
+  RemoveSwitchPassword = 'remove-switch-password',
   // Conflict resolution
   GetConflictState = 'get-conflict-state',
   GetConflictPreview = 'get-conflict-preview',
@@ -134,6 +136,8 @@ export interface SyncTarget {
   /** Required when a switch lock exists: proves the link comes from an
    *  unlocked user and lets the new active key be wrapped for the list. */
   switchPassword?: string;
+  /** Optional user name for the new row (max 40, unique case-insensitively). */
+  label?: string;
 }
 
 /** Read-only preflight for the move wizard. Never mutates anything. */
@@ -272,6 +276,11 @@ export interface ChangeSwitchPasswordResult {
   changed: boolean;
 }
 
+export interface RemoveSwitchPasswordResult {
+  /** Rows whose keys were unwrapped to clear storage. */
+  rows: number;
+}
+
 export interface ResetSwitchPasswordResult {
   /** Dormant rows removed by the reset (their keys were unrecoverable). */
   removed: number;
@@ -290,6 +299,7 @@ export type MessagePayload =
       serviceUrl: string;
       password: string;
       switchPassword?: string;
+      label?: string;
     }
   | {
       command: MessageCommand.ConnectExisting;
@@ -298,6 +308,7 @@ export type MessagePayload =
       password: string;
       direction: 'pull' | 'push' | 'merge';
       switchPassword?: string;
+      label?: string;
     }
   | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
@@ -315,9 +326,11 @@ export type MessagePayload =
       command: MessageCommand.ActivateSavedSync;
       serviceUrl: string;
       syncId: string;
-      switchPassword: string;
+      /** Only needed (and asked) when a switch lock is set. */
+      switchPassword?: string;
     }
   | { command: MessageCommand.RemoveSavedSync; serviceUrl: string; syncId: string }
+  | { command: MessageCommand.RenameSavedSync; serviceUrl: string; syncId: string; label: string }
   | { command: MessageCommand.GetSwitchLock }
   | { command: MessageCommand.SetSwitchPassword; password: string; confirm: string }
   | {
@@ -327,6 +340,7 @@ export type MessagePayload =
       confirm: string;
     }
   | { command: MessageCommand.ResetSwitchPassword; next: string; confirm: string }
+  | { command: MessageCommand.RemoveSwitchPassword; current: string }
   | { command: MessageCommand.CheckSyncTarget; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }

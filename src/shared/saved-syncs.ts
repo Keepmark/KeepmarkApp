@@ -1,9 +1,10 @@
 // Saved syncs: the registry behind multi-sync. One sync is ACTIVE at a time
 // (StoreKey.SyncInfo); the others are dormant rows the popup can activate.
-// A dormant row carries its derived key wrapped under the switch lock (never
-// the raw password, never a clear key). Activating one asks for the short
-// switch password, unlocks the key and verifies the remote copy by decrypting
-// it before anything is mutated.
+// A dormant row carries its derived key, either wrapped under the optional
+// switch lock (opt-in protection) or in clear when no password is set. The
+// clear scheme is the same exposure as the active SyncInfo key; the wrapped
+// one needs the short switch password to unlock. Activating a row verifies the
+// remote copy by decrypting it before anything is mutated.
 //
 // Pure helpers: no storage, no DOM, no crypto — safe in the MV3 worker.
 
@@ -20,9 +21,44 @@ export interface SavedSync {
   syncVersion?: string;
   /** Last link/activation of this sync (ISO 8601). */
   lastUsedAt: string;
-  /** Derived key wrapped under the switch-lock vault (dormant rows only: the
-   *  active row's key lives in StoreKey.SyncInfo). */
-  credential?: WrappedSecret;
+  /** How to get this row's derived key back: in clear (no switch password
+   *  configured) or wrapped under the switch-lock vault. The active row has
+   *  one too, so it stays activatable after being demoted. */
+  credential?: SavedSyncCredential;
+}
+
+/**
+ * A row key. `plain` = the derived key in clear, used when the user did not
+ * opt into the switch password; `switch` = AES-GCM under the vault key.
+ */
+export type SavedSyncCredential =
+  | { scheme: 'plain'; key: string }
+  | ({ scheme: 'switch' } & WrappedSecret);
+
+/** Longest accepted label (the UI shows it in a narrow row). */
+export const MaxSavedSyncLabelLength = 40;
+
+/** Trimmed label, or undefined for "use the automatic name" (the host).
+ *  Defensive truncation: the UI caps the input too. */
+export function normalizeSavedSyncLabel(value: string | undefined): string | undefined {
+  const label = value?.trim();
+  if (!label) return undefined;
+  return label.slice(0, MaxSavedSyncLabelLength);
+}
+
+/** True when another row already uses this label (case-insensitive: two rows
+ *  named "Work" would be indistinguishable in the list). */
+export function savedSyncLabelTaken(
+  list: readonly SavedSync[],
+  target: SavedSyncActive | undefined,
+  label: string,
+): boolean {
+  const needle = label.trim().toLocaleLowerCase();
+  if (!needle) return false;
+  return list.some((row) =>
+    (!target || !sameSavedSync(row, target)) &&
+    (row.label ?? '').trim().toLocaleLowerCase() === needle,
+  );
 }
 
 /** Identity of the linked sync (mirrors SyncInfo.serviceUrl + SyncInfo.id). */
@@ -109,18 +145,25 @@ export function sanitizeSavedSyncs(value: unknown): SavedSync[] {
       syncId: row.syncId,
       ...(typeof row.label === 'string' && row.label.trim() ? { label: row.label } : {}),
       ...(typeof row.syncVersion === 'string' && row.syncVersion ? { syncVersion: row.syncVersion } : {}),
-      ...(isCredential(row.credential) ? { credential: row.credential } : {}),
+      ...(normalizeCredential(row.credential) ? { credential: normalizeCredential(row.credential) } : {}),
       lastUsedAt: typeof row.lastUsedAt === 'string' ? row.lastUsedAt : '',
     });
   }
   return sortSavedSyncs(rows);
 }
 
-/** Wrapped credential shape check (unknown values are dropped, never trusted). */
-function isCredential(value: unknown): value is WrappedSecret {
-  if (!value || typeof value !== 'object') return false;
-  const blob = value as Partial<WrappedSecret>;
-  return typeof blob.iv === 'string' && !!blob.iv && typeof blob.ct === 'string' && !!blob.ct;
+/** Credential shape check + normalization (unknown values are dropped, never
+ *  trusted). Legacy wrapped blobs without a scheme become `switch`. */
+export function normalizeCredential(value: unknown): SavedSyncCredential | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const blob = value as Partial<SavedSyncCredential> & Partial<WrappedSecret>;
+  if (blob.scheme === 'plain') {
+    return typeof blob.key === 'string' && !!blob.key ? { scheme: 'plain', key: blob.key } : undefined;
+  }
+  if (typeof blob.iv === 'string' && !!blob.iv && typeof blob.ct === 'string' && !!blob.ct) {
+    return { scheme: 'switch', iv: blob.iv, ct: blob.ct };
+  }
+  return undefined;
 }
 
 /** Most recently used first; deterministic ties (label, then sync id). */
@@ -146,6 +189,27 @@ export function serviceHost(serviceUrl: string): string {
  *  the UI shows a prefix only (full ID stays copyable in the status card). */
 export function shortSyncId(syncId: string, length = 8): string {
   return syncId.length <= length ? syncId : `${syncId.slice(0, length)}…`;
+}
+
+/** Suggested name for a new row: the host, or "host 2", "host 3"… when a
+ *  saved sync already answers to that name (label or host fallback). */
+export function suggestSavedSyncName(
+  serviceUrl: string,
+  list: readonly SavedSync[],
+  exclude?: SavedSyncActive,
+): string {
+  const base = serviceHost(serviceUrl);
+  const taken = new Set(
+    list
+      .filter((row) => !exclude || !sameSavedSync(row, exclude))
+      .map((row) => savedSyncName(row).trim().toLocaleLowerCase())
+      .filter(Boolean),
+  );
+  if (!taken.has(base.toLocaleLowerCase())) return base;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${base} ${n}`;
+    if (!taken.has(candidate.toLocaleLowerCase())) return candidate;
+  }
 }
 
 /** Row name in the UI: the user label when set, otherwise the service host. */

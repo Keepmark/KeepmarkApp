@@ -19,6 +19,7 @@ import type { BookmarkNode, ServiceInfo } from './models.js';
 import { UnexpectedResponseException } from './errors.js';
 import { ServiceStatus } from './models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from './bookmarks.js';
+import { countNodes } from './backup.js';
 import type { GetBookmarksResponse, SyncMeta, XSyncApiClient } from './api.js';
 import { Store, StoreKey, type SyncInfo } from './store.js';
 import { BookmarkIdMapper } from './id-mapper.js';
@@ -125,7 +126,7 @@ export async function createNewSync(
   password: string,
   serviceUrl?: string,
   v12 = false,
-): Promise<{ id: string }> {
+): Promise<{ id: string; bookmarkCount: number }> {
   const { api, store, native, idMapper, log, syncToolbar } = deps;
   const bookmarks = await native.readAll(syncToolbar);
   const { id } = await createAndUpload(api, store, bookmarks, password, serviceUrl, v12);
@@ -133,7 +134,9 @@ export async function createNewSync(
   const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
   await idMapper.set(mappings);
   log.log(XbsLogLevel.Info, 'sync', 'New sync created and native bookmarks uploaded');
-  return { id };
+  // Callers report what was uploaded: a fresh sync always starts from the
+  // live native tree, so this is the user-visible "N bookmarks" count.
+  return { id, bookmarkCount: countNodes(bookmarks) };
 }
 
 /**

@@ -70,6 +70,19 @@ import {
   type ConflictStateResponse,
 } from '../shared/messages.js';
 import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
+import {
+  MaxSavedSyncLabelLength,
+  isActiveSavedSync,
+  normalizeSavedSyncLabel,
+  sameSavedSync,
+  savedSyncLabelTaken,
+  savedSyncName,
+  serviceHost,
+  shortSyncId,
+  suggestSavedSyncName,
+  type SavedSync,
+  type SavedSyncActive,
+} from '../shared/saved-syncs.js';
 import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
 
 let connectQr: ConnectQrController | undefined;
@@ -86,9 +99,14 @@ let checkingTarget = false;
 let linking = false;
 /** Current conflict preview (fetched when status.conflict === true). */
 let conflictPreview: ConflictPreviewResponse | undefined;
-/** Manager-owned switch password: gates activation and wraps dormant keys. */
+/** Manager-owned switch password: optional protection for dormant keys. */
 let switchLockSet = false;
-let dormantSyncs = 0;
+/** Registry snapshot behind the Sync section (list + protection card). */
+let syncsView: SavedSyncsResponse = { syncs: [], switchLockSet: false };
+/** Dormant row waiting for the activation confirmation. */
+let pendingActivation: SavedSync | undefined;
+/** Name typed by the user (stop overwriting it with the host suggestion). */
+let nameTouched = false;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
@@ -99,7 +117,10 @@ function prefillLinkUrl(): void {
 }
 function updateLinkServiceGate(): void {
   if (!linkService || checkingTarget || linking) return;
-  ($('m-btn-link-check') as HTMLButtonElement).disabled = !status?.syncEnabled || !linkService.ready;
+  const ready = linkService.ready && !linkLabelTaken(input('m-link-name').value);
+  const wizard = linkMode() === 'existing' && !!status?.syncEnabled;
+  ($('m-btn-link-check') as HTMLButtonElement).disabled = !ready || !wizard;
+  ($('m-btn-link-direct') as HTMLButtonElement).disabled = !ready;
 }
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
@@ -128,7 +149,11 @@ function showSection(name: string, moveFocus = false): void {
   }
   if (name === 'status') void refreshStatus();
   if (name === 'backup') void refreshSafety();
-  if (name === 'syncs') { updateLinkForm(); prefillLinkUrl(); }
+  if (name === 'syncs') {
+    updateLinkForm();
+    prefillLinkUrl();
+    void refreshSyncs();
+  }
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
@@ -139,7 +164,7 @@ function showSection(name: string, moveFocus = false): void {
  *  successful action (and on storage changes), so hiding result boxes here
  *  would erase the success evidence the action just showed. */
 function hideStatusErrors(): void {
-  for (const id of ['status-error', 'status-error-2', 'conflict-error']) {
+  for (const id of ['status-error', 'conflict-error']) {
     const el = $(id);
     el.hidden = true;
     el.textContent = '';
@@ -160,7 +185,7 @@ async function refreshStatus(): Promise<void> {
     conflictPreview = undefined;
     renderStatusCard('m', { status, ping });
     updateStatusActions();
-    updateDangerZone();
+    updateSyncsDanger();
     updateLinkGates();
     renderConflictSection();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
@@ -180,9 +205,10 @@ async function refreshStatus(): Promise<void> {
   if (my !== statusSeq) return;
   renderStatusCard('m', { status, ping });
   updateStatusActions();
-  updateDangerZone();
+  updateSyncsDanger();
   updateLinkGates();
   ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
+  if (!$('sec-syncs').hidden) void refreshSyncs();
   await refreshUndoBanner();
 
   // If there's a conflict, fetch the preview and render resolution UI.
@@ -372,7 +398,7 @@ function initUndoBanner(): void {
         await refreshStatus();
         await refreshUndoBanner();
       } catch (err) {
-        showError('status-error-2', (err as Error).message);
+        showError('status-error', (err as Error).message);
       }
     });
   });
@@ -412,7 +438,7 @@ function initStatusSection(): void {
           return;
         }
       } catch (err) {
-        showError('status-error-2', (err as Error).message);
+        showError('status-error', (err as Error).message);
       }
       await refreshStatus();
     });
@@ -424,68 +450,68 @@ function initStatusSection(): void {
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, t('popup.copyIdPrompt'));
   });
-  $('m-btn-unlink').addEventListener('click', () => void unlink());
-  $('m-btn-delete-remote').addEventListener('click', () => void deleteRemote());
 }
 
-async function unlink(): Promise<void> {
+async function unlink(anchorId: string): Promise<void> {
   connectQr?.close();
   // Disabled buttons don't fire clicks anyway; deleting the server sync
   // already unlinks, so there is nothing left to unlink afterwards.
   // Checked BEFORE withBusy (it disables the button while running, so a
   // check inside would always self-trigger).
-  if (($('m-btn-unlink') as HTMLButtonElement).disabled) return;
+  if (($(anchorId) as HTMLButtonElement).disabled) return;
   clearMessages();
-  const ok = await confirmInline('m-btn-unlink', {
+  const ok = await confirmInline(anchorId, {
     message: t('mgr.status.unlinkMessage'),
     implication: UnlinkImplication(),
     confirmLabel: t('common.yesUnlink'),
     danger: true,
   });
   if (!ok) return;
-  await withBusy('m-btn-unlink', t('busy.unlinking'), async () => {
+  await withBusy(anchorId, t('busy.unlinking'), async () => {
     try {
       await send({ command: MessageCommand.DisableSync });
-      showResult('status-result', UnlinkDone());
+      showResult('m-syncs-result', UnlinkDone());
       status = undefined;
       ping = undefined;
       await refreshStatus();
+      await refreshSyncs();
     } catch (err) {
-      showError('status-error-2', (err as Error).message);
+      showError('m-syncs-error', (err as Error).message);
     }
   });
 }
 
-async function deleteRemote(): Promise<void> {
+async function deleteRemote(anchorId: string): Promise<void> {
   connectQr?.close();
   // Defense in depth (checked BEFORE withBusy: the wrapper disables the
   // button while running, so a check inside would always self-trigger).
   // Disabled buttons don't fire clicks anyway; the background re-gates.
-  if (($('m-btn-delete-remote') as HTMLButtonElement).disabled) return;
+  if (($(anchorId) as HTMLButtonElement).disabled) return;
   clearMessages();
   // One explicit confirmation names the global deletion; backup remains fail-closed.
-  const first = await confirmInline('m-btn-delete-remote', {
+  const first = await confirmInline(anchorId, {
     message: t('mgr.status.deleteMessage'),
     implication: DeleteRemoteImplication(),
     confirmLabel: t('common.yesDelete'),
     danger: true,
   });
   if (!first) return;
-  await withBusy('m-btn-delete-remote', t('busy.deleting'), async () => {
+  await withBusy(anchorId, t('busy.deleting'), async () => {
     try {
       await send({ command: MessageCommand.DeleteRemoteSync });
-      showResult('status-result', DeleteRemoteDone());
+      showResult('m-syncs-result', DeleteRemoteDone());
       status = undefined;
       ping = undefined;
       await refreshStatus();
+      await refreshSyncs();
     } catch (err) {
-      showError('status-error-2', (err as Error).message);
+      showError('m-syncs-error', (err as Error).message);
     }
   });
   // withBusy restores the pre-click disabled state last: re-assert the
   // v1.2 gate after it, so neither success (now unlinked) nor failure
   // (legacy service) leaves a stale enabled button behind.
-  updateDangerZone();
+  updateSyncsDanger();
 }
 
 /**
@@ -505,29 +531,26 @@ function updateStatusActions(): void {
 }
 
 /**
- * Danger-zone gating: both buttons act on the current link, so both stay
- * disabled while unlinked (deleting the server sync already unlinks — after
- * that there is nothing left to unlink). The delete button additionally
- * needs a v1.2-speaking service (live probe wins, stored flag as fallback
- * when offline). Legacy services see the button disabled plus the reason.
+ * Delete gating on the active row: it acts on the current link, so it stays
+ * disabled while unlinked and until the service speaks v1.2 (live probe
+ * wins, stored flag as fallback when offline). Legacy services see the
+ * button disabled plus the reason.
  */
-function updateDangerZone(): void {
-  const linked = !!status?.syncEnabled;
-  const unlink = $('m-btn-unlink') as HTMLButtonElement;
-  unlink.disabled = !linked;
-  unlink.title = linked ? '' : t('mgr.status.nothingToUnlink');
-  const btn = $('m-btn-delete-remote') as HTMLButtonElement;
-  const hint = $('m-delete-v12-hint') as HTMLElement;
-  const contract = $('m-api-contract');
+function updateSyncsDanger(): void {
+  // The API-version badge lives in the active row; this only drives the
+  // active row's "Delete from server" button and its explanation.
+  const btn = document.querySelector<HTMLButtonElement>('#m-syncs-list button[data-action="delete"]');
+  const hint = $('m-delete-v12-hint');
   const gate = contractGate({
     liveV12: ping?.supportsV12,
     storedV12: status?.supportsV12,
     syncEnabled: !!status?.syncEnabled,
   });
-  btn.disabled = !gate.enabled;
-  btn.title = gate.title;
-  hint.hidden = gate.hintHidden;
-  contract.textContent = gate.badge;
+  if (btn) {
+    btn.disabled = !gate.enabled;
+    btn.title = gate.title;
+  }
+  hint.hidden = gate.hintHidden || !syncsView.active;
 }
 
 /**
@@ -1018,9 +1041,22 @@ function linkDirection(): 'push' | 'pull' | 'merge' {
 function updateLinkForm(): void {
   linkGeneration++;
   const mode = linkMode();
+  const linked = !!status?.syncEnabled;
+  // A new sync is always additive (the current one stays in the list), so it
+  // is created directly from the live bookmarks. Only an existing sync, with
+  // an active one to compare against, goes through the check/review wizard.
+  const wizard = mode === 'existing' && linked;
   linkService?.updateMode();
   ($('m-link-id-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-link-direction-row') as HTMLElement).hidden = mode !== 'existing';
+  ($('m-link-check-row') as HTMLElement).hidden = !wizard;
+  ($('m-link-direct') as HTMLElement).hidden = wizard;
+  ($('link-gate-hint') as HTMLElement).hidden = !wizard;
+  $('m-btn-link-direct').textContent = mode === 'new'
+    ? t('manager.syncs.createUpload')
+    : t('manager.syncs.connect');
+  ($('m-link-new-note') as HTMLElement).hidden = mode !== 'new';
+  updateLinkConflictNote();
   // Prepopulate once with the current link: most moves stay on the same
   // service (new sync id, same host). Never clobbers user input afterwards.
   prefillLinkUrl();
@@ -1043,8 +1079,19 @@ function updateLinkForm(): void {
   const result = $('link-result') as HTMLElement;
   result.hidden = true;
   result.textContent = '';
+  suggestLinkName();
+  updateLinkNameHint();
   renderLinkReview();
   updateLinkServiceGate();
+}
+
+/** Informational only: a pending conflict is not a reason to block a new
+ *  sync. The new sync starts from the live tree; the conflicted one keeps
+ *  its server copy (the conflict record is dropped on the sync change). */
+function updateLinkConflictNote(): void {
+  const note = document.getElementById('m-link-conflict') as HTMLElement | null;
+  if (!note) return;
+  note.hidden = !(linkMode() === 'new' && !!status?.conflict);
 }
 
 function renderLinkReview(): void {
@@ -1199,6 +1246,9 @@ function setLinkGate(ok: boolean): void {
 }
 
 async function submitLink(): Promise<void> {
+  // Only the existing-sync wizard has a review step; everything else acts
+  // through the direct button.
+  if (linkMode() !== 'existing' || !status?.syncEnabled) return;
   connectQr?.close();
   clearMessages();
   const newServiceUrl = input('m-link-url').value.trim();
@@ -1214,6 +1264,7 @@ async function submitLink(): Promise<void> {
   }
   // A move leaves the previous sync in the list: prove the switch lock first,
   // so the background can wrap the new active key.
+  const label = input('m-link-name').value.trim() || undefined;
   const switchPassword = input('m-link-lock-pw').value;
   if (switchLockSet && !switchPassword) {
     showError('link-error-2', t('core.switchPasswordRequired'));
@@ -1251,11 +1302,13 @@ async function submitLink(): Promise<void> {
     try {
       const res = await send<{ id: string }>({
         command: MessageCommand.LinkSync,
-        link: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword },
+        link: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword, label },
       });
       input('m-link-password').value = '';
       input('m-link-confirm').value = '';
       input('m-link-lock-pw').value = '';
+      input('m-link-name').value = '';
+      nameTouched = false;
       movedId = res.id;
     } catch (err) {
       input('m-link-confirm').value = '';
@@ -1266,25 +1319,22 @@ async function submitLink(): Promise<void> {
   linkService.setBusy(false);
   updateLinkServiceGate();
   if (movedId) {
-    await linkService.refreshCatalog().catch(err => showError('link-error', (err as Error).message));
-    // Consume the preview AFTER withBusy (it restores the pre-click state
-    // last): the unlocked button must never re-fire with stale inputs.
-    updateLinkForm();
+    // The add form is one-shot: close it (consuming the stale preview) and
+    // keep the evidence in the section-level result box outside the form.
+    closeAddSync();
+    await linkService.refreshCatalog().catch(err => showError('m-syncs-error', (err as Error).message));
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
     const done = describeLinkResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
-    showResult('link-result', t('mgr.syncs.resultLine', { done, next: LinkDoneNext(), id: movedId }));
+    const box = $('m-syncs-result') as HTMLElement;
+    box.textContent = t('mgr.syncs.resultLine', { done, next: LinkDoneNext(), id: movedId });
     const copy = document.createElement('button');
     copy.textContent = t('mgr.syncs.copyId');
     copy.className = 'mini';
     copy.setAttribute('aria-label', t('mgr.syncs.copyIdAria'));
     copy.addEventListener('click', () => void copyText(movedId!, t('popup.copyIdPrompt')));
-    $('link-result').append(' ', copy);
-    // updateLinkForm() above re-locked the button and reshown the gate hint:
-    // the hint contradicts the result, so hide it, then bring the result
-    // into view (it sits below the fold on small windows).
-    ($('link-gate-hint') as HTMLElement).hidden = true;
-    const box = $('link-result') as HTMLElement;
+    box.append(' ', copy);
+    box.hidden = false;
     box.scrollIntoView({ block: 'nearest' });
     box.focus({ preventScroll: true });
     await refreshStatus();
@@ -1292,6 +1342,143 @@ async function submitLink(): Promise<void> {
     // Failed: the still-valid preview keeps the button unlocked, so keep
     // the gate hint in sync with the button (hint shown only while locked).
     ($('link-gate-hint') as HTMLElement).hidden = !($('m-btn-link') as HTMLButtonElement).disabled;
+  }
+}
+
+/** Direct action: creating a new sync (always additive) or, with no active
+ *  side, opening an existing one. Nothing is reviewed because nothing is
+ *  replaced: a new sync uploads the live tree and the current sync stays in
+ *  the list. */
+async function directConnect(): Promise<void> {
+  connectQr?.close();
+  clearMessages();
+  const serviceUrl = input('m-link-url').value.trim();
+  const mode = linkMode();
+  const direction = linkDirection();
+  const syncId = input('m-link-id').value.trim() || undefined;
+  const password = input('m-link-password').value;
+  const invalid = validateSwitch({ mode, newServiceUrl: serviceUrl, syncId,
+    newPassword: password, confirm: input('m-link-confirm').value });
+  if (invalid) return showError('link-error', invalid);
+  const urlErr = validateServiceUrl(serviceUrl);
+  if (urlErr) return showError('link-error', urlErr);
+  if (!linkService.ready) return;
+  const label = input('m-link-name').value.trim() || undefined;
+  if (linkLabelTaken(input('m-link-name').value)) {
+    return showError('link-error', t('core.labelDuplicate'));
+  }
+  // Existing target while unlinked: still confirm the direction (pull/push
+  // replace a side, merge resurrects deleted items). A new sync replaces
+  // nothing, so its note in the form is the whole explanation.
+  if (mode === 'existing') {
+    let counts = '';
+    if (direction === 'merge') {
+      let preview: MergePreview | undefined;
+      await withBusy('m-btn-link-direct', t('busy.checking'), async () => {
+        try {
+          preview = await send<MergePreview>({
+            command: MessageCommand.PreviewMerge,
+            serviceUrl,
+            syncId: syncId!,
+            password,
+          });
+        } catch (err) {
+          showError('link-error', (err as Error).message);
+        }
+      });
+      if (!preview) return;
+      counts = t('popup.merge.counts', {
+        local: preview.localOnly,
+        remote: preview.remoteOnly,
+        titles: preview.titleConflicts,
+      });
+    }
+    const ok = await confirmInline('m-btn-link-direct', {
+      message: directionConfirm(direction).message,
+      implication: `${counts}${directionConfirm(direction).implication}`,
+      confirmLabel: directionConfirm(direction).confirmLabel,
+      danger: direction !== 'merge',
+    });
+    if (!ok) return;
+  }
+  const switchPassword = input('m-link-lock-pw').value;
+  if (switchLockSet && !switchPassword) {
+    return showError('link-error', t('core.switchPasswordRequired'));
+  }
+  const shownName = label ?? serviceHost(serviceUrl);
+  let createdCount: number | undefined;
+  await withBusy('m-btn-link-direct', t('busy.connecting'), async () => {
+    try {
+      if (mode === 'new') {
+        const res = await send<{ id: string; bookmarkCount: number }>({
+          command: MessageCommand.ConnectNew,
+          serviceUrl,
+          password,
+          switchPassword,
+          label,
+        });
+        createdCount = res.bookmarkCount;
+      } else {
+        await send({
+          command: MessageCommand.ConnectExisting,
+          serviceUrl,
+          syncId: syncId!,
+          password,
+          direction,
+          switchPassword,
+          label,
+        });
+      }
+      closeAddSync();
+      await linkService.refreshCatalog().catch((err) => showError('m-syncs-error', (err as Error).message));
+      showResult(
+        'm-syncs-result',
+        createdCount === undefined
+          ? t('manager.syncs.connected', { name: shownName })
+          : t('manager.syncs.created', { name: shownName, count: createdCount }),
+      );
+      await refreshSyncs();
+      await refreshStatus();
+    } catch (err) {
+      input('m-link-confirm').value = '';
+      showError('link-error', (err as Error).message);
+    }
+  });
+  updateLinkForm();
+}
+
+/** The add form is hidden until requested, and closes after a success or a
+ *  cancel: the section keeps only the list plus its own result/error boxes. */
+function openAddSync(): void {
+  clearMessages();
+  nameTouched = false;
+  // Every open starts on "a new sync": that is what the button promises.
+  (document.querySelector('input[name="m-link-mode"][value="new"]') as HTMLInputElement).checked = true;
+  (document.querySelector('input[name="m-link-direction"][value="pull"]') as HTMLInputElement).checked = true;
+  ($('m-link-form') as HTMLElement).hidden = false;
+  ($('m-btn-add-sync') as HTMLElement).hidden = true;
+  updateLinkForm();
+  prefillLinkUrl();
+  suggestLinkName();
+  input('m-link-url').focus();
+}
+
+function closeAddSync(): void {
+  ($('m-link-form') as HTMLElement).hidden = true;
+  ($('m-btn-add-sync') as HTMLElement).hidden = false;
+  input('m-link-password').value = '';
+  input('m-link-confirm').value = '';
+  input('m-link-lock-pw').value = '';
+  input('m-link-name').value = '';
+  nameTouched = false;
+  preview = undefined;
+  previewFor = undefined;
+  mergeStats = undefined;
+  for (const id of ['link-error', 'link-error-2', 'link-preview', 'link-result', 'link-step2']) {
+    const el = document.getElementById(id) as HTMLElement | null;
+    if (!el) continue;
+    el.hidden = true;
+    if (el.hasAttribute('role') && (el.classList.contains('error') || el.classList.contains('result'))) el.textContent = '';
   }
 }
 
@@ -1314,8 +1501,16 @@ function initMoveSection(): void {
   input('m-link-id').addEventListener('input', updateLinkForm);
   input('m-link-password').addEventListener('input', updateLinkForm);
   input('m-link-confirm').addEventListener('input', updateLinkForm);
+  input('m-link-name').addEventListener('input', () => {
+    nameTouched = true;
+    updateLinkNameHint();
+    updateLinkServiceGate();
+  });
   $('m-btn-link-check').addEventListener('click', () => void previewTarget());
   $('m-btn-link').addEventListener('click', () => void submitLink());
+  $('m-btn-link-direct').addEventListener('click', () => void directConnect());
+  $('m-btn-add-sync').addEventListener('click', () => openAddSync());
+  $('m-btn-add-cancel').addEventListener('click', () => closeAddSync());
   updateLinkForm();
 }
 
@@ -1342,7 +1537,7 @@ function initLogsSection(): void {
 
 async function renderSettings(): Promise<void> {
   clearMessages();
-  await refreshSwitchLock().catch(() => undefined);
+  await refreshSyncs().catch(() => undefined);
   const info = $('m-service-info');
   info.textContent = '';
   let st: StatusResponse | undefined;
@@ -1419,30 +1614,343 @@ function initSettingsSection(): void {
     }
   });
   $('m-btn-password').addEventListener('click', () => void changePassword());
-  initSwitchPasswordSection();
 }
 
-/** Read the lock state + how many dormant rows a reset would drop. */
-async function refreshSwitchLock(): Promise<void> {
-  let state: SwitchLockState = { set: false };
-  let saved: SavedSyncsResponse = { syncs: [], switchLockSet: false };
+/** Sync section: registry rows, activation, rename and row actions. Reads the
+ *  background (the only writer) then renders; every mutation re-reads. */
+async function refreshSyncs(): Promise<void> {
+  let data: SavedSyncsResponse | null = null;
   try {
-    state = await send<SwitchLockState>({ command: MessageCommand.GetSwitchLock });
-    saved = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs });
+    data = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs });
   } catch {
-    state = { set: false };
-    saved = { syncs: [], switchLockSet: false };
+    data = null;
   }
-  switchLockSet = state.set;
-  dormantSyncs = saved.syncs.length;
+  // Defensive: a background from an older version (or a failed read) must
+  // leave the section empty, not crash the whole manager.
+  syncsView = {
+    syncs: Array.isArray(data?.syncs) ? data.syncs : [],
+    ...(data?.active ? { active: data.active } : {}),
+    switchLockSet: !!data?.switchLockSet,
+  };
+  switchLockSet = syncsView.switchLockSet;
+  renderSyncsList();
+  refreshSwitchLockUi();
+  suggestLinkName();
+}
+
+function renderSyncsList(): void {
+  const list = $('m-syncs-list') as HTMLElement;
+  list.replaceChildren();
+  const rows = syncsView.syncs;
+  ($('m-syncs-empty') as HTMLElement).hidden = rows.length > 0;
+  rows.forEach((sync, index) => list.append(syncRow(sync, index)));
+  const activeRow = rows.find((row) => isActiveSavedSync(row, syncsView.active));
+  ($('m-sync-name') as HTMLElement).textContent = activeRow ? savedSyncName(activeRow) : '—';
+  updateLinkConflictNote();
+  updateSyncsDanger();
+  renderActivation();
+}
+
+/** One registry row, three lines: name + status (and the API badge on the
+ *  active row), then host / ID prefix / last use, then the actions. Remove
+ *  exists on every row: on the active one it necessarily unlinks (the row is
+ *  the link), on a dormant one it only forgets the row. */
+function syncRow(sync: SavedSync, index: number): HTMLElement {
+  const isActive = isActiveSavedSync(sync, syncsView.active);
+  const li = document.createElement('li');
+  li.className = isActive ? 'saved-row saved-active' : 'saved-row';
+
+  const head = document.createElement('div');
+  head.className = 'saved-head';
+  const name = document.createElement('strong');
+  name.textContent = savedSyncName(sync);
+  const statusWrap = document.createElement('span');
+  statusWrap.className = 'saved-status';
+  const tag = document.createElement('span');
+  tag.className = isActive ? 'tag ok' : 'tag';
+  tag.textContent = isActive ? t('popup.saved.active') : t('manager.syncs.dormant');
+  statusWrap.append(tag);
+  if (isActive) {
+    const gate = contractGate({
+      liveV12: ping?.supportsV12,
+      storedV12: status?.supportsV12,
+      syncEnabled: true,
+    });
+    if (gate.badge) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = gate.badge;
+      statusWrap.append(badge);
+    }
+  }
+  head.append(name, statusWrap);
+
+  // The sync ID is a bearer token: a prefix only (the full one stays in the
+  // status card, copyable).
+  const lastUsed = sync.lastUsedAt ? ` · ${t('manager.syncs.lastUsed', { when: formatDateTime(sync.lastUsedAt) })}` : '';
+  const sub = document.createElement('small');
+  sub.className = 'saved-sub';
+  sub.textContent = `${serviceHost(sync.serviceUrl)} · ${shortSyncId(sync.syncId)}${lastUsed}`;
+
+  const actions = document.createElement('div');
+  actions.className = 'saved-actions';
+
+  const rename = document.createElement('button');
+  rename.type = 'button';
+  rename.className = 'mini';
+  rename.id = `m-syncs-rename-${index}`;
+  rename.textContent = t('manager.syncs.rename');
+  const editor = renameEditor(sync, index);
+  rename.addEventListener('click', () => {
+    editor.hidden = !editor.hidden;
+    if (!editor.hidden) input(`m-syncs-name-${index}`).focus();
+  });
+  actions.append(rename);
+
+  if (isActive) {
+    const unlinkBtn = document.createElement('button');
+    unlinkBtn.type = 'button';
+    unlinkBtn.className = 'mini';
+    unlinkBtn.id = 'm-syncs-unlink';
+    unlinkBtn.textContent = t('manager.syncs.unlink');
+    unlinkBtn.addEventListener('click', () => void unlink('m-syncs-unlink'));
+    actions.append(unlinkBtn);
+
+    const removeRemote = document.createElement('button');
+    removeRemote.type = 'button';
+    removeRemote.className = 'mini danger';
+    removeRemote.id = `m-syncs-delete-${index}`;
+    removeRemote.dataset.action = 'delete';
+    removeRemote.textContent = t('manager.syncs.deleteRemote');
+    removeRemote.addEventListener('click', () => void deleteRemote(removeRemote.id));
+    actions.append(removeRemote);
+  } else {
+    const activate = document.createElement('button');
+    activate.type = 'button';
+    activate.className = 'mini primary';
+    activate.id = `m-syncs-act-${index}`;
+    activate.textContent = t('popup.saved.activate');
+    activate.addEventListener('click', () => openActivation(sync));
+    actions.append(activate);
+  }
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'mini danger';
+  remove.id = `m-syncs-rm-${index}`;
+  remove.textContent = t('manager.syncs.remove');
+  // Removing the active row unlinks this browser (and keeps the server
+  // copy): confirmed with its own wording, never disabled.
+  remove.addEventListener('click', () => void removeSavedRow(sync, remove.id));
+  actions.append(remove);
+
+  li.append(head, sub, actions, editor);
+  return li;
+}
+
+/** Inline rename: metadata only, never asks for a password. Empty restores
+ *  the automatic host name. */
+function renameEditor(sync: SavedSync, index: number): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'saved-rename';
+  box.hidden = true;
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.id = `m-syncs-name-${index}`;
+  field.maxLength = MaxSavedSyncLabelLength;
+  field.value = sync.label ?? '';
+  field.placeholder = serviceHost(sync.serviceUrl);
+  field.autocomplete = 'off';
+  const error = document.createElement('p');
+  error.className = 'error';
+  error.id = `m-syncs-rename-error-${index}`;
+  error.setAttribute('role', 'alert');
+  error.hidden = true;
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'mini primary';
+  save.id = `m-syncs-save-${index}`;
+  save.textContent = t('common.save');
+  save.addEventListener('click', () => void saveSyncLabel(sync, field, error, box));
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'mini';
+  cancel.textContent = t('common.cancel');
+  cancel.addEventListener('click', () => {
+    field.value = sync.label ?? '';
+    box.hidden = true;
+    error.hidden = true;
+  });
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') void saveSyncLabel(sync, field, error, box);
+    if (event.key === 'Escape') {
+      field.value = sync.label ?? '';
+      box.hidden = true;
+      error.hidden = true;
+    }
+  });
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.append(field, save, cancel);
+  box.append(row, error);
+  return box;
+}
+
+async function saveSyncLabel(
+  sync: SavedSync,
+  field: HTMLInputElement,
+  error: HTMLElement,
+  box: HTMLElement,
+): Promise<void> {
+  error.hidden = true;
+  try {
+    const res = await send<{ renamed: boolean }>({
+      command: MessageCommand.RenameSavedSync,
+      serviceUrl: sync.serviceUrl,
+      syncId: sync.syncId,
+      label: field.value.trim(),
+    });
+    if (!res.renamed) throw new Error(t('core.savedNotFound'));
+    box.hidden = true;
+    await refreshSyncs();
+    await refreshStatus();
+  } catch (err) {
+    error.textContent = (err as Error).message;
+    error.hidden = false;
+  }
+}
+
+/** Duplicate check for the name field (case-insensitive, host fallback
+ *  counts as a name too: two identical rows would be indistinguishable). */
+function linkLabelTaken(label: string): boolean {
+  const needle = label.trim().toLocaleLowerCase();
+  if (!needle) return false;
+  const mode = linkMode();
+  const syncId = input('m-link-id').value.trim();
+  const exclude: SavedSyncActive | undefined =
+    mode === 'existing' && syncId
+      ? { serviceUrl: input('m-link-url').value.trim(), syncId }
+      : undefined;
+  return syncsView.syncs.some(
+    (row) => (!exclude || !sameSavedSync(row, exclude)) && savedSyncName(row).trim().toLocaleLowerCase() === needle,
+  );
+}
+
+function suggestLinkName(): void {
+  if (nameTouched) return;
+  const url = input('m-link-url').value.trim();
+  input('m-link-name').value = url ? suggestSavedSyncName(url, syncsView.syncs) : '';
+  updateLinkNameHint();
+}
+
+function updateLinkNameHint(): void {
+  const hint = $('m-link-name-hint') as HTMLElement;
+  hint.hidden = !linkLabelTaken(input('m-link-name').value);
+}
+
+function openActivation(sync: SavedSync): void {
+  pendingActivation = sync;
+  const name = savedSyncName(sync);
+  $('m-syncs-activate-text').textContent = t('popup.saved.activatePrompt', { name });
+  $('m-syncs-activate-hint').textContent = switchLockSet
+    ? t('popup.saved.passwordHint', { name })
+    : t('manager.syncs.activateHint', { name });
+  ($('m-syncs-pw-row') as HTMLElement).hidden = !switchLockSet;
+  input('m-syncs-activate-pw').value = '';
+  clearMessages();
+  $('m-syncs-activate').hidden = false;
+  if (switchLockSet) input('m-syncs-activate-pw').focus();
+  else $('m-syncs-activate-go').focus();
+}
+
+function closeActivation(): void {
+  pendingActivation = undefined;
+  input('m-syncs-activate-pw').value = '';
+  ($('m-syncs-activate') as HTMLElement).hidden = true;
+}
+
+function renderActivation(): void {
+  if (pendingActivation && !syncsView.syncs.some((row) => sameSavedSync(row, pendingActivation!))) {
+    closeActivation();
+  }
+}
+
+async function activatePending(): Promise<void> {
+  const target = pendingActivation;
+  if (!target) return;
+  const password = input('m-syncs-activate-pw').value;
+  if (switchLockSet && !password) {
+    showError('m-syncs-error', t('core.switchPasswordRequired'));
+    return;
+  }
+  clearMessages();
+  const name = savedSyncName(target);
+  await withBusy('m-syncs-activate-go', t('busy.connecting'), async () => {
+    try {
+      await send({
+        command: MessageCommand.ActivateSavedSync,
+        serviceUrl: target.serviceUrl,
+        syncId: target.syncId,
+        ...(switchLockSet ? { switchPassword: password } : {}),
+      });
+      closeActivation();
+      showResult('m-syncs-result', t('manager.syncs.activated', { name }));
+      await refreshSyncs();
+      await refreshStatus();
+    } catch (err) {
+      showError('m-syncs-error', (err as Error).message);
+    }
+  });
+}
+
+async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> {
+  clearMessages();
+  const isActive = isActiveSavedSync(sync, syncsView.active);
+  const name = savedSyncName(sync);
+  const ok = await confirmInline(anchorId, {
+    message: isActive
+      ? t('manager.syncs.removeActiveMessage', { name })
+      : t('popup.saved.removePrompt', { name }),
+    implication: isActive
+      ? t('manager.syncs.removeActiveImplication')
+      : t('popup.saved.removeImplication'),
+    confirmLabel: t('common.remove'),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await send<{ removed: boolean; unlinked: boolean }>({
+      command: MessageCommand.RemoveSavedSync,
+      serviceUrl: sync.serviceUrl,
+      syncId: sync.syncId,
+    });
+    await refreshSyncs();
+    if (res.unlinked) await refreshStatus();
+    showResult(
+      'm-syncs-result',
+      t(res.unlinked ? 'manager.syncs.removedActive' : 'manager.syncs.removed', { name }),
+    );
+  } catch (err) {
+    showError('m-syncs-error', (err as Error).message);
+  }
+}
+
+/** Protection card: offered with 2+ syncs, change/remove/reset once a lock
+ *  exists (even with a single row, so it can always be removed). */
+function refreshSwitchLockUi(): void {
+  const rows = syncsView.syncs.length;
+  const dormant = Math.max(rows - (syncsView.active ? 1 : 0), 0);
   $('m-link-state').textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
+  ($('m-protection') as HTMLElement).hidden = !switchLockSet && rows < 2;
   ($('m-link-lock-current') as HTMLElement).hidden = !switchLockSet;
   ($('m-btn-link-lock-set') as HTMLElement).hidden = switchLockSet;
   ($('m-btn-link-lock-change') as HTMLElement).hidden = !switchLockSet;
+  ($('m-btn-link-lock-remove') as HTMLElement).hidden = !switchLockSet;
   ($('m-btn-link-lock-reset') as HTMLElement).hidden = !switchLockSet;
-  // The reset drops every row but the active one (none when unlinked).
-  const dropped = Math.max(dormantSyncs - (saved.active ? 1 : 0), 0);
-  $('m-link-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dropped });
+  $('m-link-lock-new-label').textContent = switchLockSet
+    ? t('manager.switchPw.new')
+    : t('manager.switchPw.setNew');
+  $('m-link-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dormant });
   // The proof is asked by every flow that changes or demotes the active key.
   ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
   ($('m-link-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
@@ -1469,9 +1977,15 @@ function validateSwitchLockFields(fields: { next: string; confirm: string }): st
   return undefined;
 }
 
-function initSwitchPasswordSection(): void {
+function initSyncsSection(): void {
+  ($('m-syncs-activate-go') as HTMLButtonElement).addEventListener('click', () => void activatePending());
+  ($('m-syncs-activate-cancel') as HTMLButtonElement).addEventListener('click', () => closeActivation());
+  input('m-syncs-activate-pw').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') void activatePending();
+  });
   ($('m-btn-link-lock-set') as HTMLButtonElement).addEventListener('click', () => void setSwitchPassword());
   ($('m-btn-link-lock-change') as HTMLButtonElement).addEventListener('click', () => void changeSwitchPassword());
+  ($('m-btn-link-lock-remove') as HTMLButtonElement).addEventListener('click', () => void removeSwitchPasswordFlow());
   ($('m-btn-link-lock-reset') as HTMLButtonElement).addEventListener('click', () => {
     clearMessages();
     ($('m-link-lock-reset-box') as HTMLElement).hidden = false;
@@ -1493,7 +2007,8 @@ async function setSwitchPassword(): Promise<void> {
       await send({ command: MessageCommand.SetSwitchPassword, password: fields.next, confirm: fields.confirm });
       clearSwitchLockFields();
       showResult('switch-pw-result', t('manager.switchPw.setDone'));
-      await refreshSwitchLock();
+      await refreshSyncs();
+      await refreshStatus();
     } catch (err) {
       showError('switch-pw-error', (err as Error).message);
     }
@@ -1517,9 +2032,39 @@ async function changeSwitchPassword(): Promise<void> {
       });
       clearSwitchLockFields();
       showResult('switch-pw-result', t('manager.switchPw.changeDone'));
-      await refreshSwitchLock();
+      await refreshSyncs();
     } catch (err) {
       // Wrong current password: keep nothing but the message.
+      input('m-link-lock-current-pw').value = '';
+      showError('switch-pw-error', (err as Error).message);
+    }
+  });
+}
+
+/** Remove: confirm the current password, unwrap every row to clear storage,
+ *  delete the lock. The doors open, the rows stay. */
+async function removeSwitchPasswordFlow(): Promise<void> {
+  clearMessages();
+  ($('switch-pw-result') as HTMLElement).hidden = true;
+  const current = input('m-link-lock-current-pw').value;
+  if (!current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
+  const ok = await confirmInline('m-btn-link-lock-remove', {
+    message: t('manager.switchPw.removeMessage'),
+    implication: t('manager.switchPw.removeImplication'),
+    confirmLabel: t('manager.switchPw.removeBtn'),
+    danger: true,
+  });
+  if (!ok) return;
+  await withBusy('m-btn-link-lock-remove', t('busy.changing'), async () => {
+    try {
+      const res = await send<{ rows: number }>({
+        command: MessageCommand.RemoveSwitchPassword,
+        current,
+      });
+      clearSwitchLockFields();
+      showResult('switch-pw-result', t('manager.switchPw.removeDone', { count: res.rows }));
+      await refreshSyncs();
+    } catch (err) {
       input('m-link-lock-current-pw').value = '';
       showError('switch-pw-error', (err as Error).message);
     }
@@ -1542,7 +2087,7 @@ async function resetSwitchPassword(): Promise<void> {
       clearSwitchLockFields();
       ($('m-link-lock-reset-box') as HTMLElement).hidden = true;
       showResult('switch-pw-result', t('manager.switchPw.resetDone', { count: res.removed }));
-      await refreshSwitchLock();
+      await refreshSyncs();
     } catch (err) {
       showError('switch-pw-error', (err as Error).message);
     }
@@ -1642,10 +2187,11 @@ async function init(): Promise<void> {
   initConflictSection();
   initBackupSection();
   initDuplicatesSection();
+  initSyncsSection();
   initMoveSection();
   initLogsSection();
   initSettingsSection();
-  void refreshSwitchLock().catch(() => undefined);
+  void refreshSyncs().catch(() => undefined);
   // Follow link changes made elsewhere (e.g. connecting from the popup):
   // the status card, actions and danger zone re-gate themselves without a
   // manual refresh. refreshStatus() is race-guarded (statusSeq), so bursts

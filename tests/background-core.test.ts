@@ -217,7 +217,7 @@ async function linkedCore(state: FakeApiState): Promise<{
   );
   const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
   const id = await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
-  expect(id).toEqual({ id: SYNC_ID });
+  expect(id).toMatchObject({ id: SYNC_ID, bookmarkCount: expect.any(Number) });
   return { core, store, ports, derived, mockApi };
 }
 

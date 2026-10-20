@@ -31,6 +31,12 @@ import {
 import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from './flow.js';
 import { SavedSyncsPanel, type SavedSyncsChange } from './saved-syncs.js';
 import {
+  isActiveSavedSync,
+  savedSyncName,
+  suggestSavedSyncName,
+  type SavedSync,
+} from '../shared/saved-syncs.js';
+import {
   type Direction,
   RemovedSyncDismissImplication,
   directionConfirm,
@@ -65,6 +71,10 @@ let savedMain: SavedSyncsPanel;
 let savedConnect: SavedSyncsPanel;
 /** Manager-owned switch password present? Gates activation and new links. */
 let switchLockSet = false;
+/** Registry snapshot used for the connect-form name suggestion. */
+let savedNames: SavedSync[] = [];
+/** Name typed by the user: never overwrite it with the host suggestion. */
+let connectNameTouched = false;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -127,8 +137,20 @@ async function refreshSavedSyncs(): Promise<void> {
   if (my !== refreshSeq) return;
   switchLockSet = data.switchLockSet;
   ($('conn-switch-locked') as HTMLElement).hidden = !switchLockSet;
+  const activeRow = data.syncs.find((row) => isActiveSavedSync(row, data.active));
+  ($('p-sync-name') as HTMLElement).textContent = activeRow ? savedSyncName(activeRow) : '—';
+  savedNames = data.syncs;
   savedMain.render(data);
   savedConnect.render(data);
+  updateConnectName();
+}
+
+/** Fill the connect-form name from the service host, unless the user typed
+ *  one. Duplicate names get a numeric suffix (same rule as the manager). */
+function updateConnectName(): void {
+  if (connectNameTouched) return;
+  const url = connectService?.url;
+  input('sync-name').value = url ? suggestSavedSyncName(url, savedNames) : '';
 }
 
 /** Folders + bookmarks in a tree; callers skip the root containers. Kept
@@ -226,7 +248,10 @@ async function initConnect(): Promise<void> {
   connectService = new ServicePicker({
     input: input('service-url'),
     mode: () => (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as 'new' | 'existing',
-    onChange: () => cancelConfirm('btn-connect'),
+    onChange: () => {
+      cancelConfirm('btn-connect');
+      updateConnectName();
+    },
     onState: () => {
       if (!connecting) ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
     },
@@ -262,6 +287,9 @@ async function initConnect(): Promise<void> {
   ['service-url', 'sync-id', 'password', 'confirm-password'].forEach((id) =>
     $(id).addEventListener('input', () => cancelConfirm('btn-connect')),
   );
+  input('sync-name').addEventListener('input', () => {
+    connectNameTouched = true;
+  });
   $('btn-connect').addEventListener('click', () => void submitConnect());
   $('btn-open-tab').addEventListener('click', () => {
     // Popups close on focus loss (by design) — a full tab stays open while
@@ -346,19 +374,30 @@ async function submitConnect(): Promise<void> {
     showError('connect-error', t('core.switchPasswordRequired'));
     return;
   }
+  const label = input('sync-name').value.trim() || undefined;
   connecting = true;
   connectService.setBusy(true);
   await withBusy('btn-connect', t('busy.connecting'), async () => {
     try {
       if (mode === 'new') {
-        await send({ command: MessageCommand.ConnectNew, serviceUrl, password, switchPassword });
+        await send({ command: MessageCommand.ConnectNew, serviceUrl, password, switchPassword, label });
       } else {
-        await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction, switchPassword });
+        await send({
+          command: MessageCommand.ConnectExisting,
+          serviceUrl,
+          syncId,
+          password,
+          direction,
+          switchPassword,
+          label,
+        });
       }
       await connectService.refreshCatalog().catch(err => showError('connect-error', (err as Error).message));
       input('password').value = '';
       input('confirm-password').value = '';
       input('conn-switch-password').value = '';
+      input('sync-name').value = '';
+      connectNameTouched = false;
       showView('main');
       await refreshAll();
     } catch (err) {
@@ -435,14 +474,12 @@ async function init(): Promise<void> {
   await initConnect();
   initMain();
   initRemovedCard();
-  const onSavedChanged = async (kind: SavedSyncsChange): Promise<void> => {
-    if (kind === 'activated') showView('main');
+  const onSavedChanged = async (_kind: SavedSyncsChange): Promise<void> => {
+    showView('main');
     await refreshAll();
-    // A removal can leave this browser unlinked: follow the link, not the click.
-    if (!status?.syncEnabled) showView('connect');
   };
-  savedMain = new SavedSyncsPanel('p-saved', onSavedChanged, openManager);
-  savedConnect = new SavedSyncsPanel('c-saved', onSavedChanged, openManager);
+  savedMain = new SavedSyncsPanel('p-saved', onSavedChanged);
+  savedConnect = new SavedSyncsPanel('c-saved', onSavedChanged);
   await refreshAll(true);
 }
 

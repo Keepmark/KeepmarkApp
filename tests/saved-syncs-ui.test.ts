@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// Popup panel for the saved syncs: rendering, the inline password step, the
-// remove confirmation and the rule "a re-render never keeps a stale confirm".
+// Popup panel for the saved syncs: read-only rendering (activate only) and the
+// modal sync-change-password step. Rename/remove live in the manager only.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SavedSyncsPanel } from '../src/popup/saved-syncs';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
@@ -11,6 +11,7 @@ vi.mock('../src/popup/ui', async (original) => ({ ...await original<object>(), s
 vi.mock('webextension-polyfill', () => ({ default: { runtime: { sendMessage: vi.fn() } } }));
 
 const el = (id: string): HTMLElement => document.getElementById(id)!;
+const dialog = (): HTMLDialogElement => el('p-saved-dialog') as HTMLDialogElement;
 const tick = async (): Promise<void> => {
   for (let i = 0; i < 15; i++) await Promise.resolve();
 };
@@ -27,7 +28,6 @@ const data: SavedSyncsResponse = {
 
 let panel: SavedSyncsPanel;
 let onChanged: ReturnType<typeof vi.fn>;
-let openManager: ReturnType<typeof vi.fn>;
 
 function rowEls(): HTMLElement[] {
   return [...el('p-saved-list').querySelectorAll<HTMLElement>('.saved-row')];
@@ -38,37 +38,31 @@ beforeEach(() => {
     <div id="p-saved-card">
       <h2 id="p-saved-title"></h2>
       <ul id="p-saved-list"></ul>
-      <div id="p-saved-notice" hidden>
-        <p></p><button id="p-saved-open-manager"></button>
-      </div>
-      <div id="p-saved-confirm" hidden>
+      <dialog id="p-saved-dialog">
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint"></p>
-        <input id="p-saved-password" type="password" />
-        <div>
-          <button id="p-saved-activate"></button>
-          <button id="p-saved-cancel"></button>
-        </div>
-      </div>
-      <div id="p-saved-error" role="alert" hidden></div>
+        <label id="p-saved-pw-row"><input id="p-saved-password" type="password" /></label>
+        <button id="p-saved-activate"></button>
+        <button id="p-saved-cancel"></button>
+        <div id="p-saved-error" role="alert" hidden></div>
+      </dialog>
     </div>`;
   harness.send.mockReset().mockResolvedValue({});
   onChanged = vi.fn(async () => undefined);
-  openManager = vi.fn();
-  panel = new SavedSyncsPanel('p-saved', onChanged, openManager);
+  panel = new SavedSyncsPanel('p-saved', onChanged);
 });
 
 describe('saved syncs popup panel', () => {
-  it('renders rows, marks the active one and never offers to remove it', () => {
+  it('renders rows read-only: active tag, one activate button for the dormant one', () => {
     panel.render(data);
     expect(el('p-saved-card').hidden).toBe(false);
     expect(el('p-saved-title').textContent).toBe('Syncs (2)');
     const [active, dormant] = rowEls();
     expect(active.classList.contains('saved-active')).toBe(true);
     expect(active.textContent).toContain('Lavoro');
-    // Active row: badge only, no activate/remove buttons.
+    // No rename, no remove, nowhere to manage: the popup only switches.
     expect(active.querySelectorAll('button')).toHaveLength(0);
-    expect(dormant.querySelectorAll('button')).toHaveLength(2);
+    expect(dormant.querySelectorAll('button')).toHaveLength(1);
     expect(dormant.textContent).toContain('other.example');
     // The ID is a capability token: only a prefix is shown.
     expect(dormant.textContent).toContain('bbbbbbbb…');
@@ -84,15 +78,19 @@ describe('saved syncs popup panel', () => {
     expect(el('p-saved-error').hidden).toBe(true);
   });
 
-  it('uses the singular form for one row', () => {
+  it('hides the card when there is nothing to switch to', () => {
     panel.render({ syncs: [rows[0]], active: data.active, switchLockSet: true });
+    expect(el('p-saved-card').hidden).toBe(true);
+    // Unlinked registry: one dormant row is exactly what the popup is for.
+    panel.render({ syncs: [rows[0]], switchLockSet: true });
+    expect(el('p-saved-card').hidden).toBe(false);
     expect(el('p-saved-title').textContent).toBe('Sync (1)');
   });
 
-  it('activates a dormant row through the inline password step', async () => {
+  it('activates a dormant row through the modal password step', async () => {
     panel.render(data);
-    (rowEls()[1].querySelector('button.mini:not(.danger)') as HTMLButtonElement).click();
-    expect(el('p-saved-confirm').hidden).toBe(false);
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(dialog().open).toBe(true);
     expect(el('p-saved-confirm-text').textContent).toContain('other.example');
     expect(document.activeElement).toBe(el('p-saved-password'));
 
@@ -112,72 +110,53 @@ describe('saved syncs popup panel', () => {
       switchPassword: 'target password',
     });
     expect(onChanged).toHaveBeenCalledWith('activated');
-    expect(el('p-saved-confirm').hidden).toBe(true);
+    expect(dialog().open).toBe(false);
     expect((el('p-saved-password') as HTMLInputElement).value).toBe('');
   });
 
   it('keeps the prompt open and the password in place when activation fails', async () => {
     harness.send.mockRejectedValueOnce(new Error('Invalid credentials'));
     panel.render(data);
-    (rowEls()[1].querySelector('button.mini:not(.danger)') as HTMLButtonElement).click();
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
     (el('p-saved-password') as HTMLInputElement).value = 'wrong';
     (el('p-saved-activate') as HTMLButtonElement).click();
     await tick();
-    expect(el('p-saved-confirm').hidden).toBe(false);
+    expect(dialog().open).toBe(true);
     expect((el('p-saved-password') as HTMLInputElement).value).toBe('wrong');
     expect(el('p-saved-error').textContent).toBe('Invalid credentials');
     expect(onChanged).not.toHaveBeenCalled();
   });
 
-  it('without a switch password the notice shows and activation is disabled', () => {
+  it('without a switch password hides the field and activates directly', async () => {
     panel.render({ ...data, switchLockSet: false });
-    expect(el('p-saved-notice').hidden).toBe(false);
-    const dormant = rowEls()[1];
-    const activate = dormant.querySelector('button.mini:not(.danger)') as HTMLButtonElement;
-    expect(activate.disabled).toBe(true);
-    (el('p-saved-open-manager') as HTMLButtonElement).click();
-    expect(openManager).toHaveBeenCalledTimes(1);
-  });
-
-  it('removes a row only after the inline confirmation', async () => {
-    panel.render(data);
-    (el('p-saved-rm-1') as HTMLButtonElement).click();
-    await tick();
-    expect(document.getElementById('p-saved-rm-1-confirm')).not.toBeNull();
-    (document.getElementById('p-saved-rm-1-cancel') as HTMLButtonElement).click();
-    await tick();
-    expect(harness.send).not.toHaveBeenCalled();
-
-    (el('p-saved-rm-1') as HTMLButtonElement).click();
-    await tick();
-    (document.getElementById('p-saved-rm-1-yes') as HTMLButtonElement).click();
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-pw-row').hidden).toBe(true);
+    (el('p-saved-activate') as HTMLButtonElement).click();
     await tick();
     expect(harness.send).toHaveBeenCalledWith({
-      command: MessageCommand.RemoveSavedSync,
+      command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://other.example/',
       syncId: 'bbbbbbbb2222',
     });
-    expect(onChanged).toHaveBeenCalledWith('removed');
+    expect(onChanged).toHaveBeenCalledWith('activated');
   });
 
-  it('a re-render cancels an open confirmation instead of leaving it orphaned', async () => {
+  it('cancels the password step from its own button', () => {
     panel.render(data);
-    (el('p-saved-rm-1') as HTMLButtonElement).click();
-    await tick();
-    expect(document.getElementById('p-saved-rm-1-confirm')).not.toBeNull();
-    panel.render(data);
-    await tick();
-    expect(document.getElementById('p-saved-rm-1-confirm')).toBeNull();
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    (el('p-saved-password') as HTMLInputElement).value = 'secret';
+    (el('p-saved-cancel') as HTMLButtonElement).click();
+    expect(dialog().open).toBe(false);
+    expect((el('p-saved-password') as HTMLInputElement).value).toBe('');
     expect(harness.send).not.toHaveBeenCalled();
   });
 
-  it('cancels the password step from its own button', async () => {
+  it('a re-render closes an open step instead of leaving it orphaned', () => {
     panel.render(data);
-    (rowEls()[1].querySelector('button.mini:not(.danger)') as HTMLButtonElement).click();
-    (el('p-saved-password') as HTMLInputElement).value = 'secret';
-    (el('p-saved-cancel') as HTMLButtonElement).click();
-    expect(el('p-saved-confirm').hidden).toBe(true);
-    expect((el('p-saved-password') as HTMLInputElement).value).toBe('');
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(dialog().open).toBe(true);
+    panel.render(data);
+    expect(dialog().open).toBe(false);
     expect(harness.send).not.toHaveBeenCalled();
   });
 });

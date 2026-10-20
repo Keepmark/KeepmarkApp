@@ -27,22 +27,18 @@
     <div id="c-saved-card" class="card saved" hidden>
       <h2 id="c-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
       <ul id="c-saved-list" class="saved-list"></ul>
-      <div id="c-saved-notice" class="notice" role="note" hidden>
-        <p data-i18n="popup.saved.switchNotSet">Set the switch password in the manager to activate a saved sync.</p>
-        <button id="c-saved-open-manager" class="mini" data-i18n="popup.saved.openManager">Open the manager</button>
-      </div>
-      <div id="c-saved-confirm" class="confirm" hidden>
+      <dialog id="c-saved-dialog" class="saved-dialog">
         <p><strong id="c-saved-confirm-text"></strong></p>
         <p id="c-saved-hint" class="hint"></p>
-        <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+        <label id="c-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
           <input id="c-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">
           <button id="c-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>
           <button id="c-saved-cancel" data-i18n="common.cancel">Cancel</button>
         </div>
-      </div>
-      <div id="c-saved-error" class="error" role="alert" hidden></div>
+        <div id="c-saved-error" class="error" role="alert" hidden></div>
+      </dialog>
     </div>
     <h2 data-i18n="popup.connect.title">Connect this browser</h2>
     <div class="seg" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="popup.connect.modeLabel">
@@ -59,11 +55,14 @@
         <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" data-i18n-placeholder="popup.connect.syncIdPlaceholder" />
       </label>
     </div>
+    <label><span data-i18n="popup.connect.nameLabel">Name (optional)</span>
+      <input id="sync-name" type="text" maxlength="40" autocomplete="off" />
+    </label>
     <label><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
     </label>
     <div id="conn-switch-locked" hidden>
-      <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+      <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
         <input id="conn-switch-password" type="password" autocomplete="off" />
       </label>
       <p class="hint" data-i18n="popup.saved.connectSwitchHint">Required to add another sync: it unlocks the saved list.</p>
@@ -103,6 +102,8 @@
       <dl class="status-grid">
         <dt data-i18n="common.service">Service</dt>
         <dd id="p-server">…</dd>
+        <dt data-i18n="popup.saved.nameTitle">Sync</dt>
+        <dd id="p-sync-name">…</dd>
         <dt data-i18n="common.serviceVersion">Service version</dt>
         <dd id="p-swversion">…</dd>
         <dt data-i18n="common.syncId">Sync ID</dt>
@@ -119,22 +120,18 @@
     <div id="p-saved-card" class="card saved" hidden>
       <h2 id="p-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
       <ul id="p-saved-list" class="saved-list"></ul>
-      <div id="p-saved-notice" class="notice" role="note" hidden>
-        <p data-i18n="popup.saved.switchNotSet">Set the switch password in the manager to activate a saved sync.</p>
-        <button id="p-saved-open-manager" class="mini" data-i18n="popup.saved.openManager">Open the manager</button>
-      </div>
-      <div id="p-saved-confirm" class="confirm" hidden>
+      <dialog id="p-saved-dialog" class="saved-dialog">
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint" class="hint"></p>
-        <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+        <label id="p-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
           <input id="p-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">
           <button id="p-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>
           <button id="p-saved-cancel" data-i18n="common.cancel">Cancel</button>
         </div>
-      </div>
-      <div id="p-saved-error" class="error" role="alert" hidden></div>
+        <div id="p-saved-error" class="error" role="alert" hidden></div>
+      </dialog>
     </div>
     <div id="main-error" class="error" role="alert" hidden></div>
     <div id="main-result" class="result" role="status" hidden></div>

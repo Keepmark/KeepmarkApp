@@ -692,3 +692,27 @@ dd:last-of-type { align-items: flex-end; }
 }
 .saved .notice p { margin: 0; }
 .saved .notice button { flex: none; }
+
+/* Activation is a modal: the popup is read-only, the dialog owns the step. */
+.saved-dialog {
+  width: min(360px, 92vw);
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+}
+
+.saved-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.saved-dialog p {
+  margin: 0;
+}
+
+.saved-dialog .row {
+  margin-top: 4px;
+}

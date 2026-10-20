@@ -51,10 +51,12 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Safety backup: restore | no | `Restore` | always | What is replaced (local or server copy) and that a pre-restore backup is taken. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
 | Unlink this device | yes | `Unlink this device…` (extension: `Unlink this browser…`) | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
-| Delete sync from server (extension, service v1.2) | yes | `Delete sync from server…` | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
+| Delete sync from server (extension, service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
 | Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | `Download copy` / `Dismiss…` | Dismiss only | The kept copy is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
-| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` on a row → short switch password → apply | none beyond the switch-password step | The short switch password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved, and a failed save or a pending conflict cancels the switch. The sync's own long password is never asked at activation. Without a switch password the manager must set one first (Activate is disabled and the notice links to it). |
+| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` → sync-change password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved, and a failed save or a pending conflict cancels the switch. The sync's own long password is never asked at activation. Without a sync-change password the dialog is a plain confirmation. |
+| Add a new sync (extension, multi-sync) | no | Manager → Sync → `+ Add new sync` → mode `A new sync` → service URL + password + confirm → `Create and upload` | none: the note says the current sync stays | Uploads the bookmarks currently in this browser and reports how many. A pending conflict is a warning only: the new sync starts from the local tree, while the conflicted sync keeps its server copy. |
+| Remove a saved sync (extension, multi-sync) | manager only | Manager → Sync → `Remove…` on a row | always | Dormant: the row only. Active: this browser is unlinked (the row is the link); the sync and its server copy stay. |
 | Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
@@ -78,37 +80,57 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 
 ## Multi-sync (saved syncs, extension)
 
-- One sync is active at a time; the others are dormant rows (service, sync ID,
-  last use). A dormant row stores its derived key wrapped under the switch
-  lock — never the raw password; the sync ID (a capability token the UI
-  truncates) is kept too.
-- The **switch password** is a short manager-owned secret (a PIN of a few
-  digits is fine: no length or complexity rules, only "not empty"). It wraps a
+- One sync is active at a time; the others are dormant rows (label, service,
+  sync ID prefix, last use). Every row stores its derived key — under the
+  optional sync-change password when one is set, in clear when it is not
+  (same exposure as the active key). The sync ID (a capability token the UI
+  truncates) is kept in the row, never the sync's long password.
+- The **sync-change password** is optional and manager-owned: a short secret
+  (a PIN of a few digits is fine — only "not empty" is enforced). It wraps a
   random vault key, which wraps every row's key. Changing it rewraps only the
-  vault (rows untouched); losing it means the dormant keys are gone.
-- Set/change it in Manager → Settings → Switch password. Activation is refused
-  until one exists: the popup shows a notice with a link to the manager and
-  disables `Activate`.
-- Activating a row = short switch password → the background unlocks the row's
+  vault (rows untouched); removing it unwraps the rows to clear; losing it
+  means the dormant keys are gone.
+- Set/change/remove/reset it in Manager → Sync → Sync-change password. With a
+  password, activation, a new link and any change that demotes the active key
+  ask for it. Without one, a dormant row is a plain confirmation and the rows
+  are stored in clear in this browser.
+- Manager → Sync → `+ Add new sync` opens the form (hidden until requested):
+  service URL, `A new sync` or `An existing sync`, credentials, optional name.
+  - **A new sync** is additive: it is created on the service from the
+    bookmarks currently in this browser and the result reports the uploaded
+    count. The sync in use stays in the list. A pending conflict is only a
+    warning (the new sync starts from the local tree; the conflicted sync
+    keeps its server copy).
+  - **An existing sync** while linked goes through the check/review wizard
+    (direction + consequences); while unlinked it connects directly after the
+    direction confirmation.
+- Row actions: `Activate` (dormant), `Rename` (metadata only, no password),
+  `Unlink` (active: detach this browser, the row stays dormant),
+  `Delete from server…` (active only, v1.2: removes the server copy and the
+  row) and `Remove…` (every row).
+  - `Remove…` on a dormant row forgets the row only: bookmarks, server copy
+    and safety backups stay.
+  - `Remove…` on the active row necessarily unlinks this browser (the row is
+    the link), then forgets the row. There is no "remove the active only when
+    it is the last" rule and no "activate another first" step.
+- The popup is read-only: dormant rows offer only `Activate`, which opens a
+  modal dialog asking for the sync-change password (only when one is set) and
+  states that it is not the sync's own password. Rename, remove, delete and
+  the add flow live in the manager (footer `Manage`). The saved list is shown
+  when there is something to switch to (2+ rows, or 1 dormant row while
+  unlinked); with a single active sync it is hidden.
+- Activating a row = (password when set) → the background unlocks the row's
   key and proves the target with a read-only preflight (version gate + GET +
   decrypt, nothing written) → saves the active side (`fail-closed`: unpushed
   native edits are pushed first; a pending conflict cancels the switch) →
   replaces the native tree with the target's → the previous sync stays listed.
-- Any link/move/long-password change that demotes or replaces the active key
-  asks the same switch password, so the new key is wrapped at once. Without a
-  lock a second link is refused (set the switch password first) and a move
-  replaces the previous row instead of leaving one that could never be
-  activated.
 - Reset (forgotten password) mints a new vault and deletes every row but the
   active one; the active sync keeps working and is wrapped under the new
   password. Server copies, safety backups and the undo slot are untouched.
 - Activating the already-active row is refused; the native tree is never
   re-read from the same sync.
-- `Remove from the list` is local-only (bookmarks, server copy and safety
-  backups stay) and refused for the active row: unlink it first. Unlinking
-  keeps the row, so the browser can re-link without retyping URL and ID.
 - The list survives unlink and browser restart; the active row is marked
-  `Active`, the others offer `Activate`.
+  `Active` with its API badge, the others are `Inactive` and offer `Activate`.
 
 ## Platform differences (allowed)
 

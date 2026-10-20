@@ -792,3 +792,92 @@ dd:last-of-type { border-bottom: 0; }
 #qr-panel #qr-error { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .qr-password-entry { transition: none; } }
 @media (max-width: 380px) { .qr-password-entry { flex-wrap: wrap; } #qr-panel .qr-password-entry input { width: calc(100% - 3rem); } #qr-panel .qr-password-entry button { width: 100%; } }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-head h3 {
+  margin-bottom: 0;
+}
+
+.saved-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.saved-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, var(--tint));
+}
+
+.saved-row.saved-active {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.saved-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.saved-head strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.saved-sub {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.saved-actions button.mini {
+  height: 28px;
+  padding: 0 10px;
+}
+
+.saved-rename {
+  margin-top: 2px;
+}
+
+.saved-rename .row {
+  margin-top: 0;
+  gap: 6px;
+}
+
+.saved-rename input {
+  flex: 1;
+  min-width: 0;
+}
