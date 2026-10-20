@@ -1,9 +1,11 @@
 // Browser QA: drives the REAL built extension in Firefox (MV2) and Chromium
 // (MV3) against a live KeepmarkApi (v1.2) — the manual-QA scenarios of
 // docs/SPEC.md §11.3 that unit tests cannot reach: connect new/existing,
-// native auto-push, every manager section, a real two-browser conflict
-// (merge in Firefox), MV3 service-worker stop + persisted conflict + take
-// remote in Chromium, convergence, server delete, log redaction, dark mode.
+// native auto-push, every manager section, the multi-sync registry (add a
+// second sync, switch password, popup activation dialog, QR), a real
+// two-browser conflict (merge in Firefox), MV3 service-worker stop + persisted
+// conflict + take remote in Chromium, convergence, server delete, log
+// redaction, dark mode.
 //
 // Usage: npm run qa:browser   (builds first; exit non-zero on any failure)
 // Needs: a running KeepmarkApi with a generous per-IP daily new-sync limit
@@ -36,6 +38,8 @@ process.on('unhandledRejection', (e) => console.log('UNHANDLED', String(e?.messa
 fs.rmSync(SHOTS, { recursive: true, force: true });
 fs.mkdirSync(SHOTS, { recursive: true });
 const results = [];
+/** Every wired page, so the storage trail can be dumped at the end. */
+const tracked = [];
 const check = (name, ok, detail = '') => {
   results.push({ name, ok: !!ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
@@ -115,9 +119,24 @@ async function open(ctx, file0) {
 
 function wire(ctx, page, file) {
   const key = `${ctx.kind}:${file}`;
+  tracked.push({ key, page });
   allErrors[key] ??= [];
   page.on('pageerror', (e) => allErrors[key].push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') allErrors[key].push(`console: ${m.text()}`); });
+  // Diagnostic trail: every write to the link state, with the id it landed on.
+  // A silent "the active sync changed back" is otherwise invisible.
+  void page.evaluate(() => {
+    const b = globalThis.browser ?? globalThis.chrome;
+    globalThis.__qaStorageLog = [];
+    b.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      const entry = { at: new Date().toISOString(), page: location.pathname, keys: Object.keys(changes) };
+      if (changes.syncInfo) entry.syncInfo = changes.syncInfo.newValue?.id ?? null;
+      if (changes.syncEnabled) entry.enabled = changes.syncEnabled.newValue;
+      if (changes.savedSyncs) entry.saved = (changes.savedSyncs.newValue ?? []).map((r) => r.label ?? `id:${(r.syncId ?? '').slice(0, 8)}`);
+      globalThis.__qaStorageLog.push(entry);
+    });
+  }).catch(() => undefined);
   page.on('dialog', async (d) => {
     (page.dialogs ??= []).push(d.message());
     try { await d.accept(); } catch (e) { console.log(`dialog accept failed (${ctx.kind}): ${e.message.split('\n')[0]}`); }
@@ -131,7 +150,13 @@ const setVal = (p, sel, v) => p.evaluate((s, val) => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }, sel, v);
-const click = (p, sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
+const click = (p, sel) => p.evaluate((s) => {
+  const el = document.querySelector(s);
+  // Name the page in the failure: a missing id is otherwise indistinguishable
+  // from a click on the wrong tab.
+  if (!el) throw new Error(`click: ${s} not found in ${location.href} (${document.readyState})`);
+  el.click();
+}, sel);
 /** Answer an inline confirmInline block (`<anchor>-confirm`) with Yes;
  *  returns its text (question + implication), or null when none opened. */
 async function confirmYes(p, anchorId) {
@@ -243,7 +268,7 @@ async function tourManager(ctx) {
   const m = await open(ctx, 'manager.html');
   await waitFor(async () => !((await text(m, '#m-pill')) ?? '…').includes('…'), 8000);
   await shot(ctx, m, 'manager-status');
-  for (const s of ['backup', 'duplicates', 'move', 'logs', 'settings', 'about']) {
+  for (const s of ['backup', 'duplicates', 'syncs', 'logs', 'settings', 'about']) {
     await section(m, s);
     const h2 = await m.evaluate(() => [...document.querySelectorAll('main section:not([hidden]) h2')].map((e) => e.textContent.trim()));
     check(`${ctx.kind}: manager section ${s} renders`, h2.length === 1, h2.join(','));
@@ -326,8 +351,321 @@ async function syncNow(ctx, m) {
   await sleep(4000);
 }
 
+// ------------------------------------------------------- multi-sync (registry)
+const managerRows = (m) => m.evaluate(() => [...document.querySelectorAll('#m-syncs-list .saved-row')].map((li) => ({
+  name: li.querySelector('strong')?.textContent ?? '',
+  active: li.classList.contains('saved-active'),
+  sub: li.querySelector('.saved-sub')?.textContent ?? '',
+  actions: [...li.querySelectorAll('button')].map((b) => b.id || b.dataset.action || ''),
+})));
+const popupRows = (p) => p.evaluate(() => [...document.querySelectorAll('#p-saved-list .saved-row')].map((li) => ({
+  name: li.querySelector('strong')?.textContent ?? '',
+  active: li.classList.contains('saved-active'),
+  sub: li.querySelector('small')?.textContent ?? '',
+  actions: [...li.querySelectorAll('button')].map((b) => b.id),
+})));
+const dialogOpen = (p, id) => p.evaluate((s) => !!document.querySelector(s)?.open, id);
+
+/** Add a second sync from the manager, then exercise the switch password, the
+ *  popup activation dialog (empty, wrong then right password) and the QR
+ *  dialog. Leaves the browser back on the QA sync. */
+async function multiSync(ctx, m, pop, activeId) {
+  await section(m, 'syncs');
+  const first = await managerRows(m);
+  check(`${ctx.kind}: syncs section lists the active sync`, first.length === 1 && first[0].active, JSON.stringify(first));
+  check(`${ctx.kind}: active row offers unlink + server delete, no activate`,
+    first[0]?.actions.includes('m-syncs-unlink') &&
+    first[0]?.actions.some((a) => a.startsWith('m-syncs-delete-')) &&
+    !first[0]?.actions.some((a) => a.startsWith('m-syncs-act-')), JSON.stringify(first[0]?.actions));
+  await shot(ctx, m, 'manager-syncs');
+
+  // + Add new sync → a NEW sync on the same service (uploads the live tree).
+  await click(m, '#m-btn-add-sync');
+  check(`${ctx.kind}: add-sync form opens`, await visible(m, '#m-link-form'));
+  await shot(ctx, m, 'manager-syncs-add');
+  await click(m, 'input[name="m-link-url-provider"][value="custom"]');
+  await setVal(m, '#m-link-url', SERVICE);
+  await click(m, '#m-link-url-check');
+  const gate = await waitFor(() => visible(m, '#m-link-direct'), 15000);
+  check(`${ctx.kind}: add-sync enables the create button only after the service check`, gate);
+  await setVal(m, '#m-link-name', 'QA second');
+  await setVal(m, '#m-link-password', PASSWORD);
+  await setVal(m, '#m-link-confirm', PASSWORD);
+  await click(m, '#m-btn-link-direct');
+  const created = await waitFor(async () => {
+    if (await visible(m, '#link-error')) return `error: ${await text(m, '#link-error')}`;
+    const shown = await text(m, '#m-syncs-result');
+    return shown && shown.includes('QA second') ? shown : undefined;
+  }, 45000);
+  check(`${ctx.kind}: adding a sync creates it and reports the upload`,
+    typeof created === 'string' && !created.startsWith('error'), String(created).slice(0, 120));
+  const rows2 = await managerRows(m);
+  check(`${ctx.kind}: registry lists two rows, the new one active`,
+    rows2.length === 2 && rows2.filter((r) => r.active).length === 1 &&
+    rows2.some((r) => r.active && r.name === 'QA second'),
+    JSON.stringify(rows2.map((r) => [r.name, r.active])));
+  const second = ((await storage(m, 'savedSyncs')) ?? []).find((r) => r.syncId !== activeId);
+  const secondId = second?.syncId;
+  if (secondId) qaExtraIds.add(secondId);
+  await shot(ctx, m, 'manager-syncs-rows');
+
+  // Optional sync-change password: the rows become wrapped.
+  await setVal(m, '#m-link-lock-new', 'pin-qa');
+  await setVal(m, '#m-link-lock-confirm', 'pin-qa');
+  await click(m, '#m-btn-link-lock-set');
+  const lockSet = await waitFor(async () => {
+    if (await visible(m, '#switch-pw-error')) return `error: ${await text(m, '#switch-pw-error')}`;
+    return (await text(m, '#switch-pw-result')) || undefined;
+  }, 20000);
+  check(`${ctx.kind}: sync-change password set`,
+    typeof lockSet === 'string' && !lockSet.startsWith('error'), String(lockSet).slice(0, 100));
+  await shot(ctx, m, 'manager-syncs-lock');
+
+  // Popup: read-only list with Activate on the dormant row only.
+  await pop.reload({ waitUntil: 'load' });
+  await waitFor(() => visible(pop, '#view-main'), 15000);
+  const pRows = await waitFor(async () => {
+    const rows = await popupRows(pop);
+    return rows.length === 2 ? rows : undefined;
+  }, 15000);
+  check(`${ctx.kind}: popup lists both syncs, one tagged active`,
+    Array.isArray(pRows) && pRows.filter((r) => r.active).length === 1, JSON.stringify(pRows));
+  check(`${ctx.kind}: popup offers Activate only on the dormant row`,
+    Array.isArray(pRows) &&
+    pRows.filter((r) => !r.active).every((r) => r.actions.some((a) => a.includes('-act-'))) &&
+    pRows.filter((r) => r.active).every((r) => r.actions.length === 0), JSON.stringify(pRows));
+  await shot(ctx, pop, 'popup-saved-syncs');
+
+  // Regression: a closed <dialog> must not be laid out (an author `display`
+  // rule on .saved-dialog once left the activation form inline at the bottom).
+  check(`${ctx.kind}: the activation dialog is hidden until requested`,
+    !(await visible(pop, '#p-saved-dialog')) && !(await dialogOpen(pop, '#p-saved-dialog')));
+
+  const dormantBtn = await pop.evaluate(() =>
+    document.querySelector('#p-saved-list .saved-row:not(.saved-active) button')?.id ?? null);
+  await click(pop, `#${dormantBtn}`);
+  check(`${ctx.kind}: popup activation opens a modal`, await dialogOpen(pop, '#p-saved-dialog'));
+  check(`${ctx.kind}: the modal asks for the sync-change password`, await visible(pop, '#p-saved-password'));
+  await shot(ctx, pop, 'popup-activate-dialog');
+  await click(pop, '#p-saved-activate');
+  check(`${ctx.kind}: an empty switch password is rejected`, await visible(pop, '#p-saved-error'),
+    (await text(pop, '#p-saved-error')) ?? '');
+  await setVal(pop, '#p-saved-password', 'wrong-pin');
+  await click(pop, '#p-saved-activate');
+  const wrong = await waitFor(async () => (await text(pop, '#p-saved-error')) || undefined, 15000);
+  check(`${ctx.kind}: a wrong switch password is rejected and nothing switched`,
+    !!wrong && (await dialogOpen(pop, '#p-saved-dialog')), wrong ?? '');
+  await setVal(pop, '#p-saved-password', 'pin-qa');
+  await click(pop, '#p-saved-activate');
+  // Wait on the BACKGROUND state, not on the rendered card: the popup repaints
+  // when the switch lands, and a reload mid-switch would race the test.
+  const switched = await waitFor(async () => {
+    const info = await storage(pop, 'syncInfo');
+    return info?.id === secondId ? info.id : undefined;
+  }, 45000);
+  check(`${ctx.kind}: the right switch password activates the dormant sync`,
+    switched === secondId, `${switched} (wanted ${secondId}) / ${await text(pop, '#p-saved-error')}`);
+  await sleep(1500);
+  await shot(ctx, pop, 'popup-switched');
+
+  // Back to the QA sync. After the switch the dormant row is the original one.
+  await pop.reload({ waitUntil: 'load' });
+  await waitFor(async () => (await popupRows(pop)).length === 2, 15000);
+  const backBtn = await pop.evaluate(() =>
+    document.querySelector('#p-saved-list .saved-row:not(.saved-active) button')?.id ?? null);
+  await click(pop, `#${backBtn}`);
+  await setVal(pop, '#p-saved-password', 'pin-qa');
+  await click(pop, '#p-saved-activate');
+  const back = await waitFor(async () => {
+    const info = await storage(pop, 'syncInfo');
+    if (info?.id !== activeId) return undefined;
+    return `ok: ${await text(pop, '#p-sync-name')}`;
+  }, 45000);
+  check(`${ctx.kind}: switching back restores the original sync`,
+    String(back).startsWith('ok'), `${back} / ${await text(pop, '#p-saved-error')}`);
+  await sleep(2000);
+
+  // QR: the QA service runs on plain HTTP, which the payload refuses by design
+  // (the Android app re-validates the URL). The card must therefore say why
+  // instead of offering a button that can only fail. Payload building,
+  // rendering and the password gate are pinned by the unit suites
+  // (connect-qr*.test.ts, render-connect-qr.test.ts).
+  await section(m, 'status');
+  await m.bringToFront();
+  await sleep(300);
+  const qrCard = {
+    shown: await visible(m, '#connect-qr'),
+    disabled: await m.evaluate(() => document.querySelector('#qr-open').disabled),
+    // The reason must be visible on the card: the dialog cannot open while the
+    // button is disabled, so a reason hidden inside it would be unreadable.
+    reasonShown: await visible(m, '#qr-feedback'),
+    reason: await text(m, '#qr-feedback'),
+  };
+  check(`${ctx.kind}: the QR card explains a plain-HTTP service instead of failing on click`,
+    qrCard.shown && qrCard.disabled && qrCard.reasonShown && /HTTPS/.test(qrCard.reason ?? ''),
+    JSON.stringify(qrCard));
+  await shot(ctx, m, 'manager-status-qr-http');
+  await section(m, 'syncs');
+}
+
+/** The end of the multi-sync story: forget the extra row, unlink the active
+ *  sync, empty the registry, then come back with the same sync. Checks both
+ *  what the UI says and that the link really works again. */
+async function unlinkAndRelink(ctx, m, pop, activeId) {
+  const linked = async (p) => !!(await storage(p, 'syncEnabled'));
+  const syncIdNow = async (p) => (await storage(p, 'syncInfo'))?.id;
+  const exampleUrls = (p) => nativeUrls(p);
+
+  // 1. Forget the dormant row: the active link must not move. Force a fresh
+  //    render first (status → syncs) so the list cannot be a stale snapshot of
+  //    a link that changed elsewhere, and prove the row marked active is the
+  //    sync the background is really on.
+  await section(m, 'status');
+  await section(m, 'syncs');
+  const activeBefore = await syncIdNow(m);
+  const rowsBefore = await managerRows(m);
+  check(`${ctx.kind}: the sync list marks the sync the browser is really on`,
+    rowsBefore.length === 2 && rowsBefore.filter((r) => r.active).length === 1 &&
+    (rowsBefore.find((r) => r.active)?.sub ?? '').includes(String(activeBefore).slice(0, 8)),
+    JSON.stringify({ activeBefore, rows: rowsBefore.map((r) => [r.name, r.active, r.sub]) }));
+  const dormantRm = await m.evaluate(() =>
+    document.querySelector('#m-syncs-list .saved-row:not(.saved-active) button[id^="m-syncs-rm-"]')?.id ?? null);
+  await click(m, `#${dormantRm}`);
+  const rmAsked = await confirmYes(m, dormantRm);
+  check(`${ctx.kind}: removing a dormant row only forgets it`,
+    !/stops syncing/i.test(rmAsked ?? ''), rmAsked?.slice(0, 90));
+  const afterRm = await waitFor(async () => {
+    const rows = await managerRows(m);
+    return rows.length === 1 ? rows : undefined;
+  }, 15000);
+  check(`${ctx.kind}: removing a dormant row keeps the active link`,
+    !!afterRm && afterRm[0].active && (await syncIdNow(m)) === activeBefore,
+    JSON.stringify({ active: await syncIdNow(m), rows: afterRm?.map((r) => [r.name, r.active]) }));
+
+  // 2. Unlink the active sync: the row stays, the browser stops syncing.
+  await click(m, '#m-syncs-unlink');
+  const unlinkAsked = await confirmYes(m, 'm-syncs-unlink');
+  check(`${ctx.kind}: unlink asks first and says how to come back`,
+    /reconnect/i.test(unlinkAsked ?? '') && /sync ID/i.test(unlinkAsked ?? ''),
+    unlinkAsked?.slice(0, 120));
+  const off = await waitFor(async () => !(await linked(m)), 20000);
+  check(`${ctx.kind}: unlink stops syncing this browser`, off);
+  const doneText = await waitFor(async () => (await visible(m, '#m-syncs-result')) ? await text(m, '#m-syncs-result') : undefined, 10000);
+  check(`${ctx.kind}: unlink result says where to link again`,
+    !!doneText && /link again/i.test(doneText), doneText?.slice(0, 120));
+  const rowsOff = await managerRows(m);
+  check(`${ctx.kind}: the unlinked sync stays in the list as inactive`,
+    rowsOff.length === 1 && !rowsOff[0].active && rowsOff[0].actions.some((a) => a.startsWith('m-syncs-act-')),
+    JSON.stringify(rowsOff.map((r) => [r.name, r.active, r.actions])));
+  await section(m, 'status');
+  check(`${ctx.kind}: status says it is not connected and how to reconnect`,
+    (await visible(m, '#m-notlinked-hint')) && /popup/i.test((await text(m, '#m-notlinked-hint')) ?? ''),
+    (await text(m, '#m-notlinked-hint')) ?? 'missing');
+  check(`${ctx.kind}: sync now and refresh are disabled while unlinked`,
+    await m.evaluate(() => document.querySelector('#m-btn-sync-now').disabled &&
+      document.querySelector('#m-btn-refresh').disabled));
+  check(`${ctx.kind}: the QR card is not offered while unlinked`,
+    await m.evaluate(() => document.querySelector('#connect-qr').hidden));
+  await shot(ctx, m, 'manager-status-unlinked');
+
+  // 3. The popup lands on Connect and offers the saved sync back.
+  await pop.reload({ waitUntil: 'load' });
+  const popOff = await waitFor(() => visible(pop, '#view-connect'), 20000);
+  check(`${ctx.kind}: popup returns to the Connect view when unlinked`, popOff);
+  const popSaved = await waitFor(async () => (await visible(pop, '#c-saved-card')) ? true : undefined, 15000);
+  check(`${ctx.kind}: popup lists the inactive sync for one-click reconnect`, popSaved);
+  check(`${ctx.kind}: the server-removed card is NOT shown for an unlink`,
+    !(await visible(pop, '#p-removed')));
+  await shot(ctx, pop, 'popup-unlinked');
+
+  // 4. Reconnect from the popup with the sync-change password. The row that is
+  //    left is the one picked in step 1 (the second sync), not `activeId`
+  //    (that id belonged to the row forgotten above).
+  const popRowId = ((await storage(pop, 'savedSyncs')) ?? [])[0]?.syncId;
+  await click(pop, '#c-saved-list .saved-row button');
+  await setVal(pop, '#c-saved-password', 'pin-qa');
+  await click(pop, '#c-saved-activate');
+  const backId = await waitFor(async () => {
+    const now = await syncIdNow(pop);
+    return now === popRowId ? now : undefined;
+  }, 45000);
+  check(`${ctx.kind}: the inactive sync reconnects from the popup`,
+    !!backId && backId === popRowId,
+    JSON.stringify({ backId: backId ?? null, popRowId, activeId }));
+  check(`${ctx.kind}: the popup is back on the status view`,
+    await waitFor(() => visible(pop, '#view-main'), 20000));
+  await shot(ctx, pop, 'popup-reconnected');
+
+  // 5. Remove the last row: the registry must empty and the browser unlink.
+  await section(m, 'syncs');
+  const lastRm = await m.evaluate(() =>
+    document.querySelector('#m-syncs-list .saved-row.saved-active button[id^="m-syncs-rm-"]')?.id ?? null);
+  await click(m, `#${lastRm}`);
+  const removeAsked = await confirmYes(m, lastRm);
+  check(`${ctx.kind}: removing the active row warns that this browser stops syncing`,
+    /stops syncing/i.test(removeAsked ?? ''), removeAsked?.slice(0, 120));
+  const emptied = await waitFor(async () => (await managerRows(m)).length === 0, 20000);
+  check(`${ctx.kind}: the registry is empty after the last row is removed`, emptied);
+  check(`${ctx.kind}: an empty registry still explains how to start over`,
+    await visible(m, '#m-syncs-empty'));
+  check(`${ctx.kind}: an empty registry disables server-side actions`,
+    await m.evaluate(() => !document.querySelector('#m-syncs-list .saved-row')));
+  await shot(ctx, m, 'manager-syncs-empty');
+  await pop.reload({ waitUntil: 'load' });
+  const popEmpty = await waitFor(() => visible(pop, '#view-connect'), 20000);
+  check(`${ctx.kind}: popup has no sync list once the registry is empty`,
+    popEmpty && !(await visible(pop, '#c-saved-card')));
+
+  // 6. Come back with the same sync, from the manager, with the lock gate.
+  await section(m, 'syncs');
+  await click(m, '#m-btn-add-sync');
+  await click(m, 'input[name="m-link-mode"][value="existing"]');
+  const relinkForm = await m.evaluate(() => ({
+    form: !document.querySelector('#m-link-form').hidden,
+    mode: document.querySelector('input[name="m-link-mode"]:checked')?.value,
+    idRow: !document.querySelector('#m-link-id-row').hidden,
+    dirRow: !document.querySelector('#m-link-direction-row').hidden,
+    idVisible: !!document.querySelector('#m-link-id').offsetParent,
+  }));
+  check(`${ctx.kind}: relinking asks for the sync ID and a direction`,
+    relinkForm.form && relinkForm.mode === 'existing' && relinkForm.idRow &&
+    relinkForm.dirRow && relinkForm.idVisible, JSON.stringify(relinkForm));
+  await click(m, 'input[name="m-link-url-provider"][value="custom"]');
+  await setVal(m, '#m-link-url', SERVICE);
+  await click(m, '#m-link-url-check');
+  check(`${ctx.kind}: the add form verifies the service before it connects`,
+    await waitFor(() => m.evaluate(() => !document.querySelector('#m-btn-link-direct').disabled), 20000));
+  await setVal(m, '#m-link-id', activeId);
+  await setVal(m, '#m-link-name', 'Ritorno');
+  await setVal(m, '#m-link-password', PASSWORD);
+  check(`${ctx.kind}: the add form asks for the sync-change password while a lock is set`,
+    await visible(m, '#m-link-lock-pw-row'));
+  await setVal(m, '#m-link-lock-pw', 'pin-qa');
+  await shot(ctx, m, 'manager-relink-form');
+  await click(m, '#m-btn-link-direct');
+  const relinkAsked = await confirmYes(m, 'm-btn-link-direct');
+  check(`${ctx.kind}: relinking asks for the direction confirmation`, !!relinkAsked, relinkAsked?.slice(0, 90));
+  const relinked = await waitFor(async () => (await syncIdNow(m)) === activeId, 60000);
+  check(`${ctx.kind}: the first sync is linked again`, relinked);
+  const rowsBack = await waitFor(async () => {
+    const rows = await managerRows(m);
+    return rows.length === 1 && rows[0].active ? rows : undefined;
+  }, 20000);
+  check(`${ctx.kind}: the registry shows the relinked sync as active`,
+    !!rowsBack && rowsBack[0].name === 'Ritorno', JSON.stringify(rowsBack?.map((r) => [r.name, r.active])));
+  const urlsBack = await waitFor(async () => {
+    const urls = await exampleUrls(m);
+    return urls.includes('https://ff-edit.example/') ? urls.sort() : undefined;
+  }, 30000);
+  check(`${ctx.kind}: relinking pulls the server tree back into the browser`,
+    !!urlsBack, JSON.stringify(urlsBack ?? []));
+  await sleep(1500);
+  await shot(ctx, m, 'manager-syncs-relinked');
+}
+
 // ---------------------------------------------------------------- run
 let qaSyncId;
+const qaExtraIds = new Set();
 const ff = await launchFirefox();
 const cr = await launchChromium();
 try {
@@ -409,23 +747,46 @@ try {
   await shot(cr, crPop, 'popup-final');
   await crPop.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await shot(cr, crPop, 'popup-final-dark');
+  await crPop.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 
-  // 8. Cleanup: delete the QA sync from the server (v1.2) via the manager.
-  await section(crM2, 'status');
-  const delEnabled = await crM2.evaluate(() => !document.querySelector('#m-btn-delete-remote').disabled);
-  check('chromium: server delete enabled on v1.2', delEnabled);
-  if (delEnabled) {
-    await click(crM2, '#m-btn-delete-remote');
-    const first = await confirmYes(crM2, 'm-btn-delete-remote');
-    check('chromium: server delete states the implication', /other devices/.test(first ?? ''), first?.slice(0, 90));
-    const second = await confirmYes(crM2, 'm-btn-delete-remote');
-    await waitFor(async () => (await head(id)).status === 401, 15000);
-    check('chromium: server delete (double confirm) removed the QA sync', !!second && (await head(id)).status === 401);
+  // 8. Multi-sync UX with the two browsers still on the same sync: second
+  //    sync from the manager, switch password, popup activation, QR.
+  await multiSync(cr, crM2, crPop, id);
+
+  // 9. Unlink the active sync, empty the registry, then link the same sync
+  //    again from scratch: the "no syncs left" case must stay recoverable.
+  await unlinkAndRelink(cr, crM2, crPop, id);
+
+  // 10. Cleanup: delete the QA sync from the server (v1.2) from its own row.
+  await section(crM2, 'syncs');
+  const activeId = (await storage(crM2, 'syncInfo'))?.id;
+  check('chromium: the relinked sync is the active one', activeId === id, `${activeId} vs ${id}`);
+  const delId = await crM2.evaluate(() =>
+    document.querySelector('#m-syncs-list .saved-row.saved-active button[data-action="delete"]')?.id ?? null);
+  check('chromium: server delete offered on the active row', !!delId, String(delId));
+  if (delId) {
+    await click(crM2, `#${delId}`);
+    const asked = await confirmYes(crM2, delId);
+    check('chromium: server delete states the implication', /other devices/.test(asked ?? ''), asked?.slice(0, 90));
+    const done = await waitFor(async () => {
+      if (await visible(crM2, '#m-syncs-error')) return `error: ${await text(crM2, '#m-syncs-error')}`;
+      const shown = await visible(crM2, '#m-syncs-result') ? await text(crM2, '#m-syncs-result') : null;
+      return shown?.startsWith('Sync deleted from the server') ? shown : undefined;
+    }, 30000);
+    const gone = await waitFor(async () => (await head(id)).status === 401, 20000);
+    check('chromium: server delete removed the QA sync',
+      String(done).startsWith('Sync deleted from the server') && !!gone,
+      `${String(done).slice(0, 70)} | head ${(await head(id)).status} | linked ${(await storage(crM2, 'syncInfo'))?.id} | active ${activeId}`);
   }
 } catch (e) {
   check('script', false, e.stack);
 } finally {
   // Never leave QA syncs behind on the operator's service.
+  for (const extra of qaExtraIds) {
+    if ((await head(extra)).status === 200) {
+      await fetch(`${SERVICE}/bookmarks/${extra}`, { method: 'DELETE', headers: { 'Accept-Version': '1.2.0' } });
+    }
+  }
   if (qaSyncId && (await head(qaSyncId)).status === 200) {
     await fetch(`${SERVICE}/bookmarks/${qaSyncId}`, { method: 'DELETE', headers: { 'Accept-Version': '1.2.0' } });
   }
@@ -433,6 +794,20 @@ try {
   const pass = results.filter((r) => r.ok).length;
   console.log(`\n=== QA: ${pass}/${results.length} passed ===`);
   fs.writeFileSync(path.join(SHOTS, 'results.json'), JSON.stringify(results, null, 2));
+  const trail = [];
+  const seen = new Set();
+  for (const { key, page } of tracked) {
+    const entries = await page.evaluate(() => globalThis.__qaStorageLog ?? []).catch(() => []);
+    // Every open page records the same broadcast: keep the first occurrence.
+    for (const entry of entries) {
+      const fingerprint = JSON.stringify([entry.at, entry.keys, entry.syncInfo, entry.enabled, entry.saved]);
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      trail.push({ tab: key, ...entry });
+    }
+  }
+  trail.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  fs.writeFileSync(path.join(SHOTS, 'storage-log.json'), JSON.stringify(trail, null, 2));
   console.log(`screenshots + results.json in ${path.relative(ROOT, SHOTS) || SHOTS}`);
   await ff.browser.close().catch(() => undefined);
   await cr.browser.close().catch(() => undefined);
