@@ -274,10 +274,11 @@ export class BackgroundCore {
       case MessageCommand.RestoreBookmarks:
         return this.queueSync('localAndRemote', msg.bookmarks);
       case MessageCommand.ConnectNew:
-        return this.connectNew(msg.serviceUrl, msg.password, msg.switchPassword);
+        return this.connectNew(msg.serviceUrl, msg.password, msg.switchPassword, msg.label);
       case MessageCommand.ConnectExisting:
         return this.connectExisting(msg.serviceUrl, msg.syncId, msg.password, msg.direction, {
           switchPassword: msg.switchPassword,
+          ...(msg.label !== undefined ? { label: msg.label } : {}),
         });
       case MessageCommand.AddBookmark:
         return this.addBookmark(msg);

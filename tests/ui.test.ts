@@ -288,23 +288,23 @@ describe('describeLinkResult', () => {
   it('names mode, direction and target in all four outcomes', () => {
     expect(
       describeLinkResult({ mode: 'new', direction: 'push', newServiceUrl: 'https://n.test/' }),
-    ).toBe('Move complete — created a new sync on https://n.test/ and uploaded your bookmarks.');
+    ).toBe('Linked — created a new sync on https://n.test/ and uploaded your bookmarks.');
     expect(
       describeLinkResult({ mode: 'existing', direction: 'push', newServiceUrl: 'https://n.test/', syncId: 's1' }),
-    ).toBe('Move complete — overwrote the remote sync s1 on https://n.test/ with your local bookmarks.');
+    ).toBe('Linked — overwrote the remote sync s1 on https://n.test/ with your local bookmarks.');
     expect(
       describeLinkResult({ mode: 'existing', direction: 'merge', newServiceUrl: 'https://n.test/', syncId: 's1' }),
     ).toBe(
-      'Move complete — merged your local bookmarks with the remote sync s1 on https://n.test/ (nothing deleted).',
+      'Linked — merged your local bookmarks with the remote sync s1 on https://n.test/ (nothing deleted).',
     );
     expect(
       describeLinkResult({ mode: 'existing', direction: 'pull', newServiceUrl: 'https://n.test/', syncId: 's1' }),
-    ).toBe('Move complete — replaced your local bookmarks with the remote sync s1 from https://n.test/.');
+    ).toBe('Linked — replaced your local bookmarks with the remote sync s1 from https://n.test/.');
   });
   it('states the uploaded count when known', () => {
     expect(
       describeLinkResult({ mode: 'new', direction: 'push', newServiceUrl: 'https://n.test/', bookmarkCount: 2088 }),
-    ).toBe('Move complete — created a new sync on https://n.test/ and uploaded 2088 bookmarks.');
+    ).toBe('Linked — created a new sync on https://n.test/ and uploaded 2088 bookmarks.');
   });
 });
 

@@ -18,7 +18,10 @@ Both apps use the same words for the same things. Keep this file identical in
 | **Upload** | Replace the server copy with the bookmarks on this device | Upload local, Upload mine, Overwrite remote, Push |
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
-| Move service / Move to another service | Wizard that moves the sync to another service (button: Move and connect, result: Move complete) | Switch service |
+| Add a sync (`+ Add new sync`) | Link this browser to a new or existing sync; while another sync is active this browser switches to it and the old one stays in the list (final button: `Connect`, result: `Sync linked`) | Move service, Move to another service, Switch service |
+| Activate | Make an inactive saved sync the active one; this browser's bookmarks become its copy | Open, Load |
+| Inactive | A saved sync this browser is not using right now | dormant, sleeping, idle |
+| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs; it is not the sync's own password | master password, sync password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
@@ -29,7 +32,7 @@ Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in 
 Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
-`Downloaded server copy — Move service`, `Merged both sides — Move service`, … (see code tables).
+`Downloaded server copy — Sync switch`, `Merged both sides — Sync switch`, … (see code tables).
 
 ## Translations (it / fr / es / de / ja / pt-BR / ru / zh)
 
@@ -57,7 +60,10 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Upload | Carica | Envoyer | Subir | Hochladen |
 | Merge | Unisci | Fusionner | Combinar | Zusammenführen |
 | Sync conflict | Conflitto di sincronizzazione | Conflit de synchronisation | Conflicto de sincronización | Synchronisierungskonflikt |
-| Move service | Cambia servizio | Changer de service | Cambiar de servicio | Dienst wechseln |
+| Add a sync | Aggiungi un sync | Ajouter un sync | Añadir un sync | Sync hinzufügen |
+| Activate | Attiva | Activer | Activar | Aktivieren |
+| Inactive | Inattivo | Inactif | Inactivo | Inaktiv |
+| Sync-change password | password di cambio sync | mot de passe de changement de sync | contraseña de cambio de sync | Sync-Wechselpasswort |
 | Backup | Backup | Sauvegarde | Copia de seguridad | Sicherung |
 | Safety backups | Backup di sicurezza | Sauvegardes de sécurité | Copias de seguridad preventivas | Sicherheitskopien |
 | Export / Restore | Esporta / Ripristina | Exporter / Restaurer | Exportar / Restaurar | Exportieren / Wiederherstellen |
@@ -94,7 +100,10 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Upload | アップロード | Enviar | Отправить | 上传 |
 | Merge | 統合 | Mesclar | Объединить | 合并 |
 | Sync conflict | 同期の競合 | Conflito de sincronização | Конфликт синхронизации | 同步冲突 |
-| Move service | サービスの移行 | Mudar de serviço | Сменить сервис | 迁移服务 |
+| Add a sync | 同期を追加 | Adicionar sync | Добавить синхронизацию | 添加同步 |
+| Activate | 有効化 | Ativar | Активировать | 启用 |
+| Inactive | 停止中 | Inativo | Неактивен | 未启用 |
+| Sync-change password | 同期切り替えパスワード | senha de troca de sync | пароль переключения | 同步切换密码 |
 | Backup | バックアップ | Backup | Резервная копия | 备份 |
 | Safety backups | 安全バックアップ | Backups de segurança | Страховочные копии | 安全备份 |
 | Undo | 元に戻す | Desfazer | Отменить | 撤销 |

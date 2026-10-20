@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildConnectQrPayload, serializeConnectQrPayload } from '../src/shared/connect-qr';
 import { isConnectQrSender } from '../src/background/connect-qr-sender';
+import { t } from '../src/shared/i18n';
 
 const input = {
   serviceUrl: 'https://sync.example.test:8443/prefix',
@@ -47,6 +48,16 @@ describe('connect QR contract', () => {
     expect(new TextEncoder().encode(serializeConnectQrPayload(boundary))).toHaveLength(1800);
     expect(() => buildConnectQrPayload({ ...input, password: 'x'.repeat(1801 - overhead) })).toThrow();
     expect(() => buildConnectQrPayload({ ...input, password: '日'.repeat(600) })).toThrow();
+  });
+
+  it('names the HTTPS requirement instead of the generic incomplete-info error', () => {
+    // The user-facing copy differs: an http service is a fixable setup issue,
+    // a missing version/id is not.
+    for (const serviceUrl of ['http://sync.example.test', 'http://sync.example.test:8090/']) {
+      expect(() => buildConnectQrPayload({ ...input, serviceUrl })).toThrow(t('qr.httpsRequired'));
+    }
+    expect(() => buildConnectQrPayload({ ...input, version: '2.0.0' })).toThrow(t('err.syncInfoIncomplete'));
+    expect(() => buildConnectQrPayload({ ...input, id: 'a/b' })).toThrow(t('err.syncInfoIncomplete'));
   });
 
   it('rejects empty passwords without including their content in errors', () => {

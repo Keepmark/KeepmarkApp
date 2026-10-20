@@ -46,7 +46,7 @@ npm run build:chromium
 npm run package       # zips -> dist/ (system `zip`, else python3 fallback)
 npm run qa            # static QA: ids, SW-safety, manifests, no HTML-injection
                       # sinks, addons-linter (0 errors, no UNSAFE_* warnings)
-npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (52 checks, see SPEC §11.3)
+npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, see SPEC §11.3)
 ```
 
 No env vars, no DB, no devices needed. Node v22, npm 12 (see `.nvmrc` — none;
@@ -117,10 +117,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   the modal activation step (sync-change password only when one is set).
   Rename/remove/add/delete live in the manager.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
-  (Status, Backup, Duplicates, Move, Logs, Settings), each section with its
-  own contextual busy/error/result evidence; move wizard has a read-only
-  `SwitchPreview` preflight before confirm; the Sync section owns the saved
-  registry (rows + `+ Add new sync` form + optional sync-change password).
+  (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
+  its own contextual busy/error/result evidence; the add-sync wizard has a
+  read-only `SwitchPreview` preflight before confirm; the Sync section owns the
+  saved registry (rows + `+ Add new sync` form + optional sync-change password).
 
 ### Build
 
@@ -214,8 +214,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - Error evidence belongs to the step that produced it: in top-down wizards
   and multi-action sections, each action cluster gets its own adjacent error
   box (`<base>-error`, `<base>-error-2`, …) instead of one top-of-section box
-  the user must scroll to find. E.g. move wizard step 1 → `move-error`,
-  step 2 submit → `move-error-2`; backup export → `backup-error`, restore
+  the user must scroll to find. E.g. add-sync wizard step 1 → `link-error`,
+  step 2 submit → `link-error-2`; backup export → `backup-error`, restore
   from file → `backup-error-2`, safety list actions → `backup-error-3`;
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`;
   popup removed-sync card → `removed-error`.
@@ -246,8 +246,8 @@ Web Store flags `host_permissions https://*/*` as "broad host permissions"
 (in-depth review, slower on every update). Plan: keep only the default
 service in `host_permissions`, move `https://*/*` to
 `optional_host_permissions`, call `chrome.permissions.request({origins})`
-from the popup/manager (user gesture) on connect and on move service; test
-connect + move flows (unit + `qa:browser`). First check whether CORS alone
+from the popup/manager (user gesture) on connect and when adding a sync; test
+connect + add flows (unit + `qa:browser`). First check whether CORS alone
 already lets the MV3 worker reach the service without any host grant.
 
 **Known limitations / next features (not started):** manual browser QA
@@ -281,7 +281,10 @@ add-or-activate).
 bytes maximum); `manager/connect-qr.ts` owns the native modal dialog, canvas
 lifetime and generation guards. Status shows the Android card (“Connect Keepmark
 on your phone”); its “Show connection QR” button opens the dialog and is hidden
-while it is open. Password verification and QR share
+while it is open; the whole card is hidden while this browser is unlinked and its
+button is disabled (with the reason on the card) for a plain-HTTP service, which
+the payload refuses with the dedicated `qr.httpsRequired` message. Password
+verification and QR share
 the focused dialog; backdrop click, Escape and focus loss close and clear it. `PrepareConnectQr` is manager-only (sender gate in background wiring),
 verifies the current password locally and decrypts one remote GET without
 mutating sync state. qrcode 1.5.4 is imported only by `manager/render-connect-qr.ts` (local Keepmark logo, adaptive H/Q/M correction). The QR carries

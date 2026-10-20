@@ -32,15 +32,15 @@ Goals:
 
 - G1. Sync the user's full bookmark tree against any compatible service with
   zero silent data loss (never auto-merge, never drop silently).
-- G2. Management UI (status, connection, space, backup, duplicates, move,
-  logs, settings), not bookmark browsing.
+- G2. Management UI (status, connection, space, backup, duplicates, saved
+  syncs, logs, settings), not bookmark browsing.
 - G3. Same end-to-end encryption as the official xBrowserSync clients (password is never sent to the service; QR linking explicitly transfers it to Android).
 - G4. Behavioral parity between Firefox and Chromium builds.
 
 Non-goals (explicitly out of scope, must NOT be "found missing"):
 
-- Bookmark browsing/search UI, multi-account, auto-backup schedule,
-  QR connect (only `QrDelimiter` constant reserved), telemetry.
+- Bookmark browsing/search UI, auto-backup schedule, connecting by scanning a
+  QR (showing one, for the Android app, is in scope), telemetry.
 
 ## 2. Stack, layout, commands
 
@@ -324,7 +324,7 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   undo `switch-pull` → overwrite natives. Existing-push: undo only after PUT
   lands (`switch-push`). UI: destination and credentials are entered together; `Continue`
   verifies the target and, in existing mode, decrypts its copy read-only.
-  The verified review shows consequences and merge counts. `Move and connect`
+  The verified review shows consequences and merge counts. `Connect`
   executes directly, without another confirmation. Changed inputs invalidate
   verification; the sync-ID field appears only in existing mode. Success shows
   the new sync ID with Copy and instructions for the other devices.
@@ -388,7 +388,7 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 
 Surfaces: popup (`src/popup.html`, connect + status + sync now + manager
 link + undo banner; `?fullpage=1` tab mode for vault copying) and manager
-(`src/manager.html`: Status, Backup, Duplicates, Move, Logs, Settings,
+(`src/manager.html`: Status, Backup, Duplicates, Sync, Logs, Settings,
 About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 
 - Each manager section owns contextual busy/error/result evidence; stale
@@ -414,8 +414,10 @@ About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 - Delete guard is checked BEFORE `withBusy` (the wrapper disables while
   running — an inner check self-triggers and mutes the click); gate
   re-asserted AFTER `withBusy` (restores pre-click state last).
-- Move wizard: preview-locked submit, gate hint visible exactly while locked,
-  result cleared on input change, new-ID + Copy on success.
+- Add-sync wizard (Sync section): preview-locked submit, gate hint visible
+  exactly while locked, result cleared on input change, new-ID + Copy on
+  success; the saved-sync rows carry Rename / Activate / Unlink / Remove and
+  `Delete from server…` on the active one.
 - `[hidden] { display: none !important; }` in both CSS files (author display
   rules otherwise override UA hiding and leak wizard rows).
 - Confirm texts: unlink and delete come from `src/popup/texts.ts` (inline
@@ -520,7 +522,11 @@ white-mark in-page chip.
   `DAILY_NEW_SYNCS_LIMIT`). Covers connect new/existing, native auto-push,
   every manager section, a real two-browser conflict (merge in Firefox), MV3
   service-worker stop + persisted conflict + take remote, convergence, server
-  delete, log redaction (no full sync ID / password), dark-mode screenshots.
+  delete, log redaction (no full sync ID / password), dark-mode screenshots,
+  and the multi-sync story in both clients: two saved syncs, activation with and
+  without the sync-change password, removing a dormant row, unlink and
+  relink from the popup, and the QR card explaining a plain-HTTP service
+  instead of failing on click.
   Throwaway profiles, generated password, the QA sync is deleted at the end;
   screenshots + `results.json` in `build/qa/`. Exit 0 only when all checks
   pass (2 = preflight: browsers/build/service missing). Not covered (still
@@ -536,7 +542,7 @@ white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 52/52 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no multi-account/auto-backup/QR; toolbar toggle +
+Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no auto-backup schedule and no QR scanning in the browser (the browser only shows a QR for the Android app); toolbar toggle +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
 assuming state.

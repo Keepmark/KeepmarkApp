@@ -38,7 +38,7 @@ npm run build:chromium
 npm run package       # zips -> dist/ (needs system `zip` or python3, else fails)
 npm run qa            # static QA: ids, SW-safety, manifests, no HTML-injection
                       # sinks, addons-linter (0 errors, no UNSAFE_* warnings)
-npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (52 checks, see SPEC §11.3)
+npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, see SPEC §11.3)
 ```
 
 ## Layout
@@ -58,13 +58,14 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (52 checks, 
   all message handlers), `adapter.ts` (NativeAdapter interface),
   `background.ts` (browser wiring; `@platform/adapter` alias per build).
 - `src/popup/` — small popup: connect (new / existing pull-push-merge),
-  status card + sync now + undo banner + open manager. Display only;
-  mutations via messages.
+  status card + read-only saved-sync list (activation dialog) + sync now +
+  undo banner + open manager. Display only; mutations via messages.
 - `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
   (export, import preview and direct restore, safety list/restore/delete),
-  Duplicates (scan, single + bulk delete), Move (wizard with target +
-  merge preview), Logs, Settings (toolbar toggle via background, password
-  change), About.
+  Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
+  Rename/Activate/Unlink/Remove/Delete from server, `+ Add new sync` wizard
+  with target + merge preview, optional sync-change password), Logs, Settings
+  (toolbar toggle via background, password change), About.
 - `src/popup.html`, `src/background.html` — vite entries (land at output root).
 - `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
 - `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.
@@ -104,7 +105,7 @@ side while offline reappear — the preview says so.
   `mergeTrees` serves the `PreviewMerge` dry-run and the confirmed flows.
 - Preview shows local-only / remote-only / title-conflicts /
   folders-created / separators-adopted before anything mutates; both flows
-  confirm per-counts (popup dialog, move wizard check + confirm).
+  confirm per-counts (popup dialog, add-sync wizard check + confirm).
 - Fail-closed safety snapshots of BOTH sides (`merge-local`,
   `merge-remote`), undo kinds `connect-merge` / `switch-merge`, PUT on the
   remote base (revision CAS or timestamp; 409 honest).
@@ -179,11 +180,20 @@ button is hidden while the dialog is open; backdrop clicks, Escape and focus los
 close it and clear transient state. The dialog gives instructions for Keepmark for Android. Verification
 checks the current password against the derived key and the live remote
 encrypted blob. No sync mutation or capability probe runs.
+The card itself is hidden while this browser is unlinked (an inert card only
+pushes the “not connected” hint down) and, when the active service is plain HTTP
+— which the payload refuses — it stays visible with the button disabled and
+`qr.httpsRequired` in place of the destination, so the reason is on screen
+instead of hidden behind a failed attempt.
 The manager-only command returns exactly `{app:"Keepmark",format:1,
 serviceType:"xbrowsersync",serviceUrl,id,version,password}`. The numeric dotted
 version is the sync data format; ID is ASCII `[A-Za-z0-9_-]{1,128}`. Payloads
 are limited to 1800 UTF-8 bytes; HTTPS service URL must have no credentials,
 query, fragment, whitespace or backslash. Password text is preserved literally.
+The payload builder throws `qr.httpsRequired` for a non-HTTPS (or unsafe) URL and
+`err.syncInfoIncomplete` for a structural failure, so the dialog can name the
+actionable one; `qr.busy` covers a verification attempted while a link/sync
+operation is still running.
 
 qrcode 1.5.4 renders a black-on-white canvas locally (M correction, quiet zone
 4). Generation guards discard late verification/render results. Close, Escape,

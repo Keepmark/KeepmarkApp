@@ -7,12 +7,12 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 
 ## Rules that apply to every workflow
 
-1. **Gating first.** A workflow that needs a linked sync (Move service, Change
+1. **Gating first.** A workflow that needs a linked sync (Add a sync, Change
    password, Backup import, Unlink, Delete sync) shows, when the device is not
    linked, one notice with a link to Connect and disables its action. The user
    never learns about a missing link from an error after submit.
 2. **One informed confirmation.** Show the consequences before the final action,
-   whose button names what will happen. In Move service and Backup import, the
+   whose button names what will happen. In Add a sync and Backup import, the
    verified review is the confirmation: its final button executes immediately.
    Android Connect and conflict resolution show consequences beside the chosen
    direction and apply directly. The extension uses one inline confirmation
@@ -23,7 +23,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
    are, in this order: `Keep the server copy` (Download), `Merge both`,
    `Keep this device's copy` (Upload; "this browser's copy" in the extension).
    One function builds the confirmation text for a direction and is used by
-   Connect, Move service and Sync conflict.
+   Connect, Add a sync and Sync conflict.
 4. **Password rule.** Any password the user invents is at least 8 characters and
    is typed twice. A password the user enters to open something existing is typed
    once and has no length rule. Messages: `Use a password of at least 8
@@ -44,7 +44,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 |---|---|---|---|---|
 | Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
-| Move service | yes | Destination, new/existing sync and credentials → `Continue` (verifies, no writes) → direction and review → `Move and connect` | Review is the only confirmation; final button executes | The old sync stays available. Other devices keep using it until moved. Save the new sync ID and password. |
+| Add a sync (manager → Sync → `+ Add new sync`) | yes | Destination, new/existing sync and credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The old sync stays available. Other devices keep using it until moved. Save the new sync ID and password. |
 | Change password | yes | Current, New, Confirm new → `Change password` | always | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. |
 | Backup: export | no | Backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
@@ -61,7 +61,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 
 ## Step and button visibility
 
-- Move service has two phases: destination and credentials, then verified review.
+- Add a sync (Sync section) has two phases: destination and credentials, then verified review.
   Changing target inputs invalidates the review; changing direction updates it. Android
   Connect verifies credentials before showing reconciliation choices; the extension
   popup verifies during submission. Android merge previews run automatically when
@@ -188,7 +188,7 @@ host.
   sent to the service. Display ends after 60 seconds, close, Escape, navigation,
   hidden, blur or pagehide; returning never restores it. A captured copy remains
   reusable: this is a display timeout, not credential expiry.
-- Android Connect → Existing sync and Move service → existing target offer a
+- Android Connect → Existing sync and Add a sync → existing target offer a
   QR icon button before manual service/ID/password entry. Scan QR requests camera
   permission only after the user chooses scanning. First scan stops the camera.
   Validation is local; the service and abbreviated ID are shown before any
@@ -201,7 +201,7 @@ host.
 - Explicit Link reuses the manual verification and reconciliation path.
   Direction consequences, one final action, preview locks and safety backups remain
   required. Verification failure drops the QR password and requires rescanning;
-  manual entry remains available. Already-linked devices scan within Move service
+  manual entry remains available. Already-linked devices scan within Add a sync
   and retain its verification/review gates.
 
 

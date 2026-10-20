@@ -17,6 +17,9 @@ export class ConnectQrController {
   private timer: ReturnType<typeof setInterval> | undefined;
   private deadline = 0;
   private identity = '';
+  /** The payload only accepts an https service URL: a plain-http link (self
+   *  hosted on the LAN) gets the card disabled with the reason spelled out. */
+  private httpsOk = false;
   private busy = false;
   private canvas: HTMLCanvasElement | undefined;
   private readonly deps: QrDependencies;
@@ -89,10 +92,30 @@ export class ConnectQrController {
       ? `${status.serviceUrl}\n${status.syncId}` : '';
     if (identity !== this.identity) this.close();
     this.identity = identity;
-    this.root.hidden = false;
+    this.httpsOk = /^https:\/\//i.test(status?.serviceUrl ?? '');
+    // Nothing to link while the browser is unlinked: an inert card would only
+    // push the "how to connect" hint further down the status section.
+    this.root.hidden = !identity;
     const destination = this.root.querySelector('#qr-destination');
-    if (destination) destination.textContent = identity ? `${status!.serviceUrl} · ${status!.syncId!.slice(0, 8)}…` : t('qr.unlinked');
-    this.open.disabled = !identity || this.busy;
+    if (destination) {
+      destination.textContent = identity
+        ? (this.httpsOk ? `${status!.serviceUrl} · ${status!.syncId!.slice(0, 8)}…` : t('qr.httpsRequired'))
+        : '';
+    }
+    this.open.disabled = !this.canPrepare();
+    this.announce(this.standingMessage());
+  }
+
+  /** The payload refuses plain HTTP (Keepmark for Android will not consume it
+   *  either): the button stays disabled and the card itself says why. */
+  private canPrepare(): boolean {
+    return !!this.identity && this.httpsOk && !this.busy;
+  }
+
+  /** Reason spelled out on the card while the dialog is closed ('' when the
+   *  card is usable), so a disabled button is never a dead end. */
+  private standingMessage(): string {
+    return this.identity && !this.httpsOk ? t('qr.httpsRequired') : '';
   }
 
   close(restoreFocus = false): void {
@@ -102,7 +125,7 @@ export class ConnectQrController {
     this.timer = undefined;
     this.deadline = 0;
     this.busy = false;
-    this.open.disabled = !this.identity;
+    this.open.disabled = !this.canPrepare();
     this.generate.disabled = false;
     this.setBusy(false);
     this.input.removeAttribute('aria-invalid');
@@ -116,7 +139,7 @@ export class ConnectQrController {
     if (this.canvas) this.erase(this.canvas);
     this.canvas = undefined;
     this.output.replaceChildren();
-    this.announce(wasOpen ? t('qr.hidden') : '');
+    this.announce(wasOpen ? t('qr.hidden') : this.standingMessage());
     if (restoreFocus && !this.root.hidden && this.deps.focused()) this.open.focus();
   }
 
@@ -191,7 +214,10 @@ export class ConnectQrController {
         this.input.removeAttribute('aria-invalid');
         if (wrongPassword) this.input.setAttribute('aria-invalid', 'true');
         this.error.textContent = wrongPassword ? t('core.currentPwWrong')
-          : error instanceof Error && error.message === t('qr.tooLarge') ? t('qr.tooLarge') : t('qr.error');
+          : error instanceof Error && error.message === t('qr.tooLarge') ? t('qr.tooLarge')
+          : error instanceof Error && error.message === t('qr.httpsRequired') ? t('qr.httpsRequired')
+          : error instanceof Error && error.message === t('core.connectBusy') ? t('qr.busy')
+          : t('qr.error');
         this.error.hidden = false;
         this.input.disabled = false;
         this.input.focus();

@@ -61,17 +61,17 @@
     <label><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
     </label>
-    <div id="conn-switch-locked" hidden>
-      <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
-        <input id="conn-switch-password" type="password" autocomplete="off" />
-      </label>
-      <p class="hint" data-i18n="popup.saved.connectSwitchHint">Required to add another sync: it unlocks the saved list.</p>
-    </div>
     <div id="conn-new-only">
       <label><span data-i18n="common.confirmPassword">Confirm password</span>
         <input id="confirm-password" type="password" autocomplete="new-password" />
       </label>
       <p class="hint" data-i18n="popup.connect.passwordHint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
+    </div>
+    <div id="conn-switch-locked" hidden>
+      <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+        <input id="conn-switch-password" type="password" autocomplete="off" />
+      </label>
+      <p class="hint" data-i18n="popup.saved.connectSwitchHint">Required to add another sync: it unlocks the saved list.</p>
     </div>
     <div id="conn-existing-direction" hidden>
       <fieldset class="options" role="radiogroup" aria-label="Link direction" data-i18n-aria-label="popup.connect.directionLabel">

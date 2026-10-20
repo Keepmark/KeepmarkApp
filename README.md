@@ -59,7 +59,8 @@ Keepmark opens there, and the other way round. Nothing to migrate.
 | **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
 | **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
-| **Move service** | Move your bookmarks to another service, into a new or existing sync, with one reviewed confirmation |
+| **Syncs** | Several syncs saved side by side, one active at a time: switch with the optional sync-change password, rename, unlink (link it again later with its sync ID and password), delete from the server |
+| **Add a sync** | Move your bookmarks to another service, into a new or existing sync, with one reviewed confirmation |
 | **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |
 
@@ -82,8 +83,8 @@ hands the credentials over in one scan, without typing them anywhere:
 The QR carries the service, the sync ID and the password in readable form, so
 show it only to your own device: nothing is stored for it, it disappears after
 60 seconds or when the manager loses focus, and a captured copy stays usable —
-treat it like the password itself. Manual linking remains available, and in
-**Move service** the same QR button sits before the manual target credentials.
+treat it like the password itself. Manual linking remains available, and in the manager's **Sync → + Add new sync**
+wizard the same QR button sits before the manual target credentials.
 
 ## Screenshots
 

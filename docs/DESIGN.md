@@ -25,9 +25,9 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 `--on-accent`, `--accent-hover`.
 
 - `color-scheme: light dark`, `font: system-ui`, no framework, no webfonts.
-- Brand: `.brand-chip` (white mark `assets/brand-mark.png`; on the popup's
-  `--brand` header it is a translucent white tile, in the manager a `--brand` tile,
-  18px popup / 22px manager). Toolbar/manifest icons come from
+- Brand: `.brand-mark` (white ribbon `assets/brand-ribbon.svg` hanging from the
+  top edge of the band, 23×40px + drop shadow) in the popup's `--brand` header
+  and in the manager's `--brand` sidebar band. Toolbar/manifest icons come from
   `../KeepmarkMobile/brand/src/build.py --install`; never recolor by hand.
 - Popup components: navy `header` band with `#sync-state` as a pill;
   `.seg`/`.seg-opt` segmented control over the native `conn-mode` radios;
@@ -35,15 +35,20 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
   text switched by CSS `:has()`; `button.primary` for the main action of a view.
 - `[hidden] { display: none !important; }` is mandatory in every page CSS:
   author `display` rules (`label`, `.row`) override UA `[hidden]` otherwise
-  and wizard rows leak into view.
+  and wizard rows leak into view. Same trap for native `<dialog>`: an author
+  `display` rule (`.saved-dialog { display: grid }`) also overrides the UA
+  `dialog:not([open]) { display: none }`, so either keep the element hidden
+  until `showModal()` or add `.x:not([open]) { display: none }`.
 
 ## 2. Layout
 
 - Popup: 360px box (`body.fullpage` → centered 560px column for
   `popup.html?fullpage=1`, used while copying from a vault).
-- Manager: `.layout` flex, 200px sticky `#sidebar`, `main` max 720px.
+- Manager: `.layout` flex, 216px sticky `#sidebar`, `main` max 760px
+  (24px/32px padding).
   Sidebar buttons toggle `.active` + `aria-current="page"`; section switch
-  moves focus to the new `h2` (`tabindex=-1`).
+  moves focus to the new `h2` (`tabindex=-1`). The sidebar sections are Status,
+  Backup, Duplicates, Sync, Logs, Settings, About.
 
 ## 3. Components (class names are the contract)
 

@@ -14,7 +14,7 @@
       <button data-section="status" class="active" data-i18n="manager.nav.status">Status</button>
       <button data-section="backup" data-i18n="manager.nav.backup">Backup</button>
       <button data-section="duplicates"><span data-i18n="manager.nav.duplicates">Duplicates</span> <span id="nav-dup-count"></span></button>
-      <button data-section="syncs" data-i18n="manager.nav.syncs">Move service</button>
+      <button data-section="syncs" data-i18n="manager.nav.syncs">Sync</button>
       <button data-section="logs" data-i18n="manager.nav.logs">Logs</button>
       <button data-section="settings" data-i18n="manager.nav.settings">Settings</button>
       <button data-section="about" data-i18n="manager.nav.about">About</button>
@@ -113,8 +113,7 @@
           </details>
         </div>
         <div id="conflict-result" class="result" role="status" hidden></div>
-        <p id="m-notlinked-hint" class="hint" hidden data-i18n="manager.status.notLinkedHint">Not connected — open the Keepmark popup to connect a sync first.
-          (“Move service” needs an existing link to move from.)</p>
+        <p id="m-notlinked-hint" class="hint" hidden data-i18n="manager.status.notLinkedHint">Not connected — open the Keepmark popup to connect a sync first.</p>
 
         <div id="status-error" class="error" role="alert" hidden></div>
         <div id="undo-banner" class="undo" hidden>
@@ -201,8 +200,8 @@
 
         <div id="m-protection" hidden>
           <h3 data-i18n="manager.switchPw.title">Sync-change password</h3>
-          <p class="hint" data-i18n="manager.switchPw.hint">Optional: require a short password (a PIN is fine) to activate the syncs you are
-            not using. Without it the switch is one click and the saved keys are stored in clear in this browser.</p>
+          <p class="hint" data-i18n="manager.switchPw.hint">Optional: require a short password (a PIN is fine) to activate or add syncs. Without
+            it the switch is one click and the saved keys are stored unencrypted in this browser.</p>
           <p><strong data-i18n="manager.switchPw.title">Sync-change password</strong>: <span id="m-link-state">…</span></p>
           <div id="m-link-lock-current" hidden>
             <label><span data-i18n="manager.switchPw.current">Current sync-change password</span>

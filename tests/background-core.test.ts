@@ -725,9 +725,9 @@ describe('background core', () => {
       },
     })) as { id: string };
     expect(res.id).toBe(SYNC_ID);
-    expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
+    expect(ports.notices.some((n) => n.title === 'Sync linked')).toBe(true);
     // The sync ID is a bearer token: never in a persisted OS notification.
-    expect(ports.notices.filter((n) => n.title === 'Move completed').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
+    expect(ports.notices.filter((n) => n.title === 'Sync linked').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
     // Mode new uploads the local tree as-is to a fresh sync: nothing is
     // destroyed, so no safety file (the undo slot covers the link swap).
     expect(ports.downloads).toHaveLength(0);
@@ -762,9 +762,9 @@ describe('background core', () => {
       },
     })) as { id: string };
     expect(res.id).toBe('target-id');
-    expect(ports.notices.some((n) => n.title === 'Move completed')).toBe(true);
+    expect(ports.notices.some((n) => n.title === 'Sync linked')).toBe(true);
     // The sync ID is a bearer token: never in a persisted OS notification.
-    expect(ports.notices.filter((n) => n.title === 'Move completed').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
+    expect(ports.notices.filter((n) => n.title === 'Sync linked').every((n) => !n.message.includes(SYNC_ID))).toBe(true);
     expect(state.puts).toHaveLength(1); // local tree uploaded onto the existing remote
     const info = await store.get<{ id: string; serviceUrl: string }>(StoreKey.SyncInfo);
     expect(info).toMatchObject({ id: 'target-id', serviceUrl: 'https://new.test/' });
@@ -1995,5 +1995,56 @@ describe('saved syncs registry lifecycle', () => {
       syncs: { syncId: string }[];
     };
     expect(list.syncs.map((r) => r.syncId)).toEqual([SYNC_ID]);
+  });
+
+  it('the label typed in the manager survives the link (new sync)', async () => {
+    const store = new Store(new MemoryBackend());
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      makePorts(),
+      makeFakeApi(baseState()),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({
+      command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD, label: '  Casa ',
+    });
+    const list = (await core.handleMessage({ command: MessageCommand.GetSavedSyncs })) as {
+      syncs: { label?: string }[];
+    };
+    expect(list.syncs.map((r) => r.label)).toEqual(['Casa']);
+  });
+
+  it('the label typed in the manager survives the link (existing sync)', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    state.remoteBlob = await encryptData(JSON.stringify([
+      { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+    ]), derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      makePorts(),
+      makeFakeApi(state),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://x.test/',
+      syncId: SYNC_ID,
+      password: PASSWORD,
+      direction: 'pull',
+      label: 'Ufficio',
+    });
+    const list = (await core.handleMessage({ command: MessageCommand.GetSavedSyncs })) as {
+      syncs: { label?: string }[];
+    };
+    expect(list.syncs.map((r) => r.label)).toEqual(['Ufficio']);
   });
 });

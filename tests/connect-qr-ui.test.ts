@@ -150,3 +150,34 @@ it('render failure keeps the dialog open, clears the detached canvas and hides a
   el('qr-close').click();
   expect((el('qr-panel') as HTMLDialogElement).open).toBe(false);
 });
+
+it('hides the card while unlinked and explains a plain-HTTP service instead of failing silently', () => {
+  const root = el('root');
+  controller.updateStatus({ syncEnabled: false, serviceUrl: 'https://example.test/sync', syncId: payload.id, queueLength: 0, syncing: false });
+  expect(root.hidden).toBe(true);
+  expect((el('qr-open') as HTMLButtonElement).disabled).toBe(true);
+
+  // Linked, but the service is plain HTTP: card visible, door closed, reason shown.
+  el('root').insertAdjacentHTML('beforeend', '<small id="qr-destination"></small>');
+  controller.updateStatus({ syncEnabled: true, serviceUrl: 'http://sync.example.test:8090/', syncId: payload.id, queueLength: 0, syncing: false });
+  expect(root.hidden).toBe(false);
+  expect((el('qr-open') as HTMLButtonElement).disabled).toBe(true);
+  expect(el('qr-destination').textContent).toBe(t('qr.httpsRequired'));
+  // The dialog cannot open while the button is disabled: the reason must be on
+  // the card, not only inside the dialog.
+  expect(el('qr-feedback').textContent).toBe(t('qr.httpsRequired'));
+  expect(el('qr-feedback').hidden).toBe(false);
+
+  controller.updateStatus({ syncEnabled: true, serviceUrl: payload.serviceUrl, syncId: payload.id, queueLength: 0, syncing: false });
+  expect((el('qr-open') as HTMLButtonElement).disabled).toBe(false);
+  expect(el('qr-destination').textContent).toContain(payload.serviceUrl);
+  expect(el('qr-feedback').hidden).toBe(true);
+});
+
+it('shows the HTTPS requirement when the background refuses to build the payload', async () => {
+  prepare.mockRejectedValueOnce(new Error(t('qr.httpsRequired')));
+  submit(); await settle();
+  expect(el('qr-error').textContent).toBe(t('qr.httpsRequired'));
+  expect(el('qr-error').hidden).toBe(false);
+  expect((el('qr-generate') as HTMLButtonElement).disabled).toBe(false);
+});

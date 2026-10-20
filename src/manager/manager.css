@@ -451,7 +451,7 @@ dd:last-of-type { border-bottom: 0; }
   margin: 8px 0;
 }
 
-.check input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.check input { margin: 0; width: 18px; height: 18px; accent-color: var(--accent); }
 
 /* ---- Duplicates ---- */
 .dup-group {
@@ -531,11 +531,12 @@ dd:last-of-type { border-bottom: 0; }
 /* Undo banner: same navy strip as the popup. */
 .undo {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   margin-top: 12px;
-  max-width: 560px;
+  max-width: min(560px, 100%);
   padding: 8px 8px 8px 14px;
   border-radius: 12px;
   background: var(--navy);
@@ -543,7 +544,9 @@ dd:last-of-type { border-bottom: 0; }
   font-size: 13px;
 }
 
-.undo .row { margin-top: 0; gap: 4px; flex-wrap: nowrap; }
+.undo #undo-text { flex: 1 1 16ch; min-width: 0; }
+
+.undo .row { margin-top: 0; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 
 .undo button.mini {
   border: 0;

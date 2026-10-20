@@ -615,7 +615,7 @@ describe('multi-sync (saved syncs)', () => {
         syncId: idA,
         switchPassword: SWITCH,
       }),
-    ).rejects.toThrow(/switch password/i);
+    ).rejects.toThrow(/sync-change password/i);
     await core.handleMessage({
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
@@ -690,7 +690,7 @@ describe('multi-sync (saved syncs)', () => {
         currentPassword: PASSWORD_A,
         newPassword: ROTATED,
       }),
-    ).rejects.toThrow(/switch password/i);
+    ).rejects.toThrow(/sync-change password/i);
     await core.handleMessage({
       command: MessageCommand.ChangePassword,
       currentPassword: PASSWORD_A,
