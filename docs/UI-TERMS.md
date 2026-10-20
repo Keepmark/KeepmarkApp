@@ -21,7 +21,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Add a sync (`+ Add new sync`) | Link this browser to a new or existing sync; while another sync is active this browser switches to it and the old one stays in the list (final button: `Connect`, result: `Sync linked`) | Move service, Move to another service, Switch service |
 | Activate | Make an inactive saved sync the active one; this browser's bookmarks become its copy | Open, Load |
 | Inactive | A saved sync this browser is not using right now | dormant, sleeping, idle |
-| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs; it is not the sync's own password | master password, sync password |
+| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs; it is not the sync's own password | master password, sync password, switch password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
