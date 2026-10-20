@@ -11,7 +11,7 @@ import {
   $,
   contractGate,
   copyText,
-  describeMoveResult,
+  describeLinkResult,
   describeSyncExpiry,
   describeUndo,
   undoBannerRemainingMs,
@@ -35,8 +35,8 @@ import {
   ChangePasswordImplication,
   DeleteRemoteDone,
   DeleteRemoteImplication,
-  MoveDoneNext,
-  MoveImplication,
+  LinkDoneNext,
+  LinkImplication,
   DirectionOrder,
   directionConfirm,
   dupDeleteConfirm,
@@ -62,7 +62,7 @@ import {
   type SavedSyncsResponse,
   type StatusResponse,
   type SwitchLockState,
-  type SwitchPreviewResult,
+  type SyncTargetPreview,
   type UndoState,
   // Conflict resolution types
   type ConflictPreviewResponse,
@@ -75,15 +75,15 @@ import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
 let connectQr: ConnectQrController | undefined;
 let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
-let preview: SwitchPreviewResult | undefined;
-let moveGeneration = 0;
+let preview: SyncTargetPreview | undefined;
+let linkGeneration = 0;
 /** Merge dry-run from the last Check target (merge direction only). */
 let mergeStats: MergePreview | undefined;
 /** Move URL prefilled once from the current link (never clobbers typing). */
-let moveUrlPrefilled = false;
-let moveService: ServicePicker;
+let linkUrlPrefilled = false;
+let linkService: ServicePicker;
 let checkingTarget = false;
-let moving = false;
+let linking = false;
 /** Current conflict preview (fetched when status.conflict === true). */
 let conflictPreview: ConflictPreviewResponse | undefined;
 /** Manager-owned switch password: gates activation and wraps dormant keys. */
@@ -92,14 +92,14 @@ let dormantSyncs = 0;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
-function prefillMoveUrl(): void {
-  if (moveUrlPrefilled || !moveService || $('sec-move').hidden) return;
-  moveUrlPrefilled = true;
-  void moveService.load(status?.serviceUrl).then(updateMoveServiceGate);
+function prefillLinkUrl(): void {
+  if (linkUrlPrefilled || !linkService || $('sec-syncs').hidden) return;
+  linkUrlPrefilled = true;
+  void linkService.load(status?.serviceUrl).then(updateLinkServiceGate);
 }
-function updateMoveServiceGate(): void {
-  if (!moveService || checkingTarget || moving) return;
-  ($('m-btn-preview') as HTMLButtonElement).disabled = !status?.syncEnabled || !moveService.ready;
+function updateLinkServiceGate(): void {
+  if (!linkService || checkingTarget || linking) return;
+  ($('m-btn-link-check') as HTMLButtonElement).disabled = !status?.syncEnabled || !linkService.ready;
 }
 /** Generation token: stale refresh responses never overwrite newer state. */
 let statusSeq = 0;
@@ -114,7 +114,7 @@ function showSection(name: string, moveFocus = false): void {
     if (active) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
-  for (const sec of ['status', 'backup', 'duplicates', 'move', 'logs', 'settings', 'about']) {
+  for (const sec of ['status', 'backup', 'duplicates', 'syncs', 'logs', 'settings', 'about']) {
     ($(`sec-${sec}`) as HTMLElement).hidden = sec !== name;
   }
   if (moveFocus) {
@@ -128,7 +128,7 @@ function showSection(name: string, moveFocus = false): void {
   }
   if (name === 'status') void refreshStatus();
   if (name === 'backup') void refreshSafety();
-  if (name === 'move') { updateMoveForm(); prefillMoveUrl(); }
+  if (name === 'syncs') { updateLinkForm(); prefillLinkUrl(); }
   if (name === 'duplicates') void scanDuplicates();
   if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
@@ -171,7 +171,7 @@ async function refreshStatus(): Promise<void> {
   connectQr?.updateStatus(status);
   const view: StatusView = { status, ping: undefined };
   renderStatusCard('m', view);
-  prefillMoveUrl();
+  prefillLinkUrl();
   try {
     ping = await send<PingResponse>({ command: MessageCommand.Ping });
   } catch {
@@ -551,7 +551,7 @@ function updateLinkGates(): void {
     }
   }
   for (const notice of document.querySelectorAll<HTMLElement>('.needs-link-notice')) notice.hidden = linked;
-  updateMoveServiceGate();
+  updateLinkServiceGate();
 }
 
 function showResult(id: string, text: string): void {
@@ -1002,146 +1002,146 @@ function initDuplicatesSection(): void {
   });
 }
 
-function switchMode(): 'new' | 'existing' {
-  return (document.querySelector('input[name="m-switch-mode"]:checked') as HTMLInputElement).value as
+function linkMode(): 'new' | 'existing' {
+  return (document.querySelector('input[name="m-link-mode"]:checked') as HTMLInputElement).value as
     | 'new'
     | 'existing';
 }
 
-function switchDirection(): 'push' | 'pull' | 'merge' {
-  return (document.querySelector('input[name="m-switch-direction"]:checked') as HTMLInputElement).value as
+function linkDirection(): 'push' | 'pull' | 'merge' {
+  return (document.querySelector('input[name="m-link-direction"]:checked') as HTMLInputElement).value as
     | 'push'
     | 'pull'
     | 'merge';
 }
 
-function updateMoveForm(): void {
-  moveGeneration++;
-  const mode = switchMode();
-  moveService?.updateMode();
-  ($('m-switch-id-row') as HTMLElement).hidden = mode !== 'existing';
-  ($('m-switch-direction-row') as HTMLElement).hidden = mode !== 'existing';
+function updateLinkForm(): void {
+  linkGeneration++;
+  const mode = linkMode();
+  linkService?.updateMode();
+  ($('m-link-id-row') as HTMLElement).hidden = mode !== 'existing';
+  ($('m-link-direction-row') as HTMLElement).hidden = mode !== 'existing';
   // Prepopulate once with the current link: most moves stay on the same
   // service (new sync id, same host). Never clobbers user input afterwards.
-  prefillMoveUrl();
+  prefillLinkUrl();
   // Existing targets use their current password, verified before the review.
-  $('m-switch-password-label').textContent = mode === 'new' ? t('manager.move.newPassword') : t('mgr.move.syncPassword');
-  $('m-switch-confirm-label').textContent = mode === 'new' ? t('common.confirmPassword') : t('mgr.move.confirmTargetPassword');
+  $('m-link-password-label').textContent = mode === 'new' ? t('manager.syncs.newPassword') : t('mgr.syncs.syncPassword');
+  $('m-link-confirm-label').textContent = mode === 'new' ? t('common.confirmPassword') : t('mgr.syncs.confirmTargetPassword');
   // Confirm row only when inventing a password (new mode). In existing
   // mode the password is verify-before-mutate: a typo fails safely as
   // InvalidCredentials, so no confirmation is asked.
-  ($('m-switch-confirm-row') as HTMLElement).hidden = mode !== 'new';
-  ($('m-switch-pw-hint') as HTMLElement).hidden = mode !== 'new';
+  ($('m-link-confirm-row') as HTMLElement).hidden = mode !== 'new';
+  ($('m-link-pw-hint') as HTMLElement).hidden = mode !== 'new';
   preview = undefined;
   previewFor = undefined;
   mergeStats = undefined;
-  cancelConfirm('m-btn-switch');
-  setMoveGate(false);
-  $('move-error').hidden = true;
-  $('move-error-2').hidden = true;
-  $('move-preview').hidden = true;
-  const result = $('move-result') as HTMLElement;
+  cancelConfirm('m-btn-link');
+  setLinkGate(false);
+  $('link-error').hidden = true;
+  $('link-error-2').hidden = true;
+  $('link-preview').hidden = true;
+  const result = $('link-result') as HTMLElement;
   result.hidden = true;
   result.textContent = '';
-  renderMoveReview();
-  updateMoveServiceGate();
+  renderLinkReview();
+  updateLinkServiceGate();
 }
 
-function renderMoveReview(): void {
-  const mode = switchMode();
-  const url = input('m-switch-url').value.trim() || '…';
+function renderLinkReview(): void {
+  const mode = linkMode();
+  const url = input('m-link-url').value.trim() || '…';
   const n = status?.bookmarkCount;
-  const direction = switchDirection();
-  $('move-summary').textContent =
+  const direction = linkDirection();
+  $('link-summary').textContent =
     mode === 'new'
       ? n === undefined
-        ? t('mgr.move.summaryNewNoCount', { url })
-        : tn('mgr.move.summaryNew', n, { url })
+        ? t('mgr.syncs.summaryNewNoCount', { url })
+        : tn('mgr.syncs.summaryNew', n, { url })
       : direction === 'push'
         ? n === undefined
-          ? t('mgr.move.summaryPushNoCount', { url })
-          : tn('mgr.move.summaryPush', n, { url })
+          ? t('mgr.syncs.summaryPushNoCount', { url })
+          : tn('mgr.syncs.summaryPush', n, { url })
         : direction === 'merge'
-          ? t('mgr.move.summaryMerge', { url })
-          : t('mgr.move.summaryPull', { url });
-  $('move-implication').textContent = `${mode === 'existing' ? directionConfirm(direction).implication + ' ' : ''}${MoveImplication()}`;
+          ? t('mgr.syncs.summaryMerge', { url })
+          : t('mgr.syncs.summaryPull', { url });
+  $('link-implication').textContent = `${mode === 'existing' ? directionConfirm(direction).implication + ' ' : ''}${LinkImplication()}`;
   const stats = mergeStats;
-  $('move-merge-counts').textContent = mode === 'existing' && direction === 'merge' && stats
+  $('link-merge-counts').textContent = mode === 'existing' && direction === 'merge' && stats
     ? t('popup.merge.counts', { local: stats.localOnly, remote: stats.remoteOnly, titles: stats.titleConflicts }) : '';
 }
 
 async function previewTarget(): Promise<void> {
-  if (!moveService.ready) return;
+  if (!linkService.ready) return;
   clearMessages();
-  const newServiceUrl = input('m-switch-url').value.trim();
+  const newServiceUrl = input('m-link-url').value.trim();
   if (!newServiceUrl) {
-    showError('move-error', t('mgr.move.urlRequired'));
+    showError('link-error', t('mgr.syncs.urlRequired'));
     return;
   }
-  const mode = switchMode();
-  const syncId = input('m-switch-id').value.trim() || undefined;
+  const mode = linkMode();
+  const syncId = input('m-link-id').value.trim() || undefined;
   if (mode === 'existing' && !syncId) {
-    showError('move-error', t('val.syncId.required'));
+    showError('link-error', t('val.syncId.required'));
     return;
   }
   const invalid = validateSwitch({ mode, newServiceUrl, syncId,
-    newPassword: input('m-switch-password').value, confirm: input('m-switch-confirm').value });
-  if (invalid) return showError('move-error', invalid);
-  const generation = moveGeneration;
+    newPassword: input('m-link-password').value, confirm: input('m-link-confirm').value });
+  if (invalid) return showError('link-error', invalid);
+  const generation = linkGeneration;
   const urlErr = validateServiceUrl(newServiceUrl);
   if (urlErr) {
-    showError('move-error', urlErr);
+    showError('link-error', urlErr);
     return;
   }
   checkingTarget = true;
-  await withBusy('m-btn-preview', t('busy.checking'), async () => {
+  await withBusy('m-btn-link-check', t('busy.checking'), async () => {
     try {
-      const checked = await send<SwitchPreviewResult>({
-        command: MessageCommand.SwitchPreview,
+      const checked = await send<SyncTargetPreview>({
+        command: MessageCommand.CheckSyncTarget,
         newServiceUrl,
         mode,
         syncId,
       });
-      if (generation !== moveGeneration) return;
+      if (generation !== linkGeneration) return;
       preview = checked;
-      // Pin what the preview was made for; submitMove() refuses stale previews.
-      previewFor = { newServiceUrl, mode, syncId, direction: switchDirection() };
+      // Pin what the preview was made for; submitLink() refuses stale previews.
+      previewFor = { newServiceUrl, mode, syncId, direction: linkDirection() };
     } catch (err) {
-      if (generation !== moveGeneration) return;
-      showError('move-error', (err as Error).message);
+      if (generation !== linkGeneration) return;
+      showError('link-error', (err as Error).message);
       return;
     }
-    const box = $('move-preview');
+    const box = $('link-preview');
     if (!preview.reachable) {
-      box.textContent = t('mgr.move.unreachable');
+      box.textContent = t('mgr.syncs.unreachable');
     } else {
       const lines = [
-        t('mgr.move.previewVersion', {
+        t('mgr.syncs.previewVersion', {
           version: preview.serviceVersion ?? '?',
-          state: preview.versionCompatible ? t('mgr.move.versionOk') : t('mgr.move.versionOld'),
+          state: preview.versionCompatible ? t('mgr.syncs.versionOk') : t('mgr.syncs.versionOld'),
         }),
-        t('mgr.move.previewSync', {
+        t('mgr.syncs.previewSync', {
           state:
             mode === 'new'
-              ? t('mgr.move.syncNew')
+              ? t('mgr.syncs.syncNew')
               : preview.remoteExists
-                ? t('mgr.move.syncFound', { when: preview.remoteLastUpdated ?? '?' })
-                : t('mgr.move.syncNotFound'),
+                ? t('mgr.syncs.syncFound', { when: preview.remoteLastUpdated ?? '?' })
+                : t('mgr.syncs.syncNotFound'),
         }),
-        t('mgr.move.previewLocal', { count: preview.localCount ?? '?' }),
+        t('mgr.syncs.previewLocal', { count: preview.localCount ?? '?' }),
       ];
       if (preview.syncExpiryDays !== undefined) {
-        lines.push(t('mgr.move.previewExpiry', { state: describeSyncExpiry(preview.syncExpiryDays) }));
+        lines.push(t('mgr.syncs.previewExpiry', { state: describeSyncExpiry(preview.syncExpiryDays) }));
       }
       // Read-only decryption verifies existing credentials for every direction.
       // Keep union statistics so changing direction needs no further check.
       mergeStats = undefined;
       if (mode === 'existing' && preview.remoteExists) {
-        const mergePassword = input('m-switch-password').value;
+        const mergePassword = input('m-link-password').value;
         if (!mergePassword) {
-          box.textContent = lines.join('\n') + '\n' + t('mgr.move.enterPwForMerge');
+          box.textContent = lines.join('\n') + '\n' + t('mgr.syncs.enterPwForMerge');
           box.hidden = false;
-          setMoveGate(false);
+          setLinkGate(false);
           return;
         }
         try {
@@ -1151,11 +1151,11 @@ async function previewTarget(): Promise<void> {
             syncId: syncId!,
             password: mergePassword,
           });
-          if (generation !== moveGeneration) return;
+          if (generation !== linkGeneration) return;
           mergeStats = checkedMerge;
-          if (switchDirection() === 'merge')
+          if (linkDirection() === 'merge')
           lines.push(
-            t('mgr.move.mergePreview', {
+            t('mgr.syncs.mergePreview', {
               local: mergeStats.localOnly,
               localTotal: mergeStats.localCount,
               remote: mergeStats.remoteOnly,
@@ -1166,8 +1166,8 @@ async function previewTarget(): Promise<void> {
             }),
           );
         } catch (err) {
-          if (generation !== moveGeneration) return;
-          showError('move-error', (err as Error).message);
+          if (generation !== linkGeneration) return;
+          showError('link-error', (err as Error).message);
           return;
         }
       }
@@ -1178,49 +1178,49 @@ async function previewTarget(): Promise<void> {
       preview.reachable &&
       preview.versionCompatible !== false &&
       (mode === 'new' || preview.remoteExists === true);
-    if (generation !== moveGeneration) return;
-    renderMoveReview();
-    setMoveGate(ok);
-    if (!ok) showError('move-error', !preview.reachable ? t('mgr.move.unreachable') : preview.versionCompatible === false ? t('mgr.move.versionOld') : t('mgr.move.syncNotFound'));
-    if (ok) $('move-step2').scrollIntoView({ block: 'nearest' });
+    if (generation !== linkGeneration) return;
+    renderLinkReview();
+    setLinkGate(ok);
+    if (!ok) showError('link-error', !preview.reachable ? t('mgr.syncs.unreachable') : preview.versionCompatible === false ? t('mgr.syncs.versionOld') : t('mgr.syncs.syncNotFound'));
+    if (ok) $('link-step2').scrollIntoView({ block: 'nearest' });
   });
   checkingTarget = false;
-  updateMoveServiceGate();
+  updateLinkServiceGate();
 }
 
 /** The Move button exists only after a passing check: shown + enabled
  *  together, with the gate hint standing in for it while locked. */
-function setMoveGate(ok: boolean): void {
-  ($('m-btn-switch') as HTMLButtonElement).disabled = !ok;
-  ($('move-step2') as HTMLElement).hidden = !ok;
+function setLinkGate(ok: boolean): void {
+  ($('m-btn-link') as HTMLButtonElement).disabled = !ok;
+  ($('link-step2') as HTMLElement).hidden = !ok;
   // One primary action at a time: once step 2 is open, Move is the main one.
-  $('m-btn-preview').classList.toggle('primary', !ok);
-  ($('move-gate-hint') as HTMLElement).hidden = ok;
+  $('m-btn-link-check').classList.toggle('primary', !ok);
+  ($('link-gate-hint') as HTMLElement).hidden = ok;
 }
 
-async function submitMove(): Promise<void> {
+async function submitLink(): Promise<void> {
   connectQr?.close();
   clearMessages();
-  const newServiceUrl = input('m-switch-url').value.trim();
-  const mode = switchMode();
-  const direction = switchDirection();
-  const syncId = input('m-switch-id').value.trim() || undefined;
-  const newPassword = input('m-switch-password').value;
-  const confirm = input('m-switch-confirm').value;
+  const newServiceUrl = input('m-link-url').value.trim();
+  const mode = linkMode();
+  const direction = linkDirection();
+  const syncId = input('m-link-id').value.trim() || undefined;
+  const newPassword = input('m-link-password').value;
+  const confirm = input('m-link-confirm').value;
   const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm });
   if (invalid) {
-    showError('move-error-2', invalid);
+    showError('link-error-2', invalid);
     return;
   }
   // A move leaves the previous sync in the list: prove the switch lock first,
   // so the background can wrap the new active key.
-  const switchPassword = input('m-switch-lock-pw').value;
+  const switchPassword = input('m-link-lock-pw').value;
   if (switchLockSet && !switchPassword) {
-    showError('move-error-2', t('core.switchPasswordRequired'));
+    showError('link-error-2', t('core.switchPasswordRequired'));
     return;
   }
   if (
-    !moveService.ready ||
+    !linkService.ready ||
     !preview ||
     !previewFor ||
     previewFor.newServiceUrl !== newServiceUrl ||
@@ -1228,14 +1228,14 @@ async function submitMove(): Promise<void> {
     previewFor.syncId !== syncId ||
     previewFor.direction !== direction
   ) {
-    showError('move-error-2', t('mgr.move.inputsChanged'));
+    showError('link-error-2', t('mgr.syncs.inputsChanged'));
     return;
   }
   // Merge executes on explicit per-counts confirmation: the union never
   // deletes, but resurrects items deleted while offline — say so first.
   const s = mergeStats;
   if (mode === 'existing' && direction === 'merge' && !s) {
-    showError('move-error-2', t('mgr.move.mergeUnavailable'));
+    showError('link-error-2', t('mgr.syncs.mergeUnavailable'));
     return;
   }
   // The visible checked summary and implication are the sole confirmation.
@@ -1244,79 +1244,79 @@ async function submitMove(): Promise<void> {
   // Local count for the success line (new/push upload exactly these; capture
   // before the move — merge/pull rewrite the local tree).
   const localCount = status?.bookmarkCount;
-  moving = true;
-  moveService.setBusy(true);
-  await withBusy('m-btn-switch', t('busy.moving'), async () => {
-    ($('move-result') as HTMLElement).hidden = true;
+  linking = true;
+  linkService.setBusy(true);
+  await withBusy('m-btn-link', t('busy.moving'), async () => {
+    ($('link-result') as HTMLElement).hidden = true;
     try {
       const res = await send<{ id: string }>({
-        command: MessageCommand.SwitchService,
-        switch: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword },
+        command: MessageCommand.LinkSync,
+        link: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword },
       });
-      input('m-switch-password').value = '';
-      input('m-switch-confirm').value = '';
-      input('m-switch-lock-pw').value = '';
+      input('m-link-password').value = '';
+      input('m-link-confirm').value = '';
+      input('m-link-lock-pw').value = '';
       movedId = res.id;
     } catch (err) {
-      input('m-switch-confirm').value = '';
-      showError('move-error-2', (err as Error).message);
+      input('m-link-confirm').value = '';
+      showError('link-error-2', (err as Error).message);
     }
   });
-  moving = false;
-  moveService.setBusy(false);
-  updateMoveServiceGate();
+  linking = false;
+  linkService.setBusy(false);
+  updateLinkServiceGate();
   if (movedId) {
-    await moveService.refreshCatalog().catch(err => showError('move-error', (err as Error).message));
+    await linkService.refreshCatalog().catch(err => showError('link-error', (err as Error).message));
     // Consume the preview AFTER withBusy (it restores the pre-click state
     // last): the unlocked button must never re-fire with stale inputs.
-    updateMoveForm();
+    updateLinkForm();
     // Contextual success: restate WHAT ran (mode + direction + target), not
     // just the new id — the wizard offers four different outcomes.
-    const done = describeMoveResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
-    showResult('move-result', t('mgr.move.resultLine', { done, next: MoveDoneNext(), id: movedId }));
+    const done = describeLinkResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
+    showResult('link-result', t('mgr.syncs.resultLine', { done, next: LinkDoneNext(), id: movedId }));
     const copy = document.createElement('button');
-    copy.textContent = t('mgr.move.copyId');
+    copy.textContent = t('mgr.syncs.copyId');
     copy.className = 'mini';
-    copy.setAttribute('aria-label', t('mgr.move.copyIdAria'));
+    copy.setAttribute('aria-label', t('mgr.syncs.copyIdAria'));
     copy.addEventListener('click', () => void copyText(movedId!, t('popup.copyIdPrompt')));
-    $('move-result').append(' ', copy);
-    // updateMoveForm() above re-locked the button and reshown the gate hint:
+    $('link-result').append(' ', copy);
+    // updateLinkForm() above re-locked the button and reshown the gate hint:
     // the hint contradicts the result, so hide it, then bring the result
     // into view (it sits below the fold on small windows).
-    ($('move-gate-hint') as HTMLElement).hidden = true;
-    const box = $('move-result') as HTMLElement;
+    ($('link-gate-hint') as HTMLElement).hidden = true;
+    const box = $('link-result') as HTMLElement;
     box.scrollIntoView({ block: 'nearest' });
     box.focus({ preventScroll: true });
     await refreshStatus();
   } else {
     // Failed: the still-valid preview keeps the button unlocked, so keep
     // the gate hint in sync with the button (hint shown only while locked).
-    ($('move-gate-hint') as HTMLElement).hidden = !($('m-btn-switch') as HTMLButtonElement).disabled;
+    ($('link-gate-hint') as HTMLElement).hidden = !($('m-btn-link') as HTMLButtonElement).disabled;
   }
 }
 
 function initMoveSection(): void {
-  moveService = new ServicePicker({
-    input: input('m-switch-url'), mode: switchMode,
-    onChange: () => updateMoveForm(),
-    onState: () => updateMoveServiceGate(),
+  linkService = new ServicePicker({
+    input: input('m-link-url'), mode: linkMode,
+    onChange: () => updateLinkForm(),
+    onState: () => updateLinkServiceGate(),
   });
-  document.querySelectorAll('input[name="m-switch-mode"]').forEach((el) => {
-    el.addEventListener('change', updateMoveForm);
+  document.querySelectorAll('input[name="m-link-mode"]').forEach((el) => {
+    el.addEventListener('change', updateLinkForm);
   });
-  document.querySelectorAll('input[name="m-switch-direction"]').forEach((el) => {
+  document.querySelectorAll('input[name="m-link-direction"]').forEach((el) => {
     el.addEventListener('change', () => {
-      if (previewFor) previewFor.direction = switchDirection();
-      renderMoveReview();
+      if (previewFor) previewFor.direction = linkDirection();
+      renderLinkReview();
     });
   });
-  input('m-switch-url').addEventListener('input', updateMoveForm);
-  input('m-switch-id').addEventListener('input', updateMoveForm);
-  input('m-switch-password').addEventListener('input', updateMoveForm);
-  input('m-switch-confirm').addEventListener('input', updateMoveForm);
-  $('m-btn-preview').addEventListener('click', () => void previewTarget());
-  $('m-btn-switch').addEventListener('click', () => void submitMove());
-  updateMoveForm();
+  input('m-link-url').addEventListener('input', updateLinkForm);
+  input('m-link-id').addEventListener('input', updateLinkForm);
+  input('m-link-password').addEventListener('input', updateLinkForm);
+  input('m-link-confirm').addEventListener('input', updateLinkForm);
+  $('m-btn-link-check').addEventListener('click', () => void previewTarget());
+  $('m-btn-link').addEventListener('click', () => void submitLink());
+  updateLinkForm();
 }
 
 async function refreshLogs(): Promise<void> {
@@ -1435,31 +1435,31 @@ async function refreshSwitchLock(): Promise<void> {
   }
   switchLockSet = state.set;
   dormantSyncs = saved.syncs.length;
-  $('m-switch-state').textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
-  ($('m-switch-lock-current') as HTMLElement).hidden = !switchLockSet;
-  ($('m-btn-switch-lock-set') as HTMLElement).hidden = switchLockSet;
-  ($('m-btn-switch-lock-change') as HTMLElement).hidden = !switchLockSet;
-  ($('m-btn-switch-lock-reset') as HTMLElement).hidden = !switchLockSet;
+  $('m-link-state').textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
+  ($('m-link-lock-current') as HTMLElement).hidden = !switchLockSet;
+  ($('m-btn-link-lock-set') as HTMLElement).hidden = switchLockSet;
+  ($('m-btn-link-lock-change') as HTMLElement).hidden = !switchLockSet;
+  ($('m-btn-link-lock-reset') as HTMLElement).hidden = !switchLockSet;
   // The reset drops every row but the active one (none when unlinked).
   const dropped = Math.max(dormantSyncs - (saved.active ? 1 : 0), 0);
-  $('m-switch-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dropped });
+  $('m-link-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dropped });
   // The proof is asked by every flow that changes or demotes the active key.
   ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
-  ($('m-switch-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
+  ($('m-link-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
 }
 
 function switchLockFields(): { current: string; next: string; confirm: string } {
   return {
-    current: input('m-switch-lock-current-pw').value,
-    next: input('m-switch-lock-new').value,
-    confirm: input('m-switch-lock-confirm').value,
+    current: input('m-link-lock-current-pw').value,
+    next: input('m-link-lock-new').value,
+    confirm: input('m-link-lock-confirm').value,
   };
 }
 
 function clearSwitchLockFields(): void {
-  input('m-switch-lock-current-pw').value = '';
-  input('m-switch-lock-new').value = '';
-  input('m-switch-lock-confirm').value = '';
+  input('m-link-lock-current-pw').value = '';
+  input('m-link-lock-new').value = '';
+  input('m-link-lock-confirm').value = '';
 }
 
 /** Short password: only "not empty" and "the two match" are enforced. */
@@ -1470,16 +1470,16 @@ function validateSwitchLockFields(fields: { next: string; confirm: string }): st
 }
 
 function initSwitchPasswordSection(): void {
-  ($('m-btn-switch-lock-set') as HTMLButtonElement).addEventListener('click', () => void setSwitchPassword());
-  ($('m-btn-switch-lock-change') as HTMLButtonElement).addEventListener('click', () => void changeSwitchPassword());
-  ($('m-btn-switch-lock-reset') as HTMLButtonElement).addEventListener('click', () => {
+  ($('m-btn-link-lock-set') as HTMLButtonElement).addEventListener('click', () => void setSwitchPassword());
+  ($('m-btn-link-lock-change') as HTMLButtonElement).addEventListener('click', () => void changeSwitchPassword());
+  ($('m-btn-link-lock-reset') as HTMLButtonElement).addEventListener('click', () => {
     clearMessages();
-    ($('m-switch-lock-reset-box') as HTMLElement).hidden = false;
+    ($('m-link-lock-reset-box') as HTMLElement).hidden = false;
   });
-  ($('m-btn-switch-lock-reset-cancel') as HTMLButtonElement).addEventListener('click', () => {
-    ($('m-switch-lock-reset-box') as HTMLElement).hidden = true;
+  ($('m-btn-link-lock-reset-cancel') as HTMLButtonElement).addEventListener('click', () => {
+    ($('m-link-lock-reset-box') as HTMLElement).hidden = true;
   });
-  ($('m-btn-switch-lock-reset-go') as HTMLButtonElement).addEventListener('click', () => void resetSwitchPassword());
+  ($('m-btn-link-lock-reset-go') as HTMLButtonElement).addEventListener('click', () => void resetSwitchPassword());
 }
 
 async function setSwitchPassword(): Promise<void> {
@@ -1488,7 +1488,7 @@ async function setSwitchPassword(): Promise<void> {
   const fields = switchLockFields();
   const invalid = validateSwitchLockFields(fields);
   if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-switch-lock-set', t('busy.changing'), async () => {
+  await withBusy('m-btn-link-lock-set', t('busy.changing'), async () => {
     try {
       await send({ command: MessageCommand.SetSwitchPassword, password: fields.next, confirm: fields.confirm });
       clearSwitchLockFields();
@@ -1507,7 +1507,7 @@ async function changeSwitchPassword(): Promise<void> {
   if (!fields.current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
   const invalid = validateSwitchLockFields(fields);
   if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-switch-lock-change', t('busy.changing'), async () => {
+  await withBusy('m-btn-link-lock-change', t('busy.changing'), async () => {
     try {
       await send({
         command: MessageCommand.ChangeSwitchPassword,
@@ -1520,7 +1520,7 @@ async function changeSwitchPassword(): Promise<void> {
       await refreshSwitchLock();
     } catch (err) {
       // Wrong current password: keep nothing but the message.
-      input('m-switch-lock-current-pw').value = '';
+      input('m-link-lock-current-pw').value = '';
       showError('switch-pw-error', (err as Error).message);
     }
   });
@@ -1532,7 +1532,7 @@ async function resetSwitchPassword(): Promise<void> {
   const fields = switchLockFields();
   const invalid = validateSwitchLockFields(fields);
   if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-switch-lock-reset-go', t('busy.changing'), async () => {
+  await withBusy('m-btn-link-lock-reset-go', t('busy.changing'), async () => {
     try {
       const res = await send<{ removed: number; kept: number }>({
         command: MessageCommand.ResetSwitchPassword,
@@ -1540,7 +1540,7 @@ async function resetSwitchPassword(): Promise<void> {
         confirm: fields.confirm,
       });
       clearSwitchLockFields();
-      ($('m-switch-lock-reset-box') as HTMLElement).hidden = true;
+      ($('m-link-lock-reset-box') as HTMLElement).hidden = true;
       showResult('switch-pw-result', t('manager.switchPw.resetDone', { count: res.removed }));
       await refreshSwitchLock();
     } catch (err) {

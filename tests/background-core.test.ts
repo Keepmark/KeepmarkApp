@@ -716,8 +716,8 @@ describe('background core', () => {
     const state = baseState();
     const { core, store, ports } = await linkedCore(state);
     const res = (await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'new',
         newPassword: 'brand-new-password',
@@ -752,8 +752,8 @@ describe('background core', () => {
     state.puts.length = 0;
     void derived;
     const res = (await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'existing',
         syncId: 'target-id',
@@ -784,8 +784,8 @@ describe('background core', () => {
     state.remoteLastUpdated = 't-target';
     state.puts.length = 0;
     const res = (await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'existing',
         syncId: 'target-id',
@@ -824,8 +824,8 @@ describe('background core', () => {
     state.remoteBlob = await encryptData(JSON.stringify(remote), targetDerived);
     state.remoteLastUpdated = 't-target';
     const res = (await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'existing',
         syncId: 'target-id',
@@ -845,8 +845,8 @@ describe('background core', () => {
     const { InvalidCredentialsException } = await import('../src/shared/errors');
     await expect(
       core.handleMessage({
-        command: MessageCommand.SwitchService,
-        switch: {
+        command: MessageCommand.LinkSync,
+        link: {
           newServiceUrl: 'https://new.test/',
           mode: 'existing',
           syncId: 'target-id',
@@ -1005,7 +1005,7 @@ describe('background core', () => {
     const state = baseState();
     const { core, store } = await linkedCore(state);
     const preview = (await core.handleMessage({
-      command: MessageCommand.SwitchPreview,
+      command: MessageCommand.CheckSyncTarget,
       newServiceUrl: 'https://new.test/',
       mode: 'existing',
       syncId: 'target-id',
@@ -1048,7 +1048,7 @@ describe('background core', () => {
     );
     await store.set(StoreKey.SyncInfo, { id: SYNC_ID, password: 'x' });
     const preview = (await core.handleMessage({
-      command: MessageCommand.SwitchPreview,
+      command: MessageCommand.CheckSyncTarget,
       newServiceUrl: 'https://down.test/',
       mode: 'new',
     })) as { reachable: boolean };
@@ -1130,8 +1130,8 @@ describe('background core', () => {
     state.remoteLastUpdated = 't-target';
     state.puts.length = 0;
     await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'existing',
         syncId: 'target-id',
@@ -1156,8 +1156,8 @@ describe('background core', () => {
     state.remoteBlob = await encryptData(JSON.stringify([]), targetDerived);
     state.remoteLastUpdated = 't-target';
     await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'existing',
         syncId: 'target-id',
@@ -1424,7 +1424,7 @@ describe('background core v1.2', () => {
     const state = v12State();
     const { core } = await linkedV12Core(state);
     const preview = (await core.handleMessage({
-      command: MessageCommand.SwitchPreview,
+      command: MessageCommand.CheckSyncTarget,
       newServiceUrl: 'https://new.test/',
       mode: 'new',
     })) as { reachable: boolean; supportsV12?: boolean };
@@ -1442,7 +1442,7 @@ describe('background core v1.2', () => {
     state.syncExpiryDays = 0; // never expires: 0 is a real answer, not "unknown"
     expect(await ping()).toBe(0);
     const preview = (await core.handleMessage({
-      command: MessageCommand.SwitchPreview,
+      command: MessageCommand.CheckSyncTarget,
       newServiceUrl: 'https://new.test/',
       mode: 'new',
     })) as { syncExpiryDays?: number };
@@ -1469,8 +1469,8 @@ describe('background core v1.2', () => {
     const state = v12State();
     const { core, store } = await linkedV12Core(state);
     const res = (await core.handleMessage({
-      command: MessageCommand.SwitchService,
-      switch: {
+      command: MessageCommand.LinkSync,
+      link: {
         newServiceUrl: 'https://new.test/',
         mode: 'new',
         newPassword: 'brand-new-password',
@@ -1572,8 +1572,8 @@ describe('background core v1.2', () => {
     const { DataOutOfSyncException } = await import('../src/shared/errors');
     await expect(
       core.handleMessage({
-        command: MessageCommand.SwitchService,
-        switch: {
+        command: MessageCommand.LinkSync,
+        link: {
           newServiceUrl: 'https://new.test/',
           mode: 'existing',
           syncId: 'target-id',

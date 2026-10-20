@@ -407,7 +407,7 @@ export function v12Usable(info: SyncInfo | undefined): boolean {
 }
 
 /**
- * Move-service wizard (mirrors Keepmark SwitchService): create a fresh sync
+ * Move-service wizard (mirrors Keepmark LinkSync): create a fresh sync
  * on the new service and upload the current tree. The caller passes the
  * decrypted current tree (safety-backup of the old side is the caller's job).
  */
@@ -426,7 +426,7 @@ export async function switchService(
 /** Contextual move-wizard success: restates WHAT ran (mode + direction +
  * target), since the wizard has four different outcomes. Pure and SW-safe:
  * shared by the manager result box and the background completion notice. */
-export function describeMoveResult(input: {
+export function describeLinkResult(input: {
   mode: 'new' | 'existing';
   direction: 'push' | 'pull' | 'merge';
   newServiceUrl: string;
@@ -436,13 +436,13 @@ export function describeMoveResult(input: {
 }): string {
   const n = input.bookmarkCount;
   const url = input.newServiceUrl;
-  const sync = input.syncId ? t('sync.move.remoteSyncId', { id: input.syncId }) : t('sync.move.remoteSync');
+  const sync = input.syncId ? t('sync.link.remoteSyncId', { id: input.syncId }) : t('sync.link.remoteSync');
   if (input.mode === 'new') {
-    return n === undefined ? t('sync.move.newNoCount', { url }) : tn('sync.move.new', n, { url });
+    return n === undefined ? t('sync.link.newNoCount', { url }) : tn('sync.link.new', n, { url });
   }
   if (input.direction === 'push') {
-    return n === undefined ? t('sync.move.pushNoCount', { url, sync }) : tn('sync.move.push', n, { url, sync });
+    return n === undefined ? t('sync.link.pushNoCount', { url, sync }) : tn('sync.link.push', n, { url, sync });
   }
-  if (input.direction === 'merge') return t('sync.move.merge', { url, sync });
-  return t('sync.move.pull', { url, sync });
+  if (input.direction === 'merge') return t('sync.link.merge', { url, sync });
+  return t('sync.link.pull', { url, sync });
 }

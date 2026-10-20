@@ -64,10 +64,10 @@ export const directionConfirm = (d: Direction): { message: string; implication: 
 });
 
 // Move service.
-export const MoveImplication = (): string => t('texts.moveImplication');
-export const moveNewConfirm = (url: string, count?: number): string =>
-  count === undefined ? t('texts.moveNewConfirmNoCount', { url }) : tn('texts.moveNewConfirm', count, { url });
-export const MoveDoneNext = (): string => t('texts.moveDoneNext');
+export const LinkImplication = (): string => t('texts.linkImplication');
+export const linkNewConfirm = (url: string, count?: number): string =>
+  count === undefined ? t('texts.linkNewConfirmNoCount', { url }) : tn('texts.linkNewConfirm', count, { url });
+export const LinkDoneNext = (): string => t('texts.linkDoneNext');
 
 // Undo (Status banner in the manager, popup banner).
 const undoKeys = {

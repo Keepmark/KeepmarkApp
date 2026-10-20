@@ -14,7 +14,7 @@
       <button data-section="status" class="active" data-i18n="manager.nav.status">Status</button>
       <button data-section="backup" data-i18n="manager.nav.backup">Backup</button>
       <button data-section="duplicates"><span data-i18n="manager.nav.duplicates">Duplicates</span> <span id="nav-dup-count"></span></button>
-      <button data-section="move" data-i18n="manager.nav.move">Move service</button>
+      <button data-section="syncs" data-i18n="manager.nav.syncs">Move service</button>
       <button data-section="logs" data-i18n="manager.nav.logs">Logs</button>
       <button data-section="settings" data-i18n="manager.nav.settings">Settings</button>
       <button data-section="about" data-i18n="manager.nav.about">About</button>
@@ -182,51 +182,51 @@
         <div id="dup-error-2" class="error" role="alert" hidden></div>
       </section>
 
-      <section id="sec-move" hidden>
-        <h2 data-i18n="manager.move.title">Move to another service</h2>
-        <p class="hint" data-i18n="manager.move.hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
+      <section id="sec-syncs" hidden>
+        <h2 data-i18n="manager.syncs.title">Move to another service</h2>
+        <p class="hint" data-i18n="manager.syncs.hint">Move your bookmarks to a different service, into a new or an existing sync. Anything replaced
           is saved to Backup → Safety backups first.</p>
-        <p class="notice needs-link-notice" hidden data-i18n="manager.move.needsLink">Moving needs a linked sync. Connect from the Keepmark popup first.</p>
-        <h3 data-i18n="manager.move.step1">1. Target</h3>
-        <label><span data-i18n="manager.move.targetUrl">Target service URL</span> <input id="m-switch-url" type="url" /></label>
-        <fieldset class="options" role="radiogroup" aria-label="Move mode" data-i18n-aria-label="manager.move.modeLabel">
-          <legend data-i18n="manager.move.modeLegend">Into which sync?</legend>
-          <label class="check option"><input type="radio" name="m-switch-mode" value="new" checked />
-            <span><b data-i18n="manager.move.modeNew">A new sync</b><small data-i18n="manager.move.modeNewDesc">Create it on the target service and upload this browser's bookmarks.</small></span></label>
-          <label class="check option"><input type="radio" name="m-switch-mode" value="existing" />
-            <span><b data-i18n="manager.move.modeExisting">An existing sync</b><small data-i18n="manager.move.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
+        <p class="notice needs-link-notice" hidden data-i18n="manager.syncs.needsLink">Moving needs a linked sync. Connect from the Keepmark popup first.</p>
+        <h3 data-i18n="manager.syncs.step1">1. Target</h3>
+        <label><span data-i18n="manager.syncs.targetUrl">Target service URL</span> <input id="m-link-url" type="url" /></label>
+        <fieldset class="options" role="radiogroup" aria-label="Move mode" data-i18n-aria-label="manager.syncs.modeLabel">
+          <legend data-i18n="manager.syncs.modeLegend">Into which sync?</legend>
+          <label class="check option"><input type="radio" name="m-link-mode" value="new" checked />
+            <span><b data-i18n="manager.syncs.modeNew">A new sync</b><small data-i18n="manager.syncs.modeNewDesc">Create it on the target service and upload this browser's bookmarks.</small></span></label>
+          <label class="check option"><input type="radio" name="m-link-mode" value="existing" />
+            <span><b data-i18n="manager.syncs.modeExisting">An existing sync</b><small data-i18n="manager.syncs.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
         </fieldset>
-        <label id="m-switch-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-switch-id" type="text" class="mono" /></label>
-        <div id="m-switch-existing-pw-slot"></div>
-          <label id="m-switch-password-row"><span id="m-switch-password-label" data-i18n="manager.move.newPassword">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
-          <label id="m-switch-confirm-row"><span id="m-switch-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
-          <p id="m-switch-pw-hint" class="hint" data-i18n="manager.move.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
-        <label id="m-switch-lock-pw-row" hidden><span data-i18n="popup.saved.passwordLabel">Switch password</span> <input id="m-switch-lock-pw" type="password" autocomplete="off" /></label>
-        <div class="row"><button id="m-btn-preview" class="primary" data-needs-link data-i18n="manager.move.check">Check target</button></div>
-        <div id="move-error" class="error" role="alert" hidden></div>
-        <details><summary data-i18n="common.details">Details</summary><div id="move-preview" class="preview" hidden></div></details>
-        <p id="move-gate-hint" class="hint" data-i18n="manager.move.gateHint">Step 2 opens once the check passes, and only for these exact inputs —
+        <label id="m-link-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-link-id" type="text" class="mono" /></label>
+        <div id="m-link-existing-pw-slot"></div>
+          <label id="m-link-password-row"><span id="m-link-password-label" data-i18n="manager.syncs.newPassword">New password</span> <input id="m-link-password" type="password" autocomplete="new-password" /></label>
+          <label id="m-link-confirm-row"><span id="m-link-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-link-confirm" type="password" autocomplete="new-password" /></label>
+          <p id="m-link-pw-hint" class="hint" data-i18n="manager.syncs.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+        <label id="m-link-lock-pw-row" hidden><span data-i18n="popup.saved.passwordLabel">Switch password</span> <input id="m-link-lock-pw" type="password" autocomplete="off" /></label>
+        <div class="row"><button id="m-btn-link-check" class="primary" data-needs-link data-i18n="manager.syncs.check">Check target</button></div>
+        <div id="link-error" class="error" role="alert" hidden></div>
+        <details><summary data-i18n="common.details">Details</summary><div id="link-preview" class="preview" hidden></div></details>
+        <p id="link-gate-hint" class="hint" data-i18n="manager.syncs.gateHint">Step 2 opens once the check passes, and only for these exact inputs —
           change anything and check again.</p>
-        <div id="move-step2" hidden>
-          <h3 data-i18n="manager.move.step2">2. Confirm</h3>
-        <div id="m-switch-direction-row" hidden>
-          <fieldset class="options" role="radiogroup" aria-label="Move direction" data-i18n-aria-label="manager.move.directionLabel">
+        <div id="link-step2" hidden>
+          <h3 data-i18n="manager.syncs.step2">2. Confirm</h3>
+        <div id="m-link-direction-row" hidden>
+          <fieldset class="options" role="radiogroup" aria-label="Move direction" data-i18n-aria-label="manager.syncs.directionLabel">
             <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
-            <label class="check option"><input type="radio" name="m-switch-direction" value="pull" checked />
+            <label class="check option"><input type="radio" name="m-link-direction" value="pull" checked />
               <span><b data-i18n="common.keepServerCopy">Keep the server copy</b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
-            <label class="check option"><input type="radio" name="m-switch-direction" value="merge" />
-              <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="manager.move.mergeDesc">Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
-            <label class="check option"><input type="radio" name="m-switch-direction" value="push" />
+            <label class="check option"><input type="radio" name="m-link-direction" value="merge" />
+              <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="manager.syncs.mergeDesc">Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
+            <label class="check option"><input type="radio" name="m-link-direction" value="push" />
               <span><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
           </fieldset>
         </div>
-          <div id="move-summary" class="hint"></div>
-          <p id="move-merge-counts" class="hint"></p>
-          <p id="move-implication" class="hint"></p>
-          <div class="row" id="move-go-row"><button id="m-btn-switch" class="primary" disabled data-i18n="manager.move.now">Move now…</button></div>
-          <div id="move-error-2" class="error" role="alert" hidden></div>
+          <div id="link-summary" class="hint"></div>
+          <p id="link-merge-counts" class="hint"></p>
+          <p id="link-implication" class="hint"></p>
+          <div class="row" id="link-go-row"><button id="m-btn-link" class="primary" disabled data-i18n="manager.syncs.now">Move now…</button></div>
+          <div id="link-error-2" class="error" role="alert" hidden></div>
         </div>
-        <div id="move-result" class="result" tabindex="-1" role="status" hidden></div>
+        <div id="link-result" class="result" tabindex="-1" role="status" hidden></div>
       </section>
 
       <section id="sec-logs" hidden>
@@ -267,26 +267,26 @@
         <div id="settings-result" class="result" hidden></div>
         <h3 data-i18n="manager.switchPw.title">Switch password</h3>
         <p class="hint" data-i18n="manager.switchPw.hint">Short password (a PIN is fine) that unlocks the saved syncs: no length or complexity rules. Keep it safe: without it the dormant syncs cannot be reactivated.</p>
-        <p><strong data-i18n="manager.switchPw.title">Switch password</strong>: <span id="m-switch-state">…</span></p>
-        <div id="m-switch-lock-current" hidden>
+        <p><strong data-i18n="manager.switchPw.title">Switch password</strong>: <span id="m-link-state">…</span></p>
+        <div id="m-link-lock-current" hidden>
           <label><span data-i18n="manager.switchPw.current">Current switch password</span>
-            <input id="m-switch-lock-current-pw" type="password" autocomplete="off" /></label>
+            <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
         </div>
-        <label><span id="m-switch-lock-new-label" data-i18n="manager.switchPw.new">New switch password</span>
-          <input id="m-switch-lock-new" type="password" autocomplete="off" /></label>
-        <label><span id="m-switch-lock-confirm-label" data-i18n="manager.switchPw.confirm">Repeat switch password</span>
-          <input id="m-switch-lock-confirm" type="password" autocomplete="off" /></label>
+        <label><span id="m-link-lock-new-label" data-i18n="manager.switchPw.new">New switch password</span>
+          <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
+        <label><span id="m-link-lock-confirm-label" data-i18n="manager.switchPw.confirm">Repeat switch password</span>
+          <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
         <div class="row">
-          <button id="m-btn-switch-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set switch password</button>
-          <button id="m-btn-switch-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change switch password</button>
-          <button id="m-btn-switch-lock-reset" hidden data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
+          <button id="m-btn-link-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set switch password</button>
+          <button id="m-btn-link-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change switch password</button>
+          <button id="m-btn-link-lock-reset" hidden data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
         </div>
-        <div id="m-switch-lock-reset-box" class="confirm danger" hidden>
+        <div id="m-link-lock-reset-box" class="confirm danger" hidden>
           <p><strong data-i18n="manager.switchPw.resetTitle">Reset the switch password</strong></p>
-          <p id="m-switch-lock-reset-warning" class="hint"></p>
+          <p id="m-link-lock-reset-warning" class="hint"></p>
           <div class="row">
-            <button id="m-btn-switch-lock-reset-go" class="danger" data-i18n="manager.switchPw.resetGo">Reset and remove dormant syncs</button>
-            <button id="m-btn-switch-lock-reset-cancel" data-i18n="common.cancel">Cancel</button>
+            <button id="m-btn-link-lock-reset-go" class="danger" data-i18n="manager.switchPw.resetGo">Reset and remove dormant syncs</button>
+            <button id="m-btn-link-lock-reset-cancel" data-i18n="common.cancel">Cancel</button>
           </div>
         </div>
         <div id="switch-pw-error" class="error" role="alert" hidden></div>
@@ -295,7 +295,7 @@
         <p class="hint" data-i18n="manager.settings.changePwHint">Re-encrypts the sync with a new password (at least 8 characters). Your current password is verified first and never leaves this device. The old password stops working on every device at once.</p>
         <p class="notice needs-link-notice" hidden data-i18n="manager.settings.changePwNeedsLink">Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
         <label><span data-i18n="manager.settings.currentPw">Current password</span> <input id="m-current-password" type="password" autocomplete="current-password" /></label>
-        <label><span data-i18n="manager.move.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
+        <label><span data-i18n="manager.syncs.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label><span data-i18n="manager.settings.confirmNewPw">Confirm new password</span> <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
         <label id="m-pw-switch-wrap" hidden><span data-i18n="popup.saved.passwordLabel">Switch password</span> <input id="m-pw-switch" type="password" autocomplete="off" /></label>
         <div class="row"><button id="m-btn-password" class="primary" data-needs-link data-i18n="manager.settings.changePwBtn">Change password…</button></div>

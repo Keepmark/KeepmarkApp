@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DeleteRemoteImplication,
   DirectionOrder,
-  MoveImplication,
+  LinkImplication,
   UnlinkImplication,
   directionConfirm,
   dupDeleteConfirm,
@@ -49,8 +49,8 @@ describe('workflow texts', () => {
   });
 
   it('move says the old sync and the other devices stay', () => {
-    expect(MoveImplication()).toContain('old sync stays');
-    expect(MoveImplication()).toContain('Other devices keep using it until you move them');
+    expect(LinkImplication()).toContain('old sync stays');
+    expect(LinkImplication()).toContain('Other devices keep using it until you move them');
   });
 
   it('undo names the action in words, never the raw key', () => {

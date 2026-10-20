@@ -39,7 +39,7 @@ export enum MessageCommand {
   GetStatus = 'get-status',
   GetLogs = 'get-logs',
   Ping = 'ping',
-  SwitchPreview = 'switch-preview',
+  CheckSyncTarget = 'check-sync-target',
   PreviewMerge = 'preview-merge',
   SetVerbosity = 'set-verbosity',
   GetUndoState = 'get-undo-state',
@@ -61,7 +61,7 @@ export enum MessageCommand {
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
   ImportBackup = 'import-backup',
-  SwitchService = 'switch-service',
+  LinkSync = 'link-sync',
   DeleteRemoteSync = 'delete-remote-sync',
   DownloadFile = 'download-file',
   // Saved syncs (multi-sync: one active at a time)
@@ -120,7 +120,7 @@ export interface RemovedSyncSnapshot {
 }
 
 /** Move-service target. Nothing syncs until the popup submits this choice. */
-export interface SwitchTarget {
+export interface SyncTarget {
   newServiceUrl: string;
   /** 'new' = create sync + upload local; 'existing' = link + push, pull or merge. */
   mode: 'new' | 'existing';
@@ -137,7 +137,7 @@ export interface SwitchTarget {
 }
 
 /** Read-only preflight for the move wizard. Never mutates anything. */
-export interface SwitchPreviewResult {
+export interface SyncTargetPreview {
   reachable: boolean;
   serviceVersion?: string;
   versionCompatible?: boolean;
@@ -308,7 +308,7 @@ export type MessagePayload =
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
-  | { command: MessageCommand.SwitchService; switch: SwitchTarget }
+  | { command: MessageCommand.LinkSync; link: SyncTarget }
   | { command: MessageCommand.DeleteRemoteSync }
   | { command: MessageCommand.GetSavedSyncs }
   | {
@@ -327,7 +327,7 @@ export type MessagePayload =
       confirm: string;
     }
   | { command: MessageCommand.ResetSwitchPassword; next: string; confirm: string }
-  | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
+  | { command: MessageCommand.CheckSyncTarget; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.GetUndoState }

@@ -220,7 +220,7 @@ export function contractGate(input: {
 /** Contextual wizard success (pure helper lives in shared/sync.ts so the
  * background completion notice uses the same words; re-exported here for
  * the popup/manager surfaces). */
-export { describeMoveResult } from '../shared/sync.js';
+export { describeLinkResult } from '../shared/sync.js';
 
 /** The "Last action" banner is a short-lived notice: it hides this long
  * after the action (the undo slot itself stays; safety backups cover later

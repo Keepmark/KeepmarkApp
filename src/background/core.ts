@@ -74,8 +74,8 @@ import {
   type ResetSwitchPasswordResult,
   type StatusResponse,
   type SwitchLockState,
-  type SwitchPreviewResult,
-  type SwitchTarget,
+  type SyncTargetPreview,
+  type SyncTarget,
   type SyncJobType,
   type UndoKind,
   type UndoState,
@@ -91,7 +91,7 @@ import {
   checkService,
   createNewSync,
   deleteRemoteSync,
-  describeMoveResult,
+  describeLinkResult,
   getStoredHash,
   getStoredRevision,
   persistMeta,
@@ -293,8 +293,8 @@ export class BackgroundCore {
         return this.exportBackup(msg.password);
       case MessageCommand.ImportBackup:
         return this.importBackup(msg.json, msg.password);
-      case MessageCommand.SwitchService:
-        return this.withCredentialChange(() => this.switchService(msg.switch));
+      case MessageCommand.LinkSync:
+        return this.withCredentialChange(() => this.linkSync(msg.link));
       case MessageCommand.DeleteRemoteSync:
         return this.deleteRemoteSync();
       case MessageCommand.GetSavedSyncs:
@@ -313,8 +313,8 @@ export class BackgroundCore {
         return this.changeSwitchPassword(msg.current, msg.next, msg.confirm);
       case MessageCommand.ResetSwitchPassword:
         return this.resetSwitchPassword(msg.next, msg.confirm);
-      case MessageCommand.SwitchPreview:
-        return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
+      case MessageCommand.CheckSyncTarget:
+        return this.checkSyncTarget(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.PreviewMerge:
         return this.previewMerge(msg.serviceUrl, msg.syncId, msg.password);
       case MessageCommand.SetVerbosity:
@@ -1801,7 +1801,7 @@ export class BackgroundCore {
       });
     }
     await this.persistActiveBeforeSwitch();
-    return this.switchService(
+    return this.linkSync(
       {
         newServiceUrl: target.serviceUrl,
         mode: 'existing',
@@ -2030,11 +2030,11 @@ export class BackgroundCore {
     return { removed: await this.forgetSavedSyncRow(target) };
   }
 
-  private notifyMoveDone(target: SwitchTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
+  private notifyMoveDone(target: SyncTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
     return this.ports.chrome
       .notify(
         t('core.moveCompleted'),
-        describeMoveResult({
+        describeLinkResult({
           mode: target.mode,
           direction: target.direction,
           newServiceUrl: target.newServiceUrl,
@@ -2047,13 +2047,13 @@ export class BackgroundCore {
 
   /**
    * Move-service wizard. NOTHING syncs until the popup submits an explicit
-   * SwitchTarget (mode + direction + passwords). The existing branch verifies
+   * SyncTarget (mode + direction + passwords). The existing branch verifies
    * the password by decrypting BEFORE mutating anything, and each direction
    * snapshots its destroyed side fail-closed first (switch-new destroys
    * nothing: the local tree is uploaded as-is to a fresh sync).
    */
-  private async switchService(
-    target: SwitchTarget,
+  private async linkSync(
+    target: SyncTarget,
     unlockedVault?: CryptoKey,
   ): Promise<{ id: string }> {
     const { info, syncToolbar } = await this.requireCreds();
@@ -2391,11 +2391,11 @@ export class BackgroundCore {
    * compatibility + (existing mode) remote existence/lastUpdated + local
    * count. Never mutates state, never syncs.
    */
-  private async switchPreview(
+  private async checkSyncTarget(
     newServiceUrl: string,
     mode: 'new' | 'existing',
     syncId?: string,
-  ): Promise<SwitchPreviewResult> {
+  ): Promise<SyncTargetPreview> {
     const { info } = await this.requireCreds();
     const localCount = await this.countCached(info).catch(() => undefined);
     const api = this.makeApi(newServiceUrl, ServiceProbeTimeoutMs);
@@ -2409,7 +2409,7 @@ export class BackgroundCore {
     } catch {
       return { reachable: false, localCount };
     }
-    const result: SwitchPreviewResult = {
+    const result: SyncTargetPreview = {
       reachable: true,
       serviceVersion: service.version ?? undefined,
       versionCompatible: !service.version || compareVersions(service.version, MinApiVersion) >= 0,

@@ -29,51 +29,51 @@ beforeEach(async () => {
       case MessageCommand.GetServices: return [];
       case MessageCommand.ProbeService: return { reachable: true, versionCompatible: true, version: '1.1.13', status: 1 };
       case MessageCommand.GetStatus: return { syncEnabled: true, serviceUrl: 'https://old.test', syncId: 'old', queueLength: 0, syncing: false, supportsV12: true, bookmarkCount: 3 };
-      case MessageCommand.SwitchPreview: return { reachable: true, versionCompatible: true, localCount: 3, remoteExists: true };
+      case MessageCommand.CheckSyncTarget: return { reachable: true, versionCompatible: true, localCount: 3, remoteExists: true };
       case MessageCommand.PreviewMerge: return { localOnly: 1, remoteOnly: 2, localCount: 3, remoteCount: 4, titleConflicts: 0 };
-      case MessageCommand.SwitchService: return { syncId: 'new' };
+      case MessageCommand.LinkSync: return { syncId: 'new' };
       default: return null;
     }
   });
   await import('../src/manager/manager');
   await settle();
-  el('m-switch-url-label').closest('.service-picker')!.querySelector<HTMLInputElement>('input[value="custom"]')!.click();
-  field('m-switch-url', 'https://target.test');
-  el('m-switch-url-check').click(); await settle();
-  field('m-switch-password', 'password123');
-  field('m-switch-confirm', 'password123');
+  el('m-link-url-label').closest('.service-picker')!.querySelector<HTMLInputElement>('input[value="custom"]')!.click();
+  field('m-link-url', 'https://target.test');
+  el('m-link-url-check').click(); await settle();
+  field('m-link-password', 'password123');
+  field('m-link-confirm', 'password123');
 });
 it('shows all new-sync credentials before checking, then executes from the reviewed summary', async () => {
-  expect(el('move-step2').contains(el('m-switch-password'))).toBe(false);
-  el('m-btn-preview').click(); await settle();
-  expect(el('move-step2').hidden).toBe(false);
-  expect(el('move-implication').textContent).toContain('old');
-  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.SwitchService)).toBe(false);
-  el('m-btn-switch').click(); await settle();
-  expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.SwitchService)).toHaveLength(1);
-  expect(document.querySelector('#m-btn-switch-confirm')).toBeNull();
+  expect(el('link-step2').contains(el('m-link-password'))).toBe(false);
+  el('m-btn-link-check').click(); await settle();
+  expect(el('link-step2').hidden).toBe(false);
+  expect(el('link-implication').textContent).toContain('old');
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.LinkSync)).toBe(false);
+  el('m-btn-link').click(); await settle();
+  expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.LinkSync)).toHaveLength(1);
+  expect(document.querySelector('#m-btn-link-confirm')).toBeNull();
 });
 it('rejects stale checks after a password edit and requires another review', async () => {
   let resolve!: (value: unknown) => void;
   harness.send.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
-  el('m-btn-preview').click();
-  field('m-switch-password', 'different123');
+  el('m-btn-link-check').click();
+  field('m-link-password', 'different123');
   resolve({ reachable: true, versionCompatible: true }); await settle();
-  expect(el('move-step2').hidden).toBe(true);
-  expect((el('m-btn-switch') as HTMLButtonElement).disabled).toBe(true);
+  expect(el('link-step2').hidden).toBe(true);
+  expect((el('m-btn-link') as HTMLButtonElement).disabled).toBe(true);
 });
 it('verifies the password for an existing target before revealing its final action', async () => {
-  const existing = document.querySelector<HTMLInputElement>('input[name="m-switch-mode"][value="existing"]')!;
+  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
   existing.checked = true; existing.dispatchEvent(new Event('change'));
-  field('m-switch-id', 'target-id');
+  field('m-link-id', 'target-id');
   harness.send.mockImplementation(async (msg) => {
-    if (msg.command === MessageCommand.SwitchPreview) return { reachable: true, remoteExists: true, versionCompatible: true };
+    if (msg.command === MessageCommand.CheckSyncTarget) return { reachable: true, remoteExists: true, versionCompatible: true };
     if (msg.command === MessageCommand.PreviewMerge) throw new Error('Wrong password');
   });
-  el('m-btn-preview').click(); await settle();
-  expect(el('move-step2').hidden).toBe(true);
-  expect(el('move-error').textContent).toBe('Wrong password');
-  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.SwitchService)).toBe(false);
+  el('m-btn-link-check').click(); await settle();
+  expect(el('link-step2').hidden).toBe(true);
+  expect(el('link-error').textContent).toBe('Wrong password');
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.LinkSync)).toBe(false);
 });
 it('asks only once before deleting the server sync', async () => {
   el('m-btn-delete-remote').click(); await settle();
@@ -83,19 +83,19 @@ it('asks only once before deleting the server sync', async () => {
 });
 
 it('changes direction within the verified review without asking to check again', async () => {
-  const existing = document.querySelector<HTMLInputElement>('input[name="m-switch-mode"][value="existing"]')!;
+  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
   existing.checked = true; existing.dispatchEvent(new Event('change'));
-  field('m-switch-id', 'target-id');
-  el('m-btn-preview').click(); await settle();
+  field('m-link-id', 'target-id');
+  el('m-btn-link-check').click(); await settle();
   const checks = harness.send.mock.calls.length;
-  const merge = document.querySelector<HTMLInputElement>('input[name="m-switch-direction"][value="merge"]')!;
+  const merge = document.querySelector<HTMLInputElement>('input[name="m-link-direction"][value="merge"]')!;
   merge.checked = true; merge.dispatchEvent(new Event('change'));
-  expect(el('move-step2').hidden).toBe(false);
+  expect(el('link-step2').hidden).toBe(false);
   expect(harness.send.mock.calls).toHaveLength(checks);
-  expect(el('move-merge-counts').textContent).toContain('1');
-  expect(el('move-implication').textContent).toContain('may return');
-  el('m-btn-switch').click(); await settle();
-  expect(harness.send.mock.calls.find(([m]) => m.command === MessageCommand.SwitchService)?.[0]).toMatchObject({ switch: { direction: 'merge' } });
+  expect(el('link-merge-counts').textContent).toContain('1');
+  expect(el('link-implication').textContent).toContain('may return');
+  el('m-btn-link').click(); await settle();
+  expect(harness.send.mock.calls.find(([m]) => m.command === MessageCommand.LinkSync)?.[0]).toMatchObject({ link: { direction: 'merge' } });
 });
 
 it('restores a verified backup directly from its consequences without another prompt', async () => {
