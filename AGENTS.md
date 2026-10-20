@@ -68,6 +68,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
 | `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ru/zh | new |
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
+| `saved-syncs.ts` | Multi-sync registry: metadata-only rows (service, sync ID, label, last use), canonical identity, upsert/remove/sort/active matching. No secrets here — the derived key stays in `StoreKey.SyncInfo` | new (model A: one active sync) |
 | `id-mapper.ts` | `syncedId<->nativeId` mappings, sorted, rebuilt on populate | `app/bookmark-id-mapper.service.ts` |
 | `sync.ts` | `checkService`, `createNewSync`, `pullExistingSync`, `pullWithDerivedKey`, `pushBookmarks`, `switchService` | `app/bookmark-sync-provider` + login component |
 | `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline/429→front, 409→persisted conflict for user resolution, 401→sync-lost) | `app/sync.service.ts` |
@@ -109,8 +110,9 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `{ok,data}` / `{ok:false,errorName,message}`, `onInstalled/onStartup`.
   Adapter via `@platform/adapter` vite alias (NOT runtime detection).
 - `src/popup/` — small popup (`popup.html` at `src/`, `popup.ts`, `popup.css`,
-  shared `ui.ts`): connect + status card + sync now + open manager. Display
-  only; mutations via messages.
+  shared `ui.ts`): connect + status card + saved syncs (multi-sync) + sync now + open manager. Display
+  only; mutations via messages. `saved-syncs.ts` renders the same registry in
+  both views and owns the inline "Activate" password step.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Move, Logs, Settings), each section with its
   own contextual busy/error/result evidence; move wizard has a read-only
@@ -153,6 +155,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 3. **Sync model**: whole-blob pushes with optimistic `lastUpdated`; stored
    password field holds the DERIVED key, never raw. Queue lives ONLY in the
    background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
+   **Multi-sync (one active at a time)**: `StoreKey.SavedSyncs` holds metadata
+   rows only; `SyncInfo`/`Bookmarks`/`LastUpdated`/`ConflictState`/`UndoSlot`
+   always describe the ACTIVE sync. Activation = persist active (fail-closed,
+   conflict blocks) → verify target password by decrypting its remote copy →
+   apply target tree. Never self-pull, never merge across syncs, never store a
+   dormant sync's key.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
    one file (`vite.chromium-sw.ts` lib build). Static imports only.
 5. **i18n** (en, it, fr, es, de, ja, pt-BR, ru, zh): every user-facing text is a key in
@@ -231,8 +239,18 @@ already lets the MV3 worker reach the service without any host grant.
 
 **Known limitations / next features (not started):** manual browser QA
 (see README "Get it"); QR connection hardware QA;
-no multi-account; no auto-backup schedule; toolbar toggle + Chromium Menu
+no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.
+
+**Multi-sync — first slice DONE (`feature/multisync`):** metadata-only
+`SavedSyncs` registry (upsert on every link, upgrade migration at startup),
+`GetSavedSyncs` / `ActivateSavedSync` / `RemoveSavedSync`, popup panel in both
+views with inline password activation, fail-closed push before switching,
+conflict blocks the switch, unlink keeps the rows (re-link without retyping).
+Next slices: editable labels (rows are named by host + ID prefix today),
+per-row "Delete sync from server" and "Show QR" menu, session password cache
+(explicitly declined for now), then KeepmarkMobile (credential index + one DB
+per sync + Syncs page + biometry gate + QR add-or-activate).
 
 ## QR linking
 

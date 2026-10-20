@@ -24,6 +24,7 @@ import {
 import type { BookmarkNode, ServiceStatus } from './models.js';
 import type { MergeStats } from './merge.js';
 import type { SafetyEntry } from './safety.js';
+import type { SavedSync, SavedSyncActive } from './saved-syncs.js';
 
 export enum MessageCommand {
   GetServices = 'get-services',
@@ -63,6 +64,10 @@ export enum MessageCommand {
   SwitchService = 'switch-service',
   DeleteRemoteSync = 'delete-remote-sync',
   DownloadFile = 'download-file',
+  // Saved syncs (multi-sync: one active at a time)
+  GetSavedSyncs = 'get-saved-syncs',
+  ActivateSavedSync = 'activate-saved-sync',
+  RemoveSavedSync = 'remove-saved-sync',
   // Conflict resolution
   GetConflictState = 'get-conflict-state',
   GetConflictPreview = 'get-conflict-preview',
@@ -238,6 +243,12 @@ export interface DuplicateGroup {
 
 export type { ConnectQrPayload } from './connect-qr.js';
 
+/** Multi-sync list + which row is the active link (absent = unlinked). */
+export interface SavedSyncsResponse {
+  syncs: SavedSync[];
+  active?: SavedSyncActive;
+}
+
 export type MessagePayload =
   | { command: MessageCommand.GetServices }
   | { command: MessageCommand.ProbeService; serviceUrl: string }
@@ -257,6 +268,9 @@ export type MessagePayload =
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.DeleteRemoteSync }
+  | { command: MessageCommand.GetSavedSyncs }
+  | { command: MessageCommand.ActivateSavedSync; serviceUrl: string; syncId: string; password: string }
+  | { command: MessageCommand.RemoveSavedSync; serviceUrl: string; syncId: string }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }

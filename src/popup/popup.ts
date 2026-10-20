@@ -24,10 +24,12 @@ import {
   type MergePreview,
   type PingResponse,
   type RemovedSyncSnapshot,
+  type SavedSyncsResponse,
   type StatusResponse,
   type UndoState,
 } from '../shared/messages.js';
 import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from './flow.js';
+import { SavedSyncsPanel, type SavedSyncsChange } from './saved-syncs.js';
 import {
   type Direction,
   RemovedSyncDismissImplication,
@@ -58,6 +60,9 @@ let ping: PingResponse | undefined;
 let refreshSeq = 0;
 let connectService: ServicePicker;
 let connecting = false;
+/** Saved-syncs panels: main view + connect view share the same data. */
+let savedMain: SavedSyncsPanel;
+let savedConnect: SavedSyncsPanel;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -102,8 +107,24 @@ async function refreshAll(pickView = false): Promise<void> {
   // Show/hide conflict resolution button
   const conflictAction = $('p-conflict-action') as HTMLElement;
   conflictAction.hidden = !status?.conflict;
+  await refreshSavedSyncs();
   await refreshUndoBanner();
   await refreshRemovedCard();
+}
+
+/** Multi-sync registry rows, rendered in both views. Metadata only: a row
+ *  never carries a key, so a failed GetSavedSyncs just hides the block. */
+async function refreshSavedSyncs(): Promise<void> {
+  const my = refreshSeq;
+  let data: SavedSyncsResponse = { syncs: [] };
+  try {
+    data = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs });
+  } catch {
+    data = { syncs: [] };
+  }
+  if (my !== refreshSeq) return;
+  savedMain.render(data);
+  savedConnect.render(data);
 }
 
 /** Folders + bookmarks in a tree; callers skip the root containers. Kept
@@ -399,6 +420,14 @@ async function init(): Promise<void> {
   await initConnect();
   initMain();
   initRemovedCard();
+  const onSavedChanged = async (kind: SavedSyncsChange): Promise<void> => {
+    if (kind === 'activated') showView('main');
+    await refreshAll();
+    // A removal can leave this browser unlinked: follow the link, not the click.
+    if (!status?.syncEnabled) showView('connect');
+  };
+  savedMain = new SavedSyncsPanel('p-saved', onSavedChanged);
+  savedConnect = new SavedSyncsPanel('c-saved', onSavedChanged);
   await refreshAll(true);
 }
 

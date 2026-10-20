@@ -24,6 +24,22 @@
       </div>
       <div id="removed-error" class="error" role="alert" hidden></div>
     </div>
+    <div id="c-saved" class="card saved" hidden>
+      <h2 id="c-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
+      <ul id="c-saved-list" class="saved-list"></ul>
+      <div id="c-saved-confirm" class="confirm" hidden>
+        <p><strong id="c-saved-confirm-text"></strong></p>
+        <p id="c-saved-hint" class="hint"></p>
+        <label><span data-i18n="common.password">Password</span>
+          <input id="c-saved-password" type="password" autocomplete="current-password" />
+        </label>
+        <div class="row">
+          <button id="c-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>
+          <button id="c-saved-cancel" data-i18n="common.cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="c-saved-error" class="error" role="alert" hidden></div>
+    </div>
     <h2 data-i18n="popup.connect.title">Connect this browser</h2>
     <div class="seg" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="popup.connect.modeLabel">
       <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span data-i18n="popup.connect.modeNew">New sync</span></label>
@@ -89,6 +105,22 @@
           <span id="p-space">…</span>
         </dd>
       </dl>
+    </div>
+    <div id="p-saved" class="card saved" hidden>
+      <h2 id="p-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
+      <ul id="p-saved-list" class="saved-list"></ul>
+      <div id="p-saved-confirm" class="confirm" hidden>
+        <p><strong id="p-saved-confirm-text"></strong></p>
+        <p id="p-saved-hint" class="hint"></p>
+        <label><span data-i18n="common.password">Password</span>
+          <input id="p-saved-password" type="password" autocomplete="current-password" />
+        </label>
+        <div class="row">
+          <button id="p-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>
+          <button id="p-saved-cancel" data-i18n="common.cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="p-saved-error" class="error" role="alert" hidden></div>
     </div>
     <div id="main-error" class="error" role="alert" hidden></div>
     <div id="main-result" class="result" role="status" hidden></div>

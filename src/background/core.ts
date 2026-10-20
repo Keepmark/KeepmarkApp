@@ -1,4 +1,13 @@
 import { mergeServiceCatalog, normalizeServiceUrl, PublicServices, type ServiceOption } from '../shared/service-catalog.js';
+import {
+  canonicalServiceUrl,
+  findSavedSync,
+  removeSavedSync as forgetSavedSync,
+  sameSavedSync,
+  upsertSavedSync,
+  type SavedSync,
+  type SavedSyncActive,
+} from '../shared/saved-syncs.js';
 import type { ServiceProbeResponse } from '../shared/messages.js';
 import { buildConnectQrPayload, type ConnectQrPayload } from '../shared/connect-qr.js';
 // Background core: owns the sync queue, alarms, native listeners and all
@@ -49,6 +58,7 @@ import {
   type MessagePayload,
   type PingResponse,
   type RemovedSyncSnapshot,
+  type SavedSyncsResponse,
   type StatusResponse,
   type SwitchPreviewResult,
   type SwitchTarget,
@@ -268,6 +278,12 @@ export class BackgroundCore {
         return this.withCredentialChange(() => this.switchService(msg.switch));
       case MessageCommand.DeleteRemoteSync:
         return this.deleteRemoteSync();
+      case MessageCommand.GetSavedSyncs:
+        return this.getSavedSyncs();
+      case MessageCommand.ActivateSavedSync:
+        return this.withCredentialChange(() => this.activateSavedSync(msg.serviceUrl, msg.syncId, msg.password));
+      case MessageCommand.RemoveSavedSync:
+        return this.removeSavedSyncEntry(msg.serviceUrl, msg.syncId);
       case MessageCommand.SwitchPreview:
         return this.switchPreview(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.PreviewMerge:
@@ -1261,6 +1277,7 @@ export class BackgroundCore {
         await this.store.set(StoreKey.SyncInfo, { ...linked, serviceVersion });
       }
     }
+    await this.rememberActiveSavedSync();
     await this.ports.alarms.schedule(UpdatesAlarmName, (this.options.pollMinutes ?? 15));
     await this.setBadge(false);
   }
@@ -1582,6 +1599,139 @@ export class BackgroundCore {
    * Explicit move confirmation (same words as the manager result box, minus
    * the sync ID — notification centers persist, and the ID is a bearer).
    */
+  // ------------------------------------------------------------ saved syncs
+
+  /** Identity of the linked sync, or undefined when this browser is unlinked. */
+  private async activeSavedSync(): Promise<SavedSyncActive | undefined> {
+    const enabled = (await this.store.get<boolean>(StoreKey.SyncEnabled)) ?? false;
+    if (!enabled) return undefined;
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (!info?.id) return undefined;
+    return {
+      serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl),
+      syncId: info.id,
+    };
+  }
+
+  private async savedSyncList(): Promise<SavedSync[]> {
+    return (await this.store.get<SavedSync[]>(StoreKey.SavedSyncs)) ?? [];
+  }
+
+  /**
+   * The linked sync is always part of the registry: installs upgraded from the
+   * single-sync version get their row here (idempotent, no-op once present).
+   */
+  private async ensureSavedSyncForLink(): Promise<void> {
+    const active = await this.activeSavedSync();
+    if (!active) return;
+    const list = await this.savedSyncList();
+    if (findSavedSync(list, active)) return;
+    await this.writeSavedSync(active);
+  }
+
+  /** Upsert the linked sync with NOW as last use (called after every link). */
+  private async rememberActiveSavedSync(): Promise<void> {
+    const active = await this.activeSavedSync();
+    if (!active) return;
+    await this.writeSavedSync(active);
+  }
+
+  private async writeSavedSync(active: SavedSyncActive): Promise<void> {
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    const list = await this.savedSyncList();
+    await this.store.set(
+      StoreKey.SavedSyncs,
+      upsertSavedSync(list, {
+        ...active,
+        syncVersion: info?.version,
+        lastUsedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  private async getSavedSyncs(): Promise<SavedSyncsResponse> {
+    await this.ensureSavedSyncForLink();
+    return {
+      syncs: await this.savedSyncList(),
+      active: await this.activeSavedSync(),
+    };
+  }
+
+  /**
+   * Multi-sync activation: make a saved sync the active one again.
+   *
+   * Nothing mutates until the target password is verified by decrypting its
+   * remote copy (switchService / connectExisting do that first). Invariants:
+   * - the active side is persisted first (fail-closed): unpushed edits are
+   *   pushed before its native tree is replaced, and a pending conflict blocks;
+   * - the previously active sync is never overwritten: it stays in the list;
+   * - the already-active sync is refused, never self-pulled.
+   */
+  private async activateSavedSync(
+    serviceUrl: string,
+    syncId: string,
+    password: string,
+  ): Promise<{ id: string }> {
+    if (!password) throw new IncompleteSyncInfoException(t('core.passwordRequired'));
+    const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
+    const list = await this.savedSyncList();
+    if (!findSavedSync(list, target)) throw new UnexpectedResponseException(t('core.savedNotFound'));
+    const active = await this.activeSavedSync();
+    if (active && sameSavedSync(active, target)) {
+      throw new UnexpectedResponseException(t('core.savedAlreadyActive'));
+    }
+    if (!active) {
+      // Unlinked (the row survived an unlink): plain link, there is no active
+      // side to persist and no link to move away from.
+      return this.connectExisting(target.serviceUrl, target.syncId, password, 'pull');
+    }
+    await this.persistActiveBeforeSwitch();
+    return this.switchService({
+      newServiceUrl: target.serviceUrl,
+      mode: 'existing',
+      syncId: target.syncId,
+      newPassword: password,
+      direction: 'pull',
+    });
+  }
+
+  /**
+   * Fail-closed pre-switch: the active sync's native edits reach the server
+   * BEFORE another sync's tree replaces them. A pending conflict or a failed
+   * push aborts the switch with nothing rewritten yet.
+   */
+  private async persistActiveBeforeSwitch(): Promise<void> {
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (!info?.id || !info.password) return;
+    if (await this.hasConflict()) throw new UnexpectedResponseException(t('core.savedConflictPending'));
+    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
+    const pending = await this.reconcileNatives(info, syncToolbar);
+    if (!pending.changed) return;
+    const pushed = await this.pushAfterNativeChange();
+    if (pushed.conflict) throw new UnexpectedResponseException(t('core.savedConflictPending'));
+    if (!pushed.pushed) throw new UnexpectedResponseException(t('core.savedPushFailed'));
+  }
+
+  /**
+   * Local-only: forget a saved row. The server copy and this device's link are
+   * untouched — the active row IS the link, so it must be unlinked first.
+   */
+  private async removeSavedSyncEntry(
+    serviceUrl: string,
+    syncId: string,
+  ): Promise<{ removed: boolean }> {
+    const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
+    const active = await this.activeSavedSync();
+    if (active && sameSavedSync(active, target)) {
+      throw new UnexpectedResponseException(t('core.savedActiveRemove'));
+    }
+    const list = await this.savedSyncList();
+    const next = forgetSavedSync(list, target);
+    if (next.length === list.length) return { removed: false };
+    await this.store.set(StoreKey.SavedSyncs, next);
+    return { removed: true };
+  }
+
   private notifyMoveDone(target: SwitchTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
     return this.ports.chrome
       .notify(
@@ -2518,6 +2668,10 @@ export class BackgroundCore {
     } catch (err) {
       this.log.log(XbsLogLevel.Warning, 'sync', `Install backup failed: ${(err as Error).message}`);
     }
+    // Upgraded installs: the single linked sync becomes the first saved row.
+    await this.ensureSavedSyncForLink().catch((err) =>
+      this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs registry failed: ${(err as Error)?.message}`),
+    );
     const enabled = await this.store.get<boolean>(StoreKey.SyncEnabled);
     if (enabled) {
       await this.ports.alarms.schedule(UpdatesAlarmName, this.options.pollMinutes ?? 15);

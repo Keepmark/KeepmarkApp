@@ -29,6 +29,9 @@ export enum StoreKey {
    *  roots move when the browser switches local/account bookmark storage). */
   NativeRootKey = 'nativeRootKey',
   RemovedSync = 'removedSync',
+  /** Saved syncs (multi-sync registry): metadata rows only, never a secret.
+   *  Exactly one sync is active at a time — the one in StoreKey.SyncInfo. */
+  SavedSyncs = 'savedSyncs',
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',
   SyncHash = 'syncHash',
