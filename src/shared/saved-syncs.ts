@@ -85,6 +85,30 @@ export function findSavedSync(
   return list.find((row) => savedSyncKey(row.serviceUrl, row.syncId) === key);
 }
 
+/**
+ * Storage is shared with older builds and hand-edited state: never trust the
+ * shape. Unknown rows are dropped instead of breaking an upsert (which runs
+ * inside the link flow), known rows are canonicalized and re-sorted.
+ */
+export function sanitizeSavedSyncs(value: unknown): SavedSync[] {
+  if (!Array.isArray(value)) return [];
+  const rows: SavedSync[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as Partial<SavedSync>;
+    if (typeof row.syncId !== 'string' || !row.syncId.trim()) continue;
+    if (typeof row.serviceUrl !== 'string' || !row.serviceUrl.trim()) continue;
+    rows.push({
+      serviceUrl: canonicalServiceUrl(row.serviceUrl),
+      syncId: row.syncId,
+      ...(typeof row.label === 'string' && row.label.trim() ? { label: row.label } : {}),
+      ...(typeof row.syncVersion === 'string' && row.syncVersion ? { syncVersion: row.syncVersion } : {}),
+      lastUsedAt: typeof row.lastUsedAt === 'string' ? row.lastUsedAt : '',
+    });
+  }
+  return sortSavedSyncs(rows);
+}
+
 /** Most recently used first; deterministic ties (label, then sync id). */
 export function sortSavedSyncs(list: readonly SavedSync[]): SavedSync[] {
   return [...list].sort((a, b) => {

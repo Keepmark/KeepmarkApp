@@ -1933,3 +1933,67 @@ describe('service selection and custom retention', () => {
     expect(await core.handleMessage({ command: MessageCommand.GetServices })).toHaveLength(9);
   });
 });
+
+describe('saved syncs registry lifecycle', () => {
+  it('connect-new registers the linked sync as the first row', async () => {
+    const { store } = await linkedCore(baseState());
+    const rows = (await store.get<{ syncId: string }[]>(StoreKey.SavedSyncs)) ?? [];
+    expect(rows.map((r) => r.syncId)).toEqual([SYNC_ID]);
+  });
+
+  it('undo of connect-new drops the row it created', async () => {
+    const { core, store } = await linkedCore(baseState());
+    expect(await store.get(StoreKey.SavedSyncs)).toHaveLength(1);
+    await core.handleMessage({ command: MessageCommand.UndoLastLink });
+    // The server sync is gone (or orphaned on a legacy service): no dead row.
+    expect(await store.get(StoreKey.SavedSyncs)).toEqual([]);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+  });
+
+  it('delete-from-server drops the row and unlinks', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    expect(await store.get(StoreKey.SavedSyncs)).toHaveLength(1);
+    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
+    expect(state.deleted).toContain(SYNC_ID);
+    expect(await store.get(StoreKey.SavedSyncs)).toEqual([]);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
+  });
+
+  it('a sync the server no longer knows drops its row on unlink', async () => {
+    const { SyncNotFoundException } = await import('../src/shared/errors');
+    const { core, store } = await linkedCore(baseState());
+    await core.disableSync(new SyncNotFoundException('gone'));
+    expect(await store.get(StoreKey.SavedSyncs)).toEqual([]);
+    expect(await store.get(StoreKey.RemovedSync)).toBeDefined();
+  });
+
+  it('a manual unlink keeps the row (re-link without retyping)', async () => {
+    const { core, store } = await linkedCore(baseState());
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    const rows = (await store.get<{ syncId: string }[]>(StoreKey.SavedSyncs)) ?? [];
+    expect(rows.map((r) => r.syncId)).toEqual([SYNC_ID]);
+  });
+
+  it('a corrupt registry never breaks a completed link', async () => {
+    const store = new Store(new MemoryBackend());
+    const ports = makePorts();
+    await store.set(StoreKey.SavedSyncs, 'not-an-array');
+    const core = new BackgroundCore(
+      store,
+      new BookmarkIdMapper(store),
+      new InMemoryLogger(),
+      makeFirefoxAdapter(makeMockApi()),
+      ports,
+      makeFakeApi(baseState()),
+      { debounceMs: 5 },
+    );
+    await core.handleMessage({ command: MessageCommand.ConnectNew, serviceUrl: 'https://x.test/', password: PASSWORD });
+    // The link landed; the registry is repaired on the next read.
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
+    const list = (await core.handleMessage({ command: MessageCommand.GetSavedSyncs })) as {
+      syncs: { syncId: string }[];
+    };
+    expect(list.syncs.map((r) => r.syncId)).toEqual([SYNC_ID]);
+  });
+});

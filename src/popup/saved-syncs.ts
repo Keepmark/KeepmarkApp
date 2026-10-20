@@ -5,7 +5,7 @@
 
 import { $, input, send, withBusy } from './ui.js';
 import { cancelConfirm, confirmInline, showError } from './flow.js';
-import { t } from '../shared/i18n.js';
+import { t, tn } from '../shared/i18n.js';
 import { MessageCommand, type SavedSyncsResponse } from '../shared/messages.js';
 import {
   isActiveSavedSync,
@@ -19,9 +19,9 @@ import {
 export type SavedSyncsChange = 'activated' | 'removed';
 
 export class SavedSyncsPanel {
-  /** Remove-confirm anchors currently open (cancelled before a re-render, so
-   *  a stale confirm never outlives the row it belongs to). */
-  private readonly openConfirms: string[] = [];
+  /** Anchor of the remove-confirm currently open, if any: cancelled before a
+   *  re-render so a stale confirm never outlives the row it belongs to. */
+  private openConfirmId?: string;
   private syncs: SavedSync[] = [];
   private active?: { serviceUrl: string; syncId: string };
   /** Row waiting for its password. */
@@ -57,8 +57,12 @@ export class SavedSyncsPanel {
   /** Render the registry (the popup calls this after every status refresh). */
   render(data: SavedSyncsResponse): void {
     this.closeConfirm();
-    for (const id of this.openConfirms) cancelConfirm(id);
-    this.openConfirms.length = 0;
+    if (this.openConfirmId) {
+      cancelConfirm(this.openConfirmId);
+      this.openConfirmId = undefined;
+    }
+    // A new render is a new state: never resurrect an error from the old one.
+    this.clearError();
     this.syncs = data.syncs;
     this.active = data.active;
     const card = this.el('card');
@@ -68,7 +72,7 @@ export class SavedSyncsPanel {
       card.hidden = true;
       return;
     }
-    this.el('title').textContent = t('popup.saved.titleCount', { n: this.syncs.length });
+    this.el('title').textContent = tn('popup.saved.title', this.syncs.length);
     this.syncs.forEach((sync, index) => list.append(this.row(sync, index)));
     card.hidden = false;
   }
@@ -163,14 +167,19 @@ export class SavedSyncsPanel {
 
   private async remove(sync: SavedSync, anchorId: string): Promise<void> {
     this.clearError();
-    const ok = await confirmInline(anchorId, {
-      message: t('popup.saved.removePrompt', { name: savedSyncName(sync) }),
-      implication: t('popup.saved.removeImplication'),
-      confirmLabel: t('common.remove'),
-      danger: true,
-    });
+    this.openConfirmId = anchorId;
+    let ok = false;
+    try {
+      ok = await confirmInline(anchorId, {
+        message: t('popup.saved.removePrompt', { name: savedSyncName(sync) }),
+        implication: t('popup.saved.removeImplication'),
+        confirmLabel: t('common.remove'),
+        danger: true,
+      });
+    } finally {
+      this.openConfirmId = undefined;
+    }
     if (!ok) return;
-    this.openConfirms.push(anchorId);
     try {
       await send({
         command: MessageCommand.RemoveSavedSync,

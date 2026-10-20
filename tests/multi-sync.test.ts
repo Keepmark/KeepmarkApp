@@ -432,4 +432,82 @@ describe('multi-sync (saved syncs)', () => {
     expect(list.active?.syncId).toBe(idA);
     expect(nativeUrls(await adapter.readAll(true))).toContain('https://a.test');
   });
+
+  it('a wrong password changes nothing, even with unpushed edits on the active sync', async () => {
+    const s = state();
+    const { core, store, native, adapter } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+    });
+    // Unpushed edit on the ACTIVE sync: the pre-flight must not touch it.
+    await native.create({ parentId: 'unfiled_____', title: 'Late', url: 'https://late.test' });
+    const beforeNative = nativeUrls(await adapter.readAll(true));
+    const beforePuts = s.puts.length;
+    const beforeUndo = await store.get(StoreKey.UndoSlot);
+
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ActivateSavedSync,
+        serviceUrl: 'https://api.xbrowsersync.org/',
+        syncId: idA,
+        password: 'wrong password',
+      }),
+    ).rejects.toThrow(/password|credentials|decrypt/i);
+
+    expect(s.puts).toHaveLength(beforePuts); // no push of the active side
+    expect(nativeUrls(await adapter.readAll(true))).toEqual(beforeNative);
+    expect((await saved(core)).active?.syncId).toBe('B');
+    expect(await store.get(StoreKey.UndoSlot)).toEqual(beforeUndo); // slot intact
+  });
+
+  it('a conflict left by a previous link does not block the switch', async () => {
+    const s = state();
+    const { core, store } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+    });
+    // A switch made from the manager never clears ConflictState: the stale
+    // record must not block activation of another sync.
+    await store.set(StoreKey.ConflictState, {
+      syncId: 'previous-sync',
+      localEnc: 'stale',
+      localCount: 0,
+      remoteLastUpdated: '',
+      capturedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    await core.handleMessage({
+      command: MessageCommand.ActivateSavedSync,
+      serviceUrl: 'https://api.xbrowsersync.org/',
+      syncId: idA,
+      password: PASSWORD_A,
+    });
+
+    expect((await saved(core)).active?.syncId).toBe(idA);
+    expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+  });
+
+  it('removing a row that is not in the list is a no-op', async () => {
+    const { core } = await setup(state());
+    await connectA(core);
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.RemoveSavedSync,
+        serviceUrl: 'https://api.xbrowsersync.org/',
+        syncId: 'never-linked',
+      }),
+    ).resolves.toEqual({ removed: false });
+  });
 });

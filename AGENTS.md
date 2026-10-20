@@ -157,10 +157,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
    **Multi-sync (one active at a time)**: `StoreKey.SavedSyncs` holds metadata
    rows only; `SyncInfo`/`Bookmarks`/`LastUpdated`/`ConflictState`/`UndoSlot`
-   always describe the ACTIVE sync. Activation = persist active (fail-closed,
-   conflict blocks) → verify target password by decrypting its remote copy →
-   apply target tree. Never self-pull, never merge across syncs, never store a
-   dormant sync's key.
+   always describe the ACTIVE sync. Activation = verify target password
+   (read-only: version gate + GET + decrypt) → persist active (fail-closed,
+   conflict blocks) → apply target tree. Never self-pull, never merge across
+   syncs, never store a dormant sync's key. A row does hold the sync ID, which
+   is a capability token for the service's `DELETE`: truncate it in UI, never
+   log it.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
    one file (`vite.chromium-sw.ts` lib build). Static imports only.
 5. **i18n** (en, it, fr, es, de, ja, pt-BR, ru, zh): every user-facing text is a key in
@@ -242,12 +244,15 @@ already lets the MV3 worker reach the service without any host grant.
 no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.
 
-**Multi-sync — first slice DONE (`feature/multisync`):** metadata-only
+**Multi-sync — first slice DONE and reviewed (`feature/multisync`):** metadata-only
 `SavedSyncs` registry (upsert on every link, upgrade migration at startup),
 `GetSavedSyncs` / `ActivateSavedSync` / `RemoveSavedSync`, popup panel in both
 views with inline password activation, fail-closed push before switching,
 conflict blocks the switch, unlink keeps the rows (re-link without retyping).
-Next slices: editable labels (rows are named by host + ID prefix today),
+The code review closed: dead rows after delete-from-server and undo, target
+password verified BEFORE the active side is persisted, per-link conflicts,
+`quiesce` before the pre-switch push, serialized registry writes and sanitized
+reads. Next slices: editable labels (rows are named by host + ID prefix today),
 per-row "Delete sync from server" and "Show QR" menu, session password cache
 (explicitly declined for now), then KeepmarkMobile (credential index + one DB
 per sync + Syncs page + biometry gate + QR add-or-activate).

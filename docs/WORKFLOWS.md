@@ -54,7 +54,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Delete sync from server (extension, service v1.2) | yes | `Delete sync from server…` | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
 | Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | `Download copy` / `Dismiss…` | Dismiss only | The kept copy is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
-| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` on a row → password of that sync → apply | none beyond the password step (the field is the check: it is verified before anything changes) | The sync that is active right now is saved first; a failed save or a pending conflict cancels the switch. The list entry only proves the sync was linked once: the password is never stored for dormant rows. |
+| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` on a row → password of that sync → apply | none beyond the password step (the field is the check: it is verified read-only before anything is saved or replaced) | The password is proved first (version gate + GET + decrypt); only then the sync that is active right now is saved, and a failed save or a pending conflict cancels the switch. The list entry only proves the sync was linked once: no key is stored for dormant rows (the sync ID, a capability token, is). |
 | Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
@@ -79,11 +79,13 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 ## Multi-sync (saved syncs, extension)
 
 - One sync is active at a time; the others are dormant rows (service, sync ID,
-  last use). No password and no key is stored for a dormant row.
-- Activating a row = password of that sync → the background verifies it by
-  decrypting the remote copy → saves the active side (`fail-closed`: unpushed
-  native edits are pushed first; a pending conflict cancels the switch) →
-  replaces the native tree with the target's → the previous sync stays listed.
+  last use). No password and no key is stored for a dormant row (the sync ID is
+  kept: it is the capability token the UI truncates).
+- Activating a row = password of that sync → the background proves it with a
+  read-only preflight (version gate + GET + decrypt, nothing written) → saves
+  the active side (`fail-closed`: unpushed native edits are pushed first; a
+  pending conflict cancels the switch) → replaces the native tree with the
+  target's → the previous sync stays listed.
 - Activating the already-active row is refused; the native tree is never
   re-read from the same sync.
 - `Remove from the list` is local-only (bookmarks, server copy and safety

@@ -4,6 +4,7 @@ import {
   findSavedSync,
   removeSavedSync as forgetSavedSync,
   sameSavedSync,
+  sanitizeSavedSyncs,
   upsertSavedSync,
   type SavedSync,
   type SavedSyncActive,
@@ -193,6 +194,9 @@ export class BackgroundCore {
   private started = false;
   /** In-flight drain shared by concurrent callers (no false "did not drain"). */
   private drainFlight?: Promise<Error | undefined>;
+  /** Serialized read-modify-write on the saved-syncs registry. One worker, but
+   *  awaits interleave: two upserts must never lose each other. */
+  private savedWriteFlight: Promise<unknown> = Promise.resolve();
   private disabling = false;
   /**
    * v1.2 capability per service URL (null = not probed yet). Probed via the
@@ -554,8 +558,9 @@ export class BackgroundCore {
     return pushBookmarks(api, this.store, info.id!, info.password!, tree);
   }
 
-  /** Reconcile native -> synced and push when anything changed. */
-  async pushAfterNativeChange(): Promise<{ pushed: boolean; conflict?: boolean }> {
+  /** Reconcile native -> synced and push when anything changed. `adopted` = the
+   *  server already held our content (nothing to push, nothing to lose). */
+  async pushAfterNativeChange(): Promise<{ pushed: boolean; conflict?: boolean; adopted?: boolean }> {
     const { info, syncToolbar } = await this.requireCreds();
     if (this.suspended > 0) {
       // Lost otherwise: the debounce alarm is one-shot and already consumed.
@@ -591,7 +596,7 @@ export class BackgroundCore {
         const fresh = await this.fetchRemote(api, info).catch(() => undefined);
         if (fresh && sameContent(next, ensureContainersExist(fresh.tree))) {
           await this.adoptRemote(api, info, syncToolbar, fresh.res);
-          return { pushed: false };
+          return { pushed: false, adopted: true };
         }
         await this.captureConflict(info, next, fresh?.res.lastUpdated ?? '');
         return { pushed: false, conflict: true };
@@ -659,8 +664,20 @@ export class BackgroundCore {
 
   // ------------------------------------------------------------- conflicts
 
+  /**
+   * Pending conflict for the ACTIVE link. A stored conflict from a previous
+   * sync (e.g. a switch made from the manager) is meaningless now: it is
+   * dropped instead of blocking pulls and switches on the new link.
+   */
   private async hasConflict(): Promise<boolean> {
-    return (await this.store.get<StoredConflict>(StoreKey.ConflictState)) !== undefined;
+    const stored = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    if (!stored) return false;
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (!info?.id || stored.syncId !== info.id) {
+      await this.store.remove(StoreKey.ConflictState);
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -675,7 +692,9 @@ export class BackgroundCore {
     notify = true,
     reason?: ConflictReason,
   ): Promise<void> {
-    const prev = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    const stored = await this.store.get<StoredConflict>(StoreKey.ConflictState);
+    // Only a conflict of the SAME sync may contribute its reason/timestamp.
+    const prev = stored?.syncId === info.id ? stored : undefined;
     const why = reason ?? prev?.reason;
     await this.store.set(StoreKey.ConflictState, {
       syncId: info.id!,
@@ -1277,7 +1296,12 @@ export class BackgroundCore {
         await this.store.set(StoreKey.SyncInfo, { ...linked, serviceVersion });
       }
     }
-    await this.rememberActiveSavedSync();
+    await this.rememberActiveSavedSync().catch((err) =>
+      // A registry hiccup must never turn a completed link into an error.
+      this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs registry failed: ${(err as Error)?.message}`),
+    );
+    // The new link starts clean: drop a conflict left over from the previous one.
+    await this.hasConflict().catch(() => false);
     await this.ports.alarms.schedule(UpdatesAlarmName, (this.options.pollMinutes ?? 15));
     await this.setBadge(false);
   }
@@ -1614,43 +1638,64 @@ export class BackgroundCore {
   }
 
   private async savedSyncList(): Promise<SavedSync[]> {
-    return (await this.store.get<SavedSync[]>(StoreKey.SavedSyncs)) ?? [];
+    return sanitizeSavedSyncs(await this.store.get<unknown>(StoreKey.SavedSyncs));
+  }
+
+  /** Serialized read-modify-write: a slower read must never drop a newer row. */
+  private withSavedSyncs<T>(mutate: (list: SavedSync[]) => Promise<T> | T): Promise<T> {
+    const run = this.savedWriteFlight.then(async () => mutate(await this.savedSyncList()));
+    this.savedWriteFlight = run.catch(() => undefined);
+    return run;
   }
 
   /**
    * The linked sync is always part of the registry: installs upgraded from the
-   * single-sync version get their row here (idempotent, no-op once present).
+   * single-sync version get their row here (idempotent, no-op once present, and
+   * it never bumps lastUsedAt: this runs on wake-ups too).
    */
   private async ensureSavedSyncForLink(): Promise<void> {
     const active = await this.activeSavedSync();
     if (!active) return;
-    const list = await this.savedSyncList();
-    if (findSavedSync(list, active)) return;
-    await this.writeSavedSync(active);
+    await this.upsertSavedSyncRow(active, false);
   }
 
   /** Upsert the linked sync with NOW as last use (called after every link). */
   private async rememberActiveSavedSync(): Promise<void> {
     const active = await this.activeSavedSync();
     if (!active) return;
-    await this.writeSavedSync(active);
+    await this.upsertSavedSyncRow(active, true);
   }
 
-  private async writeSavedSync(active: SavedSyncActive): Promise<void> {
-    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
-    const list = await this.savedSyncList();
-    await this.store.set(
-      StoreKey.SavedSyncs,
-      upsertSavedSync(list, {
-        ...active,
-        syncVersion: info?.version,
-        lastUsedAt: new Date().toISOString(),
-      }),
-    );
+  private async upsertSavedSyncRow(active: SavedSyncActive, bumpLastUse: boolean): Promise<void> {
+    await this.withSavedSyncs(async (list) => {
+      const existing = findSavedSync(list, active);
+      if (!bumpLastUse && existing) return;
+      const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      await this.store.set(
+        StoreKey.SavedSyncs,
+        upsertSavedSync(list, {
+          ...active,
+          syncVersion: info?.version,
+          lastUsedAt: bumpLastUse ? new Date().toISOString() : existing?.lastUsedAt ?? new Date().toISOString(),
+        }),
+      );
+    });
+  }
+
+  /** Drop one row. No active-link guard: callers that must respect it check. */
+  private forgetSavedSyncRow(target: SavedSyncActive): Promise<boolean> {
+    return this.withSavedSyncs(async (list) => {
+      const next = forgetSavedSync(list, target);
+      if (next.length === list.length) return false;
+      await this.store.set(StoreKey.SavedSyncs, next);
+      return true;
+    });
   }
 
   private async getSavedSyncs(): Promise<SavedSyncsResponse> {
-    await this.ensureSavedSyncForLink();
+    await this.ensureSavedSyncForLink().catch((err) =>
+      this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs registry failed: ${(err as Error)?.message}`),
+    );
     return {
       syncs: await this.savedSyncList(),
       active: await this.activeSavedSync(),
@@ -1661,8 +1706,10 @@ export class BackgroundCore {
    * Multi-sync activation: make a saved sync the active one again.
    *
    * Nothing mutates until the target password is verified by decrypting its
-   * remote copy (switchService / connectExisting do that first). Invariants:
-   * - the active side is persisted first (fail-closed): unpushed edits are
+   * remote copy — a read-only preflight that runs BEFORE the active side is
+   * persisted, so a wrong password changes nothing at all (no push, no undo
+   * slot, no safety snapshot). Invariants:
+   * - the active side is then persisted (fail-closed): unpushed edits are
    *   pushed before its native tree is replaced, and a pending conflict blocks;
    * - the previously active sync is never overwritten: it stays in the list;
    * - the already-active sync is refused, never self-pulled.
@@ -1680,6 +1727,7 @@ export class BackgroundCore {
     if (active && sameSavedSync(active, target)) {
       throw new UnexpectedResponseException(t('core.savedAlreadyActive'));
     }
+    await this.verifySavedSyncTarget(target, password);
     if (!active) {
       // Unlinked (the row survived an unlink): plain link, there is no active
       // side to persist and no link to move away from.
@@ -1696,20 +1744,48 @@ export class BackgroundCore {
   }
 
   /**
+   * Read-only password/version preflight for a dormant row: version gates,
+   * derive, GET and decrypt of the target's remote copy. Nothing is written, so
+   * it can run before `persistActiveBeforeSwitch` (that is what makes "a wrong
+   * password changes nothing" true, including the undo slot). Costs one extra
+   * GET before the switch, deliberately.
+   */
+  private async verifySavedSyncTarget(target: SavedSyncActive, password: string): Promise<void> {
+    const api = this.makeApi(target.serviceUrl);
+    await checkService(api, this.log);
+    const versionRes = await api.getVersion(target.syncId);
+    const remoteVersion = versionRes.version ?? undefined;
+    if (!remoteVersion) {
+      throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
+    }
+    if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
+      throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
+    }
+    const derived = await deriveKey(password, target.syncId, remoteVersion);
+    const res = await api.getBookmarks(target.syncId);
+    if (!res.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
+    // Wrong key: InvalidCredentials before anything else runs.
+    await decryptData(res.bookmarks, derived);
+  }
+
+  /**
    * Fail-closed pre-switch: the active sync's native edits reach the server
    * BEFORE another sync's tree replaces them. A pending conflict or a failed
-   * push aborts the switch with nothing rewritten yet.
+   * push aborts the switch with nothing rewritten yet. `quiesce()` first: a
+   * debounced native push in flight would race this one into a false 409.
    */
   private async persistActiveBeforeSwitch(): Promise<void> {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (!info?.id || !info.password) return;
+    await this.quiesce();
     if (await this.hasConflict()) throw new UnexpectedResponseException(t('core.savedConflictPending'));
     const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
     const pending = await this.reconcileNatives(info, syncToolbar);
     if (!pending.changed) return;
     const pushed = await this.pushAfterNativeChange();
     if (pushed.conflict) throw new UnexpectedResponseException(t('core.savedConflictPending'));
-    if (!pushed.pushed) throw new UnexpectedResponseException(t('core.savedPushFailed'));
+    // adopted = the server already held this content: nothing was lost.
+    if (!pushed.pushed && !pushed.adopted) throw new UnexpectedResponseException(t('core.savedPushFailed'));
   }
 
   /**
@@ -1725,11 +1801,7 @@ export class BackgroundCore {
     if (active && sameSavedSync(active, target)) {
       throw new UnexpectedResponseException(t('core.savedActiveRemove'));
     }
-    const list = await this.savedSyncList();
-    const next = forgetSavedSync(list, target);
-    if (next.length === list.length) return { removed: false };
-    await this.store.set(StoreKey.SavedSyncs, next);
-    return { removed: true };
+    return { removed: await this.forgetSavedSyncRow(target) };
   }
 
   private notifyMoveDone(target: SwitchTarget, _finalId: string, bookmarkCount?: number): Promise<void> {
@@ -2034,6 +2106,10 @@ export class BackgroundCore {
     this.log.log(XbsLogLevel.Info, 'sync', `Sync ${sanitizeSyncId(info.id)} deleted from server, unlinking device`);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     await this.disableSync();
+    // The row would only offer an activation that answers 404: drop it.
+    await this.forgetSavedSyncRow({ serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl), syncId: info.id! }).catch(
+      (e: unknown) => this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs cleanup failed: ${(e as Error)?.message}`),
+    );
     // The safety entry above stays locked to the deleted sync's key, so it
     // can never be opened again: keep the same plaintext RemovedSync copy a
     // server-side removal leaves, which the popup offers for download. Set
@@ -2215,6 +2291,14 @@ export class BackgroundCore {
       }
     }
     await this.restorePrevState(slot, putBack);
+    // A sync created by the undone operation is gone (DELETE above, or an
+    // orphan on a legacy service): its saved row must not survive as a dead
+    // entry the popup would offer to activate.
+    if (slot.kind === 'connect-new' || slot.kind === 'switch-new') {
+      await this.forgetSavedSyncRow({ serviceUrl: slot.opServiceUrl, syncId: slot.opSyncId }).catch(
+        (e: unknown) => this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs cleanup failed: ${(e as Error)?.message}`),
+      );
+    }
     await this.clearUndo();
     this.log.log(XbsLogLevel.Info, 'sync', `Undid ${slot.kind}, previous state restored`);
     return { undone: slot.kind };
@@ -2597,6 +2681,8 @@ export class BackgroundCore {
   }
 
   private async doDisableSync(err?: Error): Promise<void> {
+    /** Sync the server says is gone: its saved row can never be activated. */
+    let deadSync: SavedSyncActive | undefined;
     // On server-side deletion the cached copy is the ONLY copy left: stash a
     // plaintext snapshot (tree + lastUpdated + service URL, never the
     // password) before wiping, mirroring upstream setSyncRemoved. The manager
@@ -2606,6 +2692,9 @@ export class BackgroundCore {
         const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
         const blob = await this.store.get<string>(StoreKey.Bookmarks);
         const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
+        if (info?.id) {
+          deadSync = { serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl), syncId: info.id };
+        }
         if (info?.password && blob) {
           const tree = JSON.parse(await decryptData(blob, info.password)) as BookmarkNode[];
           await this.store.set(StoreKey.RemovedSync, {
@@ -2636,6 +2725,11 @@ export class BackgroundCore {
     if (!err) await this.store.remove(StoreKey.RemovedSync);
     await this.store.set(StoreKey.SyncEnabled, false);
     await this.store.set(StoreKey.SyncInfo, {});
+    if (deadSync) {
+      await this.forgetSavedSyncRow(deadSync).catch((e: unknown) =>
+        this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs cleanup failed: ${(e as Error)?.message}`),
+      );
+    }
     await this.setBadge(false);
     if (err instanceof SyncNotFoundException) {
       await this.ports.chrome.notify(t('core.removedTitle'), t('core.removedBody'));

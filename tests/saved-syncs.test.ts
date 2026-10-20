@@ -4,6 +4,7 @@ import {
   findSavedSync,
   isActiveSavedSync,
   removeSavedSync,
+  sanitizeSavedSyncs,
   sameSavedSync,
   savedSyncKey,
   savedSyncName,
@@ -80,5 +81,37 @@ describe('saved syncs registry', () => {
   it('shortens sync ids for lists (the full id stays copyable elsewhere)', () => {
     expect(shortSyncId('12345678-90ab-cdef')).toBe('12345678…');
     expect(shortSyncId('short')).toBe('short');
+  });
+
+  it('drops garbage rows instead of trusting the stored shape', () => {
+    expect(sanitizeSavedSyncs(undefined)).toEqual([]);
+    expect(sanitizeSavedSyncs('nope')).toEqual([]);
+    expect(sanitizeSavedSyncs({ syncId: 'x' })).toEqual([]);
+
+    const list = sanitizeSavedSyncs([
+      null,
+      42,
+      { serviceUrl: 'https://a.test', syncId: '' },
+      { serviceUrl: '', syncId: 'no-service' },
+      { serviceUrl: 'https://old.test', syncId: 'old', lastUsedAt: '2026-01-01T00:00:00.000Z' },
+      { serviceUrl: 'https://new.test', syncId: 'new', label: '  ', syncVersion: 3, lastUsedAt: 7 },
+    ]);
+    expect(list.map((r) => r.syncId)).toEqual(['old', 'new']);
+    // Canonicalized, unknown/typed fields dropped, missing timestamp last.
+    expect(list[1]).toEqual({ serviceUrl: 'https://new.test/', syncId: 'new', lastUsedAt: '' });
+    expect(list[0]).toMatchObject({ serviceUrl: 'https://old.test/', syncId: 'old' });
+  });
+
+  it('keeps a valid label and version when they are present', () => {
+    const [entry] = sanitizeSavedSyncs([
+      { serviceUrl: 'https://x.test', syncId: 's', label: 'Lavoro', syncVersion: '1.8.0', lastUsedAt: 't' },
+    ]);
+    expect(entry).toEqual({
+      serviceUrl: 'https://x.test/',
+      syncId: 's',
+      label: 'Lavoro',
+      syncVersion: '1.8.0',
+      lastUsedAt: 't',
+    });
   });
 });
