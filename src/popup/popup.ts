@@ -63,6 +63,8 @@ let connecting = false;
 /** Saved-syncs panels: main view + connect view share the same data. */
 let savedMain: SavedSyncsPanel;
 let savedConnect: SavedSyncsPanel;
+/** Manager-owned switch password present? Gates activation and new links. */
+let switchLockSet = false;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -116,13 +118,15 @@ async function refreshAll(pickView = false): Promise<void> {
  *  never carries a key, so a failed GetSavedSyncs just hides the block. */
 async function refreshSavedSyncs(): Promise<void> {
   const my = refreshSeq;
-  let data: SavedSyncsResponse = { syncs: [] };
+  let data: SavedSyncsResponse = { syncs: [], switchLockSet: false };
   try {
     data = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs });
   } catch {
-    data = { syncs: [] };
+    data = { syncs: [], switchLockSet: false };
   }
   if (my !== refreshSeq) return;
+  switchLockSet = data.switchLockSet;
+  ($('conn-switch-locked') as HTMLElement).hidden = !switchLockSet;
   savedMain.render(data);
   savedConnect.render(data);
 }
@@ -267,6 +271,16 @@ async function initConnect(): Promise<void> {
   });
 }
 
+/** Open the manager (tab, or same page in fullpage mode). */
+function openManager(): void {
+  const url = browser.runtime.getURL('manager.html');
+  if (new URLSearchParams(location.search).has('fullpage')) {
+    location.href = url;
+  } else {
+    void browser.tabs.create({ url }).then(() => window.close());
+  }
+}
+
 /**
  * Connect: new creates without a confirm (nothing is replaced); existing
  * always confirms inline with the direction's loss line, merge with its
@@ -325,18 +339,26 @@ async function submitConnect(): Promise<void> {
     if (!ok) return;
   }
   if (!connectService.ready || connectService.url !== serviceUrl) return;
+  // With a switch lock the background must unwrap/wrap keys: prove it here,
+  // before the confirm and before anything is created.
+  const switchPassword = input('conn-switch-password').value;
+  if (switchLockSet && !switchPassword) {
+    showError('connect-error', t('core.switchPasswordRequired'));
+    return;
+  }
   connecting = true;
   connectService.setBusy(true);
   await withBusy('btn-connect', t('busy.connecting'), async () => {
     try {
       if (mode === 'new') {
-        await send({ command: MessageCommand.ConnectNew, serviceUrl, password });
+        await send({ command: MessageCommand.ConnectNew, serviceUrl, password, switchPassword });
       } else {
-        await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction });
+        await send({ command: MessageCommand.ConnectExisting, serviceUrl, syncId, password, direction, switchPassword });
       }
       await connectService.refreshCatalog().catch(err => showError('connect-error', (err as Error).message));
       input('password').value = '';
       input('confirm-password').value = '';
+      input('conn-switch-password').value = '';
       showView('main');
       await refreshAll();
     } catch (err) {
@@ -370,14 +392,7 @@ function initMain(): void {
       await refreshAll();
     });
   });
-  $('btn-manage').addEventListener('click', () => {
-    const url = browser.runtime.getURL('manager.html');
-    if (new URLSearchParams(location.search).has('fullpage')) {
-      location.href = url;
-    } else {
-      void browser.tabs.create({ url }).then(() => window.close());
-    }
-  });
+  $('btn-manage').addEventListener('click', openManager);
   $('btn-resolve-conflict').addEventListener('click', () => {
     const url = browser.runtime.getURL('manager.html?section=status');
     if (new URLSearchParams(location.search).has('fullpage')) {
@@ -426,8 +441,8 @@ async function init(): Promise<void> {
     // A removal can leave this browser unlinked: follow the link, not the click.
     if (!status?.syncEnabled) showView('connect');
   };
-  savedMain = new SavedSyncsPanel('p-saved', onSavedChanged);
-  savedConnect = new SavedSyncsPanel('c-saved', onSavedChanged);
+  savedMain = new SavedSyncsPanel('p-saved', onSavedChanged, openManager);
+  savedConnect = new SavedSyncsPanel('c-saved', onSavedChanged, openManager);
   await refreshAll(true);
 }
 

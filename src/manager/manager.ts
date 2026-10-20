@@ -59,7 +59,9 @@ import {
   type MergePreview,
   type PingResponse,
   type SafetyEntry,
+  type SavedSyncsResponse,
   type StatusResponse,
+  type SwitchLockState,
   type SwitchPreviewResult,
   type UndoState,
   // Conflict resolution types
@@ -84,6 +86,9 @@ let checkingTarget = false;
 let moving = false;
 /** Current conflict preview (fetched when status.conflict === true). */
 let conflictPreview: ConflictPreviewResponse | undefined;
+/** Manager-owned switch password: gates activation and wraps dormant keys. */
+let switchLockSet = false;
+let dormantSyncs = 0;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
@@ -1207,6 +1212,13 @@ async function submitMove(): Promise<void> {
     showError('move-error-2', invalid);
     return;
   }
+  // A move leaves the previous sync in the list: prove the switch lock first,
+  // so the background can wrap the new active key.
+  const switchPassword = input('m-switch-lock-pw').value;
+  if (switchLockSet && !switchPassword) {
+    showError('move-error-2', t('core.switchPasswordRequired'));
+    return;
+  }
   if (
     !moveService.ready ||
     !preview ||
@@ -1239,10 +1251,11 @@ async function submitMove(): Promise<void> {
     try {
       const res = await send<{ id: string }>({
         command: MessageCommand.SwitchService,
-        switch: { newServiceUrl, mode, syncId, newPassword, direction },
+        switch: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword },
       });
       input('m-switch-password').value = '';
       input('m-switch-confirm').value = '';
+      input('m-switch-lock-pw').value = '';
       movedId = res.id;
     } catch (err) {
       input('m-switch-confirm').value = '';
@@ -1329,6 +1342,7 @@ function initLogsSection(): void {
 
 async function renderSettings(): Promise<void> {
   clearMessages();
+  await refreshSwitchLock().catch(() => undefined);
   const info = $('m-service-info');
   info.textContent = '';
   let st: StatusResponse | undefined;
@@ -1405,6 +1419,134 @@ function initSettingsSection(): void {
     }
   });
   $('m-btn-password').addEventListener('click', () => void changePassword());
+  initSwitchPasswordSection();
+}
+
+/** Read the lock state + how many dormant rows a reset would drop. */
+async function refreshSwitchLock(): Promise<void> {
+  let state: SwitchLockState = { set: false };
+  let saved: SavedSyncsResponse = { syncs: [], switchLockSet: false };
+  try {
+    state = await send<SwitchLockState>({ command: MessageCommand.GetSwitchLock });
+    saved = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs });
+  } catch {
+    state = { set: false };
+    saved = { syncs: [], switchLockSet: false };
+  }
+  switchLockSet = state.set;
+  dormantSyncs = saved.syncs.length;
+  $('m-switch-state').textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
+  ($('m-switch-lock-current') as HTMLElement).hidden = !switchLockSet;
+  ($('m-btn-switch-lock-set') as HTMLElement).hidden = switchLockSet;
+  ($('m-btn-switch-lock-change') as HTMLElement).hidden = !switchLockSet;
+  ($('m-btn-switch-lock-reset') as HTMLElement).hidden = !switchLockSet;
+  // The reset drops every row but the active one (none when unlinked).
+  const dropped = Math.max(dormantSyncs - (saved.active ? 1 : 0), 0);
+  $('m-switch-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dropped });
+  // The proof is asked by every flow that changes or demotes the active key.
+  ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
+  ($('m-switch-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
+}
+
+function switchLockFields(): { current: string; next: string; confirm: string } {
+  return {
+    current: input('m-switch-lock-current-pw').value,
+    next: input('m-switch-lock-new').value,
+    confirm: input('m-switch-lock-confirm').value,
+  };
+}
+
+function clearSwitchLockFields(): void {
+  input('m-switch-lock-current-pw').value = '';
+  input('m-switch-lock-new').value = '';
+  input('m-switch-lock-confirm').value = '';
+}
+
+/** Short password: only "not empty" and "the two match" are enforced. */
+function validateSwitchLockFields(fields: { next: string; confirm: string }): string | undefined {
+  if (!fields.next) return t('core.switchPasswordRequired');
+  if (fields.next !== fields.confirm) return t('core.switchPasswordMismatch');
+  return undefined;
+}
+
+function initSwitchPasswordSection(): void {
+  ($('m-btn-switch-lock-set') as HTMLButtonElement).addEventListener('click', () => void setSwitchPassword());
+  ($('m-btn-switch-lock-change') as HTMLButtonElement).addEventListener('click', () => void changeSwitchPassword());
+  ($('m-btn-switch-lock-reset') as HTMLButtonElement).addEventListener('click', () => {
+    clearMessages();
+    ($('m-switch-lock-reset-box') as HTMLElement).hidden = false;
+  });
+  ($('m-btn-switch-lock-reset-cancel') as HTMLButtonElement).addEventListener('click', () => {
+    ($('m-switch-lock-reset-box') as HTMLElement).hidden = true;
+  });
+  ($('m-btn-switch-lock-reset-go') as HTMLButtonElement).addEventListener('click', () => void resetSwitchPassword());
+}
+
+async function setSwitchPassword(): Promise<void> {
+  clearMessages();
+  ($('switch-pw-result') as HTMLElement).hidden = true;
+  const fields = switchLockFields();
+  const invalid = validateSwitchLockFields(fields);
+  if (invalid) return showError('switch-pw-error', invalid);
+  await withBusy('m-btn-switch-lock-set', t('busy.changing'), async () => {
+    try {
+      await send({ command: MessageCommand.SetSwitchPassword, password: fields.next, confirm: fields.confirm });
+      clearSwitchLockFields();
+      showResult('switch-pw-result', t('manager.switchPw.setDone'));
+      await refreshSwitchLock();
+    } catch (err) {
+      showError('switch-pw-error', (err as Error).message);
+    }
+  });
+}
+
+async function changeSwitchPassword(): Promise<void> {
+  clearMessages();
+  ($('switch-pw-result') as HTMLElement).hidden = true;
+  const fields = switchLockFields();
+  if (!fields.current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
+  const invalid = validateSwitchLockFields(fields);
+  if (invalid) return showError('switch-pw-error', invalid);
+  await withBusy('m-btn-switch-lock-change', t('busy.changing'), async () => {
+    try {
+      await send({
+        command: MessageCommand.ChangeSwitchPassword,
+        current: fields.current,
+        next: fields.next,
+        confirm: fields.confirm,
+      });
+      clearSwitchLockFields();
+      showResult('switch-pw-result', t('manager.switchPw.changeDone'));
+      await refreshSwitchLock();
+    } catch (err) {
+      // Wrong current password: keep nothing but the message.
+      input('m-switch-lock-current-pw').value = '';
+      showError('switch-pw-error', (err as Error).message);
+    }
+  });
+}
+
+async function resetSwitchPassword(): Promise<void> {
+  clearMessages();
+  ($('switch-pw-result') as HTMLElement).hidden = true;
+  const fields = switchLockFields();
+  const invalid = validateSwitchLockFields(fields);
+  if (invalid) return showError('switch-pw-error', invalid);
+  await withBusy('m-btn-switch-lock-reset-go', t('busy.changing'), async () => {
+    try {
+      const res = await send<{ removed: number; kept: number }>({
+        command: MessageCommand.ResetSwitchPassword,
+        next: fields.next,
+        confirm: fields.confirm,
+      });
+      clearSwitchLockFields();
+      ($('m-switch-lock-reset-box') as HTMLElement).hidden = true;
+      showResult('switch-pw-result', t('manager.switchPw.resetDone', { count: res.removed }));
+      await refreshSwitchLock();
+    } catch (err) {
+      showError('switch-pw-error', (err as Error).message);
+    }
+  });
 }
 
 function readPasswordChange(): { current: string; next: string; confirm: string } {
@@ -1425,6 +1567,12 @@ async function changePassword(): Promise<void> {
     showError('pw-error', invalid);
     return;
   }
+  // Rotating the key must rewrap the saved row: prove the switch lock.
+  const switchPassword = input('m-pw-switch').value;
+  if (switchLockSet && !switchPassword) {
+    showError('pw-error', t('core.switchPasswordRequired'));
+    return;
+  }
   const ok = await confirmInline('m-btn-password', {
     message: t('mgr.settings.changePwMessage'),
     implication: ChangePasswordImplication(),
@@ -1442,10 +1590,16 @@ async function changePassword(): Promise<void> {
   }
   await withBusy('m-btn-password', t('busy.changing'), async () => {
     try {
-      await send({ command: MessageCommand.ChangePassword, currentPassword: fields.current, newPassword: fields.next });
+      await send({
+        command: MessageCommand.ChangePassword,
+        currentPassword: fields.current,
+        newPassword: fields.next,
+        switchPassword,
+      });
       input('m-current-password').value = '';
       input('m-new-password').value = '';
       input('m-new-password-confirm').value = '';
+      input('m-pw-switch').value = '';
       showResult('pw-result', ChangePasswordDone());
       await refreshStatus();
     } catch (err) {
@@ -1491,6 +1645,7 @@ async function init(): Promise<void> {
   initMoveSection();
   initLogsSection();
   initSettingsSection();
+  void refreshSwitchLock().catch(() => undefined);
   // Follow link changes made elsewhere (e.g. connecting from the popup):
   // the status card, actions and danger zone re-gate themselves without a
   // manual refresh. refreshStatus() is race-guarded (statusSeq), so bursts

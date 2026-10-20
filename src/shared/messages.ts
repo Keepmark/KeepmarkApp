@@ -68,6 +68,11 @@ export enum MessageCommand {
   GetSavedSyncs = 'get-saved-syncs',
   ActivateSavedSync = 'activate-saved-sync',
   RemoveSavedSync = 'remove-saved-sync',
+  // Switch password (short, manager-owned gate for activation)
+  GetSwitchLock = 'get-switch-lock',
+  SetSwitchPassword = 'set-switch-password',
+  ChangeSwitchPassword = 'change-switch-password',
+  ResetSwitchPassword = 'reset-switch-password',
   // Conflict resolution
   GetConflictState = 'get-conflict-state',
   GetConflictPreview = 'get-conflict-preview',
@@ -120,9 +125,15 @@ export interface SwitchTarget {
   /** 'new' = create sync + upload local; 'existing' = link + push, pull or merge. */
   mode: 'new' | 'existing';
   syncId?: string;
-  newPassword: string;
+  newPassword?: string;
+  /** Activation path: the target key already unwrapped from the switch lock,
+   *  so the sync password is not known (and not asked). */
+  newDerivedKey?: string;
   /** existing mode only: overwrite remote with local, local with remote, or union both. */
   direction: 'push' | 'pull' | 'merge';
+  /** Required when a switch lock exists: proves the link comes from an
+   *  unlocked user and lets the new active key be wrapped for the list. */
+  switchPassword?: string;
 }
 
 /** Read-only preflight for the move wizard. Never mutates anything. */
@@ -247,6 +258,25 @@ export type { ConnectQrPayload } from './connect-qr.js';
 export interface SavedSyncsResponse {
   syncs: SavedSync[];
   active?: SavedSyncActive;
+  /** False until the manager sets the short switch password: activation is
+   *  blocked and new links are refused (rows could not be wrapped). */
+  switchLockSet: boolean;
+}
+
+/** Whether the switch password exists (the manager owns set/change/reset). */
+export interface SwitchLockState {
+  set: boolean;
+}
+
+export interface ChangeSwitchPasswordResult {
+  changed: boolean;
+}
+
+export interface ResetSwitchPasswordResult {
+  /** Dormant rows removed by the reset (their keys were unrecoverable). */
+  removed: number;
+  /** 1 when the active sync was kept, 0 when the browser was unlinked. */
+  kept: 0 | 1;
 }
 
 export type MessagePayload =
@@ -255,8 +285,20 @@ export type MessagePayload =
   | { command: MessageCommand.PrepareConnectQr; currentPassword: string }
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
-  | { command: MessageCommand.ConnectNew; serviceUrl: string; password: string }
-  | { command: MessageCommand.ConnectExisting; serviceUrl: string; syncId: string; password: string; direction: 'pull' | 'push' | 'merge' }
+  | {
+      command: MessageCommand.ConnectNew;
+      serviceUrl: string;
+      password: string;
+      switchPassword?: string;
+    }
+  | {
+      command: MessageCommand.ConnectExisting;
+      serviceUrl: string;
+      syncId: string;
+      password: string;
+      direction: 'pull' | 'push' | 'merge';
+      switchPassword?: string;
+    }
   | { command: MessageCommand.AddBookmark; container: string; parentId?: number; title: string; url?: string }
   | { command: MessageCommand.DisableSync }
   | { command: MessageCommand.GetStatus }
@@ -269,8 +311,22 @@ export type MessagePayload =
   | { command: MessageCommand.SwitchService; switch: SwitchTarget }
   | { command: MessageCommand.DeleteRemoteSync }
   | { command: MessageCommand.GetSavedSyncs }
-  | { command: MessageCommand.ActivateSavedSync; serviceUrl: string; syncId: string; password: string }
+  | {
+      command: MessageCommand.ActivateSavedSync;
+      serviceUrl: string;
+      syncId: string;
+      switchPassword: string;
+    }
   | { command: MessageCommand.RemoveSavedSync; serviceUrl: string; syncId: string }
+  | { command: MessageCommand.GetSwitchLock }
+  | { command: MessageCommand.SetSwitchPassword; password: string; confirm: string }
+  | {
+      command: MessageCommand.ChangeSwitchPassword;
+      current: string;
+      next: string;
+      confirm: string;
+    }
+  | { command: MessageCommand.ResetSwitchPassword; next: string; confirm: string }
   | { command: MessageCommand.SwitchPreview; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }
@@ -279,7 +335,13 @@ export type MessagePayload =
   | { command: MessageCommand.DismissUndo }
   | { command: MessageCommand.GetRemovedSync }
   | { command: MessageCommand.ClearRemovedSync }
-  | { command: MessageCommand.ChangePassword; currentPassword: string; newPassword: string }
+  | {
+      command: MessageCommand.ChangePassword;
+      currentPassword: string;
+      newPassword: string;
+      /** Required when a switch lock exists: the rotated key is rewrapped. */
+      switchPassword?: string;
+    }
   | { command: MessageCommand.GetToolbarSync }
   | { command: MessageCommand.SetToolbarSync; enabled: boolean }
   | { command: MessageCommand.GetUiLanguage }

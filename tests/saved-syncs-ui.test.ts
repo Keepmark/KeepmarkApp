@@ -22,10 +22,12 @@ const rows: SavedSync[] = [
 const data: SavedSyncsResponse = {
   syncs: rows,
   active: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: 'aaaaaaaa1111' },
+  switchLockSet: true,
 };
 
 let panel: SavedSyncsPanel;
 let onChanged: ReturnType<typeof vi.fn>;
+let openManager: ReturnType<typeof vi.fn>;
 
 function rowEls(): HTMLElement[] {
   return [...el('p-saved-list').querySelectorAll<HTMLElement>('.saved-row')];
@@ -36,6 +38,9 @@ beforeEach(() => {
     <div id="p-saved-card">
       <h2 id="p-saved-title"></h2>
       <ul id="p-saved-list"></ul>
+      <div id="p-saved-notice" hidden>
+        <p></p><button id="p-saved-open-manager"></button>
+      </div>
       <div id="p-saved-confirm" hidden>
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint"></p>
@@ -49,7 +54,8 @@ beforeEach(() => {
     </div>`;
   harness.send.mockReset().mockResolvedValue({});
   onChanged = vi.fn(async () => undefined);
-  panel = new SavedSyncsPanel('p-saved', onChanged);
+  openManager = vi.fn();
+  panel = new SavedSyncsPanel('p-saved', onChanged, openManager);
 });
 
 describe('saved syncs popup panel', () => {
@@ -72,14 +78,14 @@ describe('saved syncs popup panel', () => {
     panel.render(data);
     el('p-saved-error').textContent = 'boom';
     el('p-saved-error').hidden = false;
-    panel.render({ syncs: [] });
+    panel.render({ syncs: [], switchLockSet: true });
     expect(el('p-saved-card').hidden).toBe(true);
     expect(el('p-saved-error').textContent).toBe('');
     expect(el('p-saved-error').hidden).toBe(true);
   });
 
   it('uses the singular form for one row', () => {
-    panel.render({ syncs: [rows[0]], active: data.active });
+    panel.render({ syncs: [rows[0]], active: data.active, switchLockSet: true });
     expect(el('p-saved-title').textContent).toBe('Sync (1)');
   });
 
@@ -103,7 +109,7 @@ describe('saved syncs popup panel', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://other.example/',
       syncId: 'bbbbbbbb2222',
-      password: 'target password',
+      switchPassword: 'target password',
     });
     expect(onChanged).toHaveBeenCalledWith('activated');
     expect(el('p-saved-confirm').hidden).toBe(true);
@@ -121,6 +127,16 @@ describe('saved syncs popup panel', () => {
     expect((el('p-saved-password') as HTMLInputElement).value).toBe('wrong');
     expect(el('p-saved-error').textContent).toBe('Invalid credentials');
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('without a switch password the notice shows and activation is disabled', () => {
+    panel.render({ ...data, switchLockSet: false });
+    expect(el('p-saved-notice').hidden).toBe(false);
+    const dormant = rowEls()[1];
+    const activate = dormant.querySelector('button.mini:not(.danger)') as HTMLButtonElement;
+    expect(activate.disabled).toBe(true);
+    (el('p-saved-open-manager') as HTMLButtonElement).click();
+    expect(openManager).toHaveBeenCalledTimes(1);
   });
 
   it('removes a row only after the inline confirmation', async () => {

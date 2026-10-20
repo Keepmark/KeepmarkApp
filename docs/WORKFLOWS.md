@@ -54,7 +54,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Delete sync from server (extension, service v1.2) | yes | `Delete sync from server…` | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept for download (the removed-sync card). |
 | Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | `Download copy` / `Dismiss…` | Dismiss only | The kept copy is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
-| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` on a row → password of that sync → apply | none beyond the password step (the field is the check: it is verified read-only before anything is saved or replaced) | The password is proved first (version gate + GET + decrypt); only then the sync that is active right now is saved, and a failed save or a pending conflict cancels the switch. The list entry only proves the sync was linked once: no key is stored for dormant rows (the sync ID, a capability token, is). |
+| Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` on a row → short switch password → apply | none beyond the switch-password step | The short switch password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved, and a failed save or a pending conflict cancels the switch. The sync's own long password is never asked at activation. Without a switch password the manager must set one first (Activate is disabled and the notice links to it). |
 | Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
@@ -79,13 +79,29 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 ## Multi-sync (saved syncs, extension)
 
 - One sync is active at a time; the others are dormant rows (service, sync ID,
-  last use). No password and no key is stored for a dormant row (the sync ID is
-  kept: it is the capability token the UI truncates).
-- Activating a row = password of that sync → the background proves it with a
-  read-only preflight (version gate + GET + decrypt, nothing written) → saves
-  the active side (`fail-closed`: unpushed native edits are pushed first; a
-  pending conflict cancels the switch) → replaces the native tree with the
-  target's → the previous sync stays listed.
+  last use). A dormant row stores its derived key wrapped under the switch
+  lock — never the raw password; the sync ID (a capability token the UI
+  truncates) is kept too.
+- The **switch password** is a short manager-owned secret (a PIN of a few
+  digits is fine: no length or complexity rules, only "not empty"). It wraps a
+  random vault key, which wraps every row's key. Changing it rewraps only the
+  vault (rows untouched); losing it means the dormant keys are gone.
+- Set/change it in Manager → Settings → Switch password. Activation is refused
+  until one exists: the popup shows a notice with a link to the manager and
+  disables `Activate`.
+- Activating a row = short switch password → the background unlocks the row's
+  key and proves the target with a read-only preflight (version gate + GET +
+  decrypt, nothing written) → saves the active side (`fail-closed`: unpushed
+  native edits are pushed first; a pending conflict cancels the switch) →
+  replaces the native tree with the target's → the previous sync stays listed.
+- Any link/move/long-password change that demotes or replaces the active key
+  asks the same switch password, so the new key is wrapped at once. Without a
+  lock a second link is refused (set the switch password first) and a move
+  replaces the previous row instead of leaving one that could never be
+  activated.
+- Reset (forgotten password) mints a new vault and deletes every row but the
+  active one; the active sync keeps working and is wrapped under the new
+  password. Server copies, safety backups and the undo slot are untouched.
 - Activating the already-active row is refused; the native tree is never
   re-read from the same sync.
 - `Remove from the list` is local-only (bookmarks, server copy and safety

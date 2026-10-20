@@ -51,6 +51,9 @@ export class UnsupportedApiVersionException extends XbsException {}
 /** Sync ID or derived key missing from local storage. */
 export class IncompleteSyncInfoException extends XbsException {}
 
+/** Wrong switch password: the short one that gates multi-sync activation. */
+export class InvalidSwitchPasswordException extends XbsException {}
+
 /** Response shape is not what the API contract promises. */
 export class UnexpectedResponseException extends XbsException {}
 

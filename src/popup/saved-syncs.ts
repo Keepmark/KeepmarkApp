@@ -1,7 +1,8 @@
 // Popup: the saved-syncs list (multi-sync). One panel per view (main and
-// connect), same rows, same actions. Rows are metadata only — activating one
-// always asks for that sync's password, which the background verifies by
-// decrypting the remote copy before anything is rewritten.
+// connect), same rows, same actions. A row carries its key wrapped under the
+// switch lock; activating it asks for the short switch password (never the
+// sync's own one), which the background verifies by decrypting the remote copy
+// before anything is rewritten.
 
 import { $, input, send, withBusy } from './ui.js';
 import { cancelConfirm, confirmInline, showError } from './flow.js';
@@ -24,15 +25,18 @@ export class SavedSyncsPanel {
   private openConfirmId?: string;
   private syncs: SavedSync[] = [];
   private active?: { serviceUrl: string; syncId: string };
-  /** Row waiting for its password. */
+  private switchLockSet = false;
+  /** Row waiting for the switch password. */
   private pending?: SavedSync;
 
   constructor(
     private readonly prefix: string,
     private readonly onChanged: (kind: SavedSyncsChange) => Promise<void>,
+    private readonly onOpenManager: () => void,
   ) {
     this.el('cancel').addEventListener('click', () => this.closeConfirm());
     this.el('activate').addEventListener('click', () => void this.submit());
+    this.el('open-manager').addEventListener('click', () => this.onOpenManager());
     const password = this.password();
     password.addEventListener('input', () => this.clearError());
     password.addEventListener('keydown', (event) => {
@@ -65,6 +69,7 @@ export class SavedSyncsPanel {
     this.clearError();
     this.syncs = data.syncs;
     this.active = data.active;
+    this.switchLockSet = data.switchLockSet;
     const card = this.el('card');
     const list = this.el('list');
     list.replaceChildren();
@@ -72,6 +77,9 @@ export class SavedSyncsPanel {
       card.hidden = true;
       return;
     }
+    // No switch password yet: the list is visible but nothing can be
+    // activated until the manager sets one (keys could not be wrapped).
+    this.el('notice').hidden = this.switchLockSet;
     this.el('title').textContent = tn('popup.saved.title', this.syncs.length);
     this.syncs.forEach((sync, index) => list.append(this.row(sync, index)));
     card.hidden = false;
@@ -104,6 +112,8 @@ export class SavedSyncsPanel {
       activate.type = 'button';
       activate.className = 'mini';
       activate.textContent = t('popup.saved.activate');
+      activate.disabled = !this.switchLockSet;
+      if (!this.switchLockSet) activate.title = t('popup.saved.switchNotSet');
       activate.addEventListener('click', () => this.openConfirm(sync));
       actions.append(activate);
 
@@ -143,7 +153,7 @@ export class SavedSyncsPanel {
     if (!target) return;
     const password = this.password().value;
     if (!password) {
-      showError(`${this.prefix}-error`, t('val.password.required'));
+      showError(`${this.prefix}-error`, t('core.switchPasswordRequired'));
       return;
     }
     this.clearError();
@@ -153,7 +163,7 @@ export class SavedSyncsPanel {
           command: MessageCommand.ActivateSavedSync,
           serviceUrl: target.serviceUrl,
           syncId: target.syncId,
-          password,
+          switchPassword: password,
         });
         this.closeConfirm();
         await this.onChanged('activated');

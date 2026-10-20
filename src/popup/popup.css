@@ -677,3 +677,18 @@ dd:last-of-type { align-items: flex-end; }
 
 .saved .confirm { margin: 10px 0 0; }
 .saved .error { margin-top: 8px; }
+
+/* Saved syncs without a switch password: readable notice + way out. */
+.saved .notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  font-size: 12px;
+}
+.saved .notice p { margin: 0; }
+.saved .notice button { flex: none; }

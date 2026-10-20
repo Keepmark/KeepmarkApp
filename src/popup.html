@@ -27,11 +27,15 @@
     <div id="c-saved-card" class="card saved" hidden>
       <h2 id="c-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
       <ul id="c-saved-list" class="saved-list"></ul>
+      <div id="c-saved-notice" class="notice" role="note" hidden>
+        <p data-i18n="popup.saved.switchNotSet">Set the switch password in the manager to activate a saved sync.</p>
+        <button id="c-saved-open-manager" class="mini" data-i18n="popup.saved.openManager">Open the manager</button>
+      </div>
       <div id="c-saved-confirm" class="confirm" hidden>
         <p><strong id="c-saved-confirm-text"></strong></p>
         <p id="c-saved-hint" class="hint"></p>
-        <label><span data-i18n="common.password">Password</span>
-          <input id="c-saved-password" type="password" autocomplete="current-password" />
+        <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+          <input id="c-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">
           <button id="c-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>
@@ -58,6 +62,12 @@
     <label><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
     </label>
+    <div id="conn-switch-locked" hidden>
+      <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+        <input id="conn-switch-password" type="password" autocomplete="off" />
+      </label>
+      <p class="hint" data-i18n="popup.saved.connectSwitchHint">Required to add another sync: it unlocks the saved list.</p>
+    </div>
     <div id="conn-new-only">
       <label><span data-i18n="common.confirmPassword">Confirm password</span>
         <input id="confirm-password" type="password" autocomplete="new-password" />
@@ -109,11 +119,15 @@
     <div id="p-saved-card" class="card saved" hidden>
       <h2 id="p-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
       <ul id="p-saved-list" class="saved-list"></ul>
+      <div id="p-saved-notice" class="notice" role="note" hidden>
+        <p data-i18n="popup.saved.switchNotSet">Set the switch password in the manager to activate a saved sync.</p>
+        <button id="p-saved-open-manager" class="mini" data-i18n="popup.saved.openManager">Open the manager</button>
+      </div>
       <div id="p-saved-confirm" class="confirm" hidden>
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint" class="hint"></p>
-        <label><span data-i18n="common.password">Password</span>
-          <input id="p-saved-password" type="password" autocomplete="current-password" />
+        <label><span data-i18n="popup.saved.passwordLabel">Switch password</span>
+          <input id="p-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">
           <button id="p-saved-activate" class="primary" data-i18n="popup.saved.activate">Activate</button>

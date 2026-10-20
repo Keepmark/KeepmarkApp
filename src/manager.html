@@ -201,6 +201,7 @@
           <label id="m-switch-password-row"><span id="m-switch-password-label" data-i18n="manager.move.newPassword">New password</span> <input id="m-switch-password" type="password" autocomplete="new-password" /></label>
           <label id="m-switch-confirm-row"><span id="m-switch-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-switch-confirm" type="password" autocomplete="new-password" /></label>
           <p id="m-switch-pw-hint" class="hint" data-i18n="manager.move.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+        <label id="m-switch-lock-pw-row" hidden><span data-i18n="popup.saved.passwordLabel">Switch password</span> <input id="m-switch-lock-pw" type="password" autocomplete="off" /></label>
         <div class="row"><button id="m-btn-preview" class="primary" data-needs-link data-i18n="manager.move.check">Check target</button></div>
         <div id="move-error" class="error" role="alert" hidden></div>
         <details><summary data-i18n="common.details">Details</summary><div id="move-preview" class="preview" hidden></div></details>
@@ -264,12 +265,39 @@
         </label>
         <div id="settings-error" class="error" role="alert" hidden></div>
         <div id="settings-result" class="result" hidden></div>
+        <h3 data-i18n="manager.switchPw.title">Switch password</h3>
+        <p class="hint" data-i18n="manager.switchPw.hint">Short password (a PIN is fine) that unlocks the saved syncs: no length or complexity rules. Keep it safe: without it the dormant syncs cannot be reactivated.</p>
+        <p><strong data-i18n="manager.switchPw.title">Switch password</strong>: <span id="m-switch-state">…</span></p>
+        <div id="m-switch-lock-current" hidden>
+          <label><span data-i18n="manager.switchPw.current">Current switch password</span>
+            <input id="m-switch-lock-current-pw" type="password" autocomplete="off" /></label>
+        </div>
+        <label><span id="m-switch-lock-new-label" data-i18n="manager.switchPw.new">New switch password</span>
+          <input id="m-switch-lock-new" type="password" autocomplete="off" /></label>
+        <label><span id="m-switch-lock-confirm-label" data-i18n="manager.switchPw.confirm">Repeat switch password</span>
+          <input id="m-switch-lock-confirm" type="password" autocomplete="off" /></label>
+        <div class="row">
+          <button id="m-btn-switch-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set switch password</button>
+          <button id="m-btn-switch-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change switch password</button>
+          <button id="m-btn-switch-lock-reset" hidden data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
+        </div>
+        <div id="m-switch-lock-reset-box" class="confirm danger" hidden>
+          <p><strong data-i18n="manager.switchPw.resetTitle">Reset the switch password</strong></p>
+          <p id="m-switch-lock-reset-warning" class="hint"></p>
+          <div class="row">
+            <button id="m-btn-switch-lock-reset-go" class="danger" data-i18n="manager.switchPw.resetGo">Reset and remove dormant syncs</button>
+            <button id="m-btn-switch-lock-reset-cancel" data-i18n="common.cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="switch-pw-error" class="error" role="alert" hidden></div>
+        <div id="switch-pw-result" class="result" role="status" hidden></div>
         <h3 data-i18n="manager.settings.changePw">Change password</h3>
         <p class="hint" data-i18n="manager.settings.changePwHint">Re-encrypts the sync with a new password (at least 8 characters). Your current password is verified first and never leaves this device. The old password stops working on every device at once.</p>
         <p class="notice needs-link-notice" hidden data-i18n="manager.settings.changePwNeedsLink">Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
         <label><span data-i18n="manager.settings.currentPw">Current password</span> <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label><span data-i18n="manager.move.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label><span data-i18n="manager.settings.confirmNewPw">Confirm new password</span> <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
+        <label id="m-pw-switch-wrap" hidden><span data-i18n="popup.saved.passwordLabel">Switch password</span> <input id="m-pw-switch" type="password" autocomplete="off" /></label>
         <div class="row"><button id="m-btn-password" class="primary" data-needs-link data-i18n="manager.settings.changePwBtn">Change password…</button></div>
         <div id="pw-error" class="error" role="alert" hidden></div>
         <div id="pw-result" class="result" hidden></div>

@@ -24,6 +24,8 @@ import { makeMockApi } from './firefox-bookmarks.test';
 
 const PASSWORD_A = 'correct horse battery staple';
 const PASSWORD_B = 'second sync password';
+/** The short switch password: gates activation, wraps the dormant keys. */
+const SWITCH = '1234';
 
 interface Doc {
   blob: string;
@@ -172,6 +174,14 @@ async function setup(s: MultiState): Promise<{
 const saved = (core: BackgroundCore): Promise<SavedSyncsResponse> =>
   core.handleMessage({ command: MessageCommand.GetSavedSyncs }) as Promise<SavedSyncsResponse>;
 
+async function setSwitch(core: BackgroundCore, password = SWITCH): Promise<void> {
+  await core.handleMessage({
+    command: MessageCommand.SetSwitchPassword,
+    password,
+    confirm: password,
+  });
+}
+
 async function connectA(core: BackgroundCore): Promise<string> {
   const { id } = (await core.handleMessage({
     command: MessageCommand.ConnectNew,
@@ -217,6 +227,7 @@ describe('multi-sync (saved syncs)', () => {
     const { core } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
 
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
@@ -224,6 +235,7 @@ describe('multi-sync (saved syncs)', () => {
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
 
     const list = await saved(core);
@@ -239,12 +251,14 @@ describe('multi-sync (saved syncs)', () => {
     const { core, adapter } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
     expect(nativeUrls(await adapter.readAll(true))).toContain('https://b.test');
 
@@ -252,7 +266,7 @@ describe('multi-sync (saved syncs)', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
       syncId: idA,
-      password: PASSWORD_A,
+      switchPassword: SWITCH,
     });
     const list = await saved(core);
     expect(list.active?.syncId).toBe(idA);
@@ -268,23 +282,25 @@ describe('multi-sync (saved syncs)', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://other.example/',
       syncId: 'B',
-      password: PASSWORD_B,
+      switchPassword: SWITCH,
     });
     expect(nativeUrls(await adapter.readAll(true))).toContain('https://b.test');
     expect((await saved(core)).syncs).toHaveLength(2);
   });
 
-  it('a wrong password aborts before mutating anything', async () => {
+  it('a wrong switch password aborts before mutating anything', async () => {
     const s = state();
     const { core, adapter } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
     const before = nativeUrls(await adapter.readAll(true));
     const putsBefore = s.puts.length;
@@ -294,7 +310,7 @@ describe('multi-sync (saved syncs)', () => {
         command: MessageCommand.ActivateSavedSync,
         serviceUrl: 'https://api.xbrowsersync.org/',
         syncId: idA,
-        password: 'wrong password',
+        switchPassword: '0000',
       }),
     ).rejects.toThrow(/password|credentials|decrypt/i);
 
@@ -307,12 +323,13 @@ describe('multi-sync (saved syncs)', () => {
     const s = state();
     const { core } = await setup(s);
     const idA = await connectA(core);
+    await setSwitch(core);
     await expect(
       core.handleMessage({
         command: MessageCommand.ActivateSavedSync,
         serviceUrl: 'https://api.xbrowsersync.org/',
         syncId: idA,
-        password: PASSWORD_A,
+        switchPassword: SWITCH,
       }),
     ).rejects.toThrow(/already active/i);
   });
@@ -322,12 +339,14 @@ describe('multi-sync (saved syncs)', () => {
     const { core, native, adapter } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
 
     // Native edit the queue never saw (no listener fired, no debounce).
@@ -337,7 +356,7 @@ describe('multi-sync (saved syncs)', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
       syncId: idA,
-      password: PASSWORD_A,
+      switchPassword: SWITCH,
     });
 
     // B kept the edit it would otherwise have lost to the switch.
@@ -351,12 +370,14 @@ describe('multi-sync (saved syncs)', () => {
     const { core, native, adapter } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
     const info = (await core.handleMessage({ command: MessageCommand.GetStatus })) as { syncId: string };
     // Capture a real conflict: the next push loses the timestamp CAS in a way
@@ -378,7 +399,7 @@ describe('multi-sync (saved syncs)', () => {
         command: MessageCommand.ActivateSavedSync,
         serviceUrl: 'https://api.xbrowsersync.org/',
         syncId: idA,
-        password: PASSWORD_A,
+        switchPassword: SWITCH,
       }),
     ).rejects.toThrow(/conflict/i);
 
@@ -391,12 +412,14 @@ describe('multi-sync (saved syncs)', () => {
     const { core } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
 
     await expect(
@@ -416,6 +439,7 @@ describe('multi-sync (saved syncs)', () => {
     const s = state();
     const { core, adapter } = await setup(s);
     const idA = await connectA(core);
+    await setSwitch(core);
 
     await core.handleMessage({ command: MessageCommand.DisableSync });
     let list = await saved(core);
@@ -426,24 +450,26 @@ describe('multi-sync (saved syncs)', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
       syncId: idA,
-      password: PASSWORD_A,
+      switchPassword: SWITCH,
     });
     list = await saved(core);
     expect(list.active?.syncId).toBe(idA);
     expect(nativeUrls(await adapter.readAll(true))).toContain('https://a.test');
   });
 
-  it('a wrong password changes nothing, even with unpushed edits on the active sync', async () => {
+  it('a wrong switch password changes nothing, even with unpushed edits on the active sync', async () => {
     const s = state();
     const { core, store, native, adapter } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
     // Unpushed edit on the ACTIVE sync: the pre-flight must not touch it.
     await native.create({ parentId: 'unfiled_____', title: 'Late', url: 'https://late.test' });
@@ -456,7 +482,7 @@ describe('multi-sync (saved syncs)', () => {
         command: MessageCommand.ActivateSavedSync,
         serviceUrl: 'https://api.xbrowsersync.org/',
         syncId: idA,
-        password: 'wrong password',
+        switchPassword: '0000',
       }),
     ).rejects.toThrow(/password|credentials|decrypt/i);
 
@@ -471,12 +497,14 @@ describe('multi-sync (saved syncs)', () => {
     const { core, store } = await setup(s);
     const idA = await connectA(core);
     await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
     await core.handleMessage({
       command: MessageCommand.ConnectExisting,
       serviceUrl: 'https://other.example',
       syncId: 'B',
       password: PASSWORD_B,
       direction: 'pull',
+      switchPassword: SWITCH,
     });
     // A switch made from the manager never clears ConflictState: the stale
     // record must not block activation of another sync.
@@ -492,11 +520,181 @@ describe('multi-sync (saved syncs)', () => {
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
       syncId: idA,
-      password: PASSWORD_A,
+      switchPassword: SWITCH,
     });
 
     expect((await saved(core)).active?.syncId).toBe(idA);
     expect(await store.get(StoreKey.ConflictState)).toBeUndefined();
+  });
+
+  it('refuses a second link until the switch password is set', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ConnectExisting,
+        serviceUrl: 'https://other.example',
+        syncId: 'B',
+        password: PASSWORD_B,
+        direction: 'pull',
+      }),
+    ).rejects.toThrow(/switch password/i);
+    const list = await saved(core);
+    expect(list.syncs).toHaveLength(1);
+    expect(list.switchLockSet).toBe(false);
+  });
+
+  it('setting the switch password wraps the active key (never the password)', async () => {
+    const s = state();
+    const { core, store } = await setup(s);
+    await connectA(core);
+    await setSwitch(core);
+    const rows = (await store.get(StoreKey.SavedSyncs)) as { credential?: { iv: string; ct: string } }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].credential?.iv).toBeTruthy();
+    expect(rows[0].credential?.ct).toBeTruthy();
+    const lock = (await store.get(StoreKey.SwitchLock)) as { salt: string; vault: { ct: string } };
+    expect(lock.salt).toBeTruthy();
+    expect(JSON.stringify(lock)).not.toContain(SWITCH);
+    expect((await saved(core)).switchLockSet).toBe(true);
+  });
+
+  it('activation is refused while no switch password is set', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    const idA = await connectA(core);
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ActivateSavedSync,
+        serviceUrl: 'https://api.xbrowsersync.org/',
+        syncId: idA,
+        switchPassword: SWITCH,
+      }),
+    ).rejects.toThrow(/switch password/i);
+  });
+
+  it('changing the switch password keeps the saved keys usable', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+      switchPassword: SWITCH,
+    });
+    await core.handleMessage({
+      command: MessageCommand.ChangeSwitchPassword,
+      current: SWITCH,
+      next: '999',
+      confirm: '999',
+    });
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ActivateSavedSync,
+        serviceUrl: 'https://api.xbrowsersync.org/',
+        syncId: idA,
+        switchPassword: SWITCH,
+      }),
+    ).rejects.toThrow(/switch password/i);
+    await core.handleMessage({
+      command: MessageCommand.ActivateSavedSync,
+      serviceUrl: 'https://api.xbrowsersync.org/',
+      syncId: idA,
+      switchPassword: '999',
+    });
+    expect((await saved(core)).active?.syncId).toBe(idA);
+  });
+
+  it('resetting the switch password keeps only the active sync', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+      switchPassword: SWITCH,
+    });
+    const res = await core.handleMessage({
+      command: MessageCommand.ResetSwitchPassword,
+      next: '555',
+      confirm: '555',
+    });
+    expect(res).toEqual({ removed: 1, kept: 1 });
+    let list = await saved(core);
+    expect(list.syncs.map((r) => r.syncId)).toEqual(['B']);
+    expect(list.active?.syncId).toBe('B');
+    expect(list.switchLockSet).toBe(true);
+    // The dormant key is gone with the old vault; the new password still
+    // unlocks the active row (wrapped fresh from SyncInfo).
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    await core.handleMessage({
+      command: MessageCommand.ActivateSavedSync,
+      serviceUrl: 'https://other.example/',
+      syncId: 'B',
+      switchPassword: '555',
+    });
+    list = await saved(core);
+    expect(list.active?.syncId).toBe('B');
+  });
+
+  it('resetting while unlinked empties the list and keeps the new password', async () => {
+    const { core } = await setup(state());
+    await connectA(core);
+    await setSwitch(core);
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    const res = await core.handleMessage({
+      command: MessageCommand.ResetSwitchPassword,
+      next: '777',
+      confirm: '777',
+    });
+    expect(res).toEqual({ removed: 1, kept: 0 });
+    const list = await saved(core);
+    expect(list.syncs).toHaveLength(0);
+    expect(list.switchLockSet).toBe(true);
+  });
+
+  it('a password rotation while locked rewraps the row (no dead key)', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    const idA = await connectA(core);
+    await setSwitch(core);
+    const ROTATED = 'rotated sync password';
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.ChangePassword,
+        currentPassword: PASSWORD_A,
+        newPassword: ROTATED,
+      }),
+    ).rejects.toThrow(/switch password/i);
+    await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: PASSWORD_A,
+      newPassword: ROTATED,
+      switchPassword: SWITCH,
+    });
+    // Unlink, then reactivate with the short password only: the row was
+    // rewrapped with the rotated key, so the remote copy still decrypts.
+    await core.handleMessage({ command: MessageCommand.DisableSync });
+    await core.handleMessage({
+      command: MessageCommand.ActivateSavedSync,
+      serviceUrl: 'https://api.xbrowsersync.org/',
+      syncId: idA,
+      switchPassword: SWITCH,
+    });
+    expect((await saved(core)).active?.syncId).toBe(idA);
   });
 
   it('removing a row that is not in the list is a no-op', async () => {

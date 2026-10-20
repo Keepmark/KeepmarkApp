@@ -1,12 +1,13 @@
 // Saved syncs: the registry behind multi-sync. One sync is ACTIVE at a time
-// (StoreKey.SyncInfo); the others are dormant metadata rows the popup can
-// activate. Rows never hold secrets: the derived key lives only in SyncInfo
-// for the active sync, and activating a saved sync always asks for its
-// password, re-derives the key and verifies it by decrypting the remote copy
-// before anything is mutated.
+// (StoreKey.SyncInfo); the others are dormant rows the popup can activate.
+// A dormant row carries its derived key wrapped under the switch lock (never
+// the raw password, never a clear key). Activating one asks for the short
+// switch password, unlocks the key and verifies the remote copy by decrypting
+// it before anything is mutated.
 //
 // Pure helpers: no storage, no DOM, no crypto — safe in the MV3 worker.
 
+import type { WrappedSecret } from './switch-lock.js';
 import { normalizeServiceUrl } from './service-catalog.js';
 
 export interface SavedSync {
@@ -19,6 +20,9 @@ export interface SavedSync {
   syncVersion?: string;
   /** Last link/activation of this sync (ISO 8601). */
   lastUsedAt: string;
+  /** Derived key wrapped under the switch-lock vault (dormant rows only: the
+   *  active row's key lives in StoreKey.SyncInfo). */
+  credential?: WrappedSecret;
 }
 
 /** Identity of the linked sync (mirrors SyncInfo.serviceUrl + SyncInfo.id). */
@@ -63,6 +67,8 @@ export function upsertSavedSync(list: readonly SavedSync[], entry: SavedSync): S
     serviceUrl,
     label: entry.label ?? (index >= 0 ? next[index].label : undefined),
     syncVersion: entry.syncVersion ?? (index >= 0 ? next[index].syncVersion : undefined),
+    // Refreshing a row without a credential must never drop the stored one.
+    credential: entry.credential ?? (index >= 0 ? next[index].credential : undefined),
   };
   if (index >= 0) next[index] = merged;
   else next.push(merged);
@@ -103,10 +109,18 @@ export function sanitizeSavedSyncs(value: unknown): SavedSync[] {
       syncId: row.syncId,
       ...(typeof row.label === 'string' && row.label.trim() ? { label: row.label } : {}),
       ...(typeof row.syncVersion === 'string' && row.syncVersion ? { syncVersion: row.syncVersion } : {}),
+      ...(isCredential(row.credential) ? { credential: row.credential } : {}),
       lastUsedAt: typeof row.lastUsedAt === 'string' ? row.lastUsedAt : '',
     });
   }
   return sortSavedSyncs(rows);
+}
+
+/** Wrapped credential shape check (unknown values are dropped, never trusted). */
+function isCredential(value: unknown): value is WrappedSecret {
+  if (!value || typeof value !== 'object') return false;
+  const blob = value as Partial<WrappedSecret>;
+  return typeof blob.iv === 'string' && !!blob.iv && typeof blob.ct === 'string' && !!blob.ct;
 }
 
 /** Most recently used first; deterministic ties (label, then sync id). */

@@ -29,9 +29,13 @@ export enum StoreKey {
    *  roots move when the browser switches local/account bookmark storage). */
   NativeRootKey = 'nativeRootKey',
   RemovedSync = 'removedSync',
-  /** Saved syncs (multi-sync registry): metadata rows only, never a secret.
+  /** Saved syncs (multi-sync registry): metadata rows + each dormant row's
+   *  derived key wrapped under the switch lock (never the raw password).
    *  Exactly one sync is active at a time — the one in StoreKey.SyncInfo. */
   SavedSyncs = 'savedSyncs',
+  /** Short switch password that gates activation: salt + vault key wrapped
+   *  with the password-derived key. Never contains the password itself. */
+  SwitchLock = 'switchLock',
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',
   SyncHash = 'syncHash',
