@@ -2495,8 +2495,8 @@ export class BackgroundCore {
     );
     // The safety entry above stays locked to the deleted sync's key, so it
     // can never be opened again: keep the same plaintext RemovedSync copy a
-    // server-side removal leaves, which the popup offers for download. Set
-    // AFTER disableSync (a manual unlink retires RemovedSync).
+    // server-side removal leaves, which Manager → Backup offers for download.
+    // Set AFTER disableSync (a manual unlink retires RemovedSync).
     await this.store
       .set(StoreKey.RemovedSync, {
         bookmarks: tree,

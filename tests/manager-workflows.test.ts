@@ -209,3 +209,40 @@ it('restores a verified backup directly from its consequences without another pr
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.ImportBackup)).toHaveLength(1);
   expect(document.querySelector('#m-btn-import-confirm-confirm')).toBeNull();
 });
+
+const removedSnapshot = {
+  savedAt: '2026-10-21T09:00:00.000Z',
+  lastUpdated: '2026-10-20T10:00:00.000Z',
+  bookmarks: [{ id: '1', title: 'Bookmarks', children: [{ id: '2', title: 'One' }, { id: '3', title: 'Two' }] }],
+};
+const openBackupWithRemovedCopy = async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetRemovedSync) return removedSnapshot;
+    if (msg.command === MessageCommand.GetSafetyList) return [];
+    if (msg.command === MessageCommand.GetStatus) return { syncEnabled: false, queueLength: 0, syncing: false, bookmarkCount: 0 };
+    return null;
+  });
+  (document.querySelector('#sidebar button[data-section="backup"]') as HTMLButtonElement).click();
+  await settle();
+};
+
+it('keeps the copy of a server-removed sync in Backup and downloads it as plain JSON', async () => {
+  await openBackupWithRemovedCopy();
+  expect(el('m-removed-card').hidden).toBe(false);
+  expect(el('m-removed-text').textContent).toContain('2 items');
+  el('m-btn-removed-download').click(); await settle();
+  const call = harness.send.mock.calls.map(([m]) => m)
+    .find((m) => m.command === MessageCommand.DownloadFile)!;
+  expect(call.filename).toBe('keepmark-removed-sync-2026-10-21.json');
+  expect(JSON.parse(call.text).bookmarks).toHaveLength(1);
+});
+
+it('asks once before dismissing the kept copy, then hides the card', async () => {
+  await openBackupWithRemovedCopy();
+  el('m-btn-removed-dismiss').click(); await settle();
+  expect(el('m-removed-card').hidden).toBe(false);
+  expect(document.getElementById('m-btn-removed-dismiss-confirm')?.textContent).toContain('only copy');
+  el('m-btn-removed-dismiss-yes').click(); await settle();
+  expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.ClearRemovedSync)).toHaveLength(1);
+  expect(el('m-removed-card').hidden).toBe(true);
+});

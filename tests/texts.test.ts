@@ -23,7 +23,8 @@ describe('workflow texts', () => {
   it('delete names other devices, no undelete, and where the kept copy is', () => {
     expect(DeleteRemoteImplication()).toContain('other devices');
     expect(DeleteRemoteImplication()).toContain('no undelete');
-    expect(DeleteRemoteImplication()).toContain('Keepmark popup');
+    expect(DeleteRemoteImplication()).toContain("manager's Backup section");
+    expect(DeleteRemoteImplication()).not.toContain('popup');
     // The safety entry is locked to the deleted sync: never point users there.
     expect(DeleteRemoteImplication()).not.toContain('Safety backups');
   });

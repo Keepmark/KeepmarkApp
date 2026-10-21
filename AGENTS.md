@@ -115,7 +115,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   only; mutations via messages. `saved-syncs.ts` renders the same registry in
   both views read-only (active tag, `Activate` on dormant rows only) and owns
   the modal activation step (sync-change password only when one is set).
-  Rename/remove/add/delete live in the manager.
+  Rename/remove/add/delete live in the manager. The server-removed notice is
+  informational too (no download/dismiss), pointing at Backup in the manager.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
@@ -218,7 +219,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   step 2 submit → `link-error-2`; backup export → `backup-error`, restore
   from file → `backup-error-2`, safety list actions → `backup-error-3`;
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`;
-  popup removed-sync card → `removed-error`.
+  the manager's kept copy of a removed sync (Backup) → `removed-error`.
   Every box has class `error`, `role="alert"`, starts `hidden`, and is
   emptied (not just hidden) when cleared. `showError(id, msg)` and
   `clearMessages()` in `src/popup/flow.ts` handle all of them by selector (no

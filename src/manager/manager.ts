@@ -44,10 +44,12 @@ import {
   UnlinkDone,
   UnlinkImplication,
   ImportImplication,
+  RemovedSyncDismissImplication,
   SafetyDeleteImplication,
   exportDone,
   importChecked,
   importDone,
+  removedSyncText,
   safetyRestoreDone,
   safetyRestoreImplication,
   undoConfirm,
@@ -58,6 +60,7 @@ import {
   type DuplicateGroup,
   type MergePreview,
   type PingResponse,
+  type RemovedSyncSnapshot,
   type SafetyEntry,
   type SavedSyncsResponse,
   type StatusResponse,
@@ -84,6 +87,7 @@ import {
   type SavedSyncActive,
 } from '../shared/saved-syncs.js';
 import { defaultMarkedIds, isSelectionLocked } from '../shared/duplicates.js';
+import type { BookmarkNode } from '../shared/models.js';
 
 let connectQr: ConnectQrController | undefined;
 let status: StatusResponse | undefined;
@@ -612,6 +616,12 @@ function initBackupSection(): void {
   });
   $('m-btn-import-confirm').addEventListener('click', () => void confirmImport());
   $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', t('busy.loading'), () => refreshSafety()));
+  $('m-btn-removed-download').addEventListener('click', () =>
+    void downloadRemovedCopy('m-btn-removed-download'),
+  );
+  $('m-btn-removed-dismiss').addEventListener('click', () =>
+    void dismissRemovedCopy('m-btn-removed-dismiss'),
+  );
 }
 
 /** Export: a new backup password typed twice (docs/WORKFLOWS.md rule 4). The
@@ -746,7 +756,73 @@ const SafetyOperations: Record<string, MessageKey> = {
   'merge-remote': 'mgr.safety.op.mergeRemote',
 };
 
+/** Items in a whole tree (folders included), for the kept-copy count. */
+function countTree(nodes: BookmarkNode[]): number {
+  return nodes.reduce((n, node) => n + 1 + countTree(node.children ?? []), 0);
+}
+
+/** Plaintext copy of a sync the server no longer has. It lives here because
+ *  the popup card is informational: download and dismissal are backup actions. */
+async function refreshRemovedCard(): Promise<void> {
+  const card = $('m-removed-card');
+  let removed: RemovedSyncSnapshot | null = null;
+  try {
+    removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
+  } catch (err) {
+    card.hidden = true;
+    showError('removed-error', (err as Error).message);
+    return;
+  }
+  if (!removed) {
+    card.hidden = true;
+    return;
+  }
+  $('m-removed-text').textContent = removedSyncText(
+    removed.bookmarks.reduce((n, root) => n + countTree(root.children ?? []), 0),
+    removed.lastUpdated,
+  );
+  card.hidden = false;
+}
+
+async function downloadRemovedCopy(anchorId: string): Promise<void> {
+  clearMessages();
+  await withBusy(anchorId, t('busy.downloading'), async () => {
+    try {
+      const removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
+      if (!removed) return refreshRemovedCard();
+      const day = removed.savedAt.slice(0, 10);
+      await send({
+        command: MessageCommand.DownloadFile,
+        filename: `keepmark-removed-sync-${day}.json`,
+        text: JSON.stringify(removed, null, 2),
+      });
+    } catch (err) {
+      showError('removed-error', (err as Error).message);
+    }
+  });
+}
+
+/** Dismissal is final: the kept copy is the only copy of the removed sync. */
+async function dismissRemovedCopy(anchorId: string): Promise<void> {
+  clearMessages();
+  const ok = await confirmInline(anchorId, {
+    message: t('removed.deleteConfirm'),
+    implication: RemovedSyncDismissImplication(),
+    confirmLabel: t('common.yesDelete'),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await send({ command: MessageCommand.ClearRemovedSync });
+    ($('m-removed-card') as HTMLElement).hidden = true;
+    void refreshStatus();
+  } catch (err) {
+    showError('removed-error', (err as Error).message);
+  }
+}
+
 async function refreshSafety(): Promise<void> {
+  await refreshRemovedCard();
   const box = $('m-safety-list');
   box.textContent = '';
   let entries: SafetyEntry[] = [];

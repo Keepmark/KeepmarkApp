@@ -777,6 +777,28 @@ try {
     check('chromium: server delete removed the QA sync',
       String(done).startsWith('Sync deleted from the server') && !!gone,
       `${String(done).slice(0, 70)} | head ${(await head(id)).status} | linked ${(await storage(crM2, 'syncInfo'))?.id} | active ${activeId}`);
+
+    // 11. The kept plaintext copy is a backup: it lives in Backup, while the
+    //     popup only explains what happened and points there.
+    await section(crM2, 'backup');
+    const copyShown = await waitFor(() => visible(crM2, '#m-removed-card'), 15000);
+    check('chromium: kept copy of the deleted sync is offered in Backup', copyShown);
+    const copyText = copyShown ? await text(crM2, '#m-removed-text') : '';
+    check('chromium: kept-copy card says it can be downloaded as plain JSON',
+      /plain JSON/i.test(copyText), copyText?.slice(0, 120));
+    await shot(cr, crM2, 'manager-backup-removed');
+    await crPop.reload({ waitUntil: 'load' });
+    const noticeShown = await waitFor(() => visible(crPop, '#p-removed'), 20000);
+    check('chromium: popup shows the removed-sync notice', noticeShown);
+    check('chromium: the popup notice offers no download/dismiss, only the manager',
+      await crPop.evaluate(() => !document.querySelector('#btn-removed-download') &&
+        !document.querySelector('#btn-removed-dismiss') && !!document.querySelector('#btn-removed-open-backup')));
+    await shot(cr, crPop, 'popup-removed-notice');
+    await click(crPop, '#btn-removed-open-backup');
+    const landed = await waitFor(async () => (crPop.url().includes('section=backup') ? true : undefined), 15000);
+    const cardThere = landed ? await waitFor(() => visible(crPop, '#m-removed-card'), 15000) : false;
+    check('chromium: Manage backups lands on the Backup copy', !!landed && !!cardThere,
+      crPop.url());
   }
 } catch (e) {
   check('script', false, e.stack);

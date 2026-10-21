@@ -38,7 +38,6 @@ import {
 } from '../shared/saved-syncs.js';
 import {
   type Direction,
-  RemovedSyncDismissImplication,
   directionConfirm,
   removedSyncText,
   undoConfirm,
@@ -182,46 +181,7 @@ async function refreshRemovedCard(): Promise<void> {
 }
 
 function initRemovedCard(): void {
-  const error = $('removed-error');
-  const fail = (err: unknown): void => {
-    error.textContent = (err as Error)?.message ?? String(err);
-    error.hidden = false;
-  };
-  $('btn-removed-download').addEventListener('click', () =>
-    void withBusy('btn-removed-download', t('busy.downloading'), async () => {
-      error.hidden = true;
-      try {
-        const removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
-        if (!removed) return refreshRemovedCard();
-        const day = removed.savedAt.slice(0, 10);
-        await send({
-          command: MessageCommand.DownloadFile,
-          filename: `keepmark-removed-sync-${day}.json`,
-          text: JSON.stringify(removed, null, 2),
-        });
-      } catch (err) {
-        fail(err);
-      }
-    }),
-  );
-  $('btn-removed-dismiss').addEventListener('click', () =>
-    void (async () => {
-      error.hidden = true;
-      const ok = await confirmInline('btn-removed-dismiss', {
-        message: t('popup.removed.deleteConfirm'),
-        implication: RemovedSyncDismissImplication(),
-        confirmLabel: t('common.yesDelete'),
-        danger: true,
-      });
-      if (!ok) return;
-      try {
-        await send({ command: MessageCommand.ClearRemovedSync });
-        ($('p-removed') as HTMLElement).hidden = true;
-      } catch (err) {
-        fail(err);
-      }
-    })(),
-  );
+  $('btn-removed-open-backup').addEventListener('click', () => openManager('backup'));
 }
 
 /** Kind of the undo slot the banner shows (its confirm names it). */
@@ -299,9 +259,9 @@ async function initConnect(): Promise<void> {
   });
 }
 
-/** Open the manager (tab, or same page in fullpage mode). */
-function openManager(): void {
-  const url = browser.runtime.getURL('manager.html');
+/** Open the manager (tab, or same page in fullpage mode), optionally on one section. */
+function openManager(section?: string): void {
+  const url = browser.runtime.getURL(`manager.html${section ? `?section=${section}` : ''}`);
   if (new URLSearchParams(location.search).has('fullpage')) {
     location.href = url;
   } else {
@@ -431,7 +391,7 @@ function initMain(): void {
       await refreshAll();
     });
   });
-  $('btn-manage').addEventListener('click', openManager);
+  $('btn-manage').addEventListener('click', () => openManager());
   $('btn-resolve-conflict').addEventListener('click', () => {
     const url = browser.runtime.getURL('manager.html?section=status');
     if (new URLSearchParams(location.search).has('fullpage')) {
