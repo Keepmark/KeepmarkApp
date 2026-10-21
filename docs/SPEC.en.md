@@ -30,6 +30,14 @@ xBrowserSync. It interoperates with the official xBrowserSync apps and services
 and with Keepmark Server (KeepmarkApi, extended contract v1.2). License GPL-3.0-only
 (`LICENSE.md`).
 
+Its defining capability is **multi-sync**: a browser keeps any number of saved
+syncs (work, home, family, a second server) side by side, each with its own
+service, derived key and bookmark copy, and exactly one of them active.
+Switching never asks again for the syncs' own long passwords: an optional short
+sync-change password gates adding and activating, and what is stored per row is
+the derived key, wrapped when that gate is set. Every other feature works the
+same whichever sync is active.
+
 Goals:
 
 - G1. Sync the user's full bookmark tree against any compatible service with

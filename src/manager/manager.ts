@@ -1940,7 +1940,9 @@ async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> 
 function refreshSwitchLockUi(): void {
   const rows = syncsView.syncs.length;
   const dormant = Math.max(rows - (syncsView.active ? 1 : 0), 0);
-  $('m-link-state').textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
+  const state = $('m-link-state');
+  state.textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
+  state.classList.toggle('ok', switchLockSet);
   ($('m-protection') as HTMLElement).hidden = !switchLockSet && rows < 2;
   ($('m-link-lock-current') as HTMLElement).hidden = !switchLockSet;
   ($('m-btn-link-lock-set') as HTMLElement).hidden = switchLockSet;

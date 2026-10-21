@@ -529,7 +529,10 @@ dd:last-of-type { align-items: flex-end; }
 }
 
 .id-row { gap: 6px; }
-.id-row code { min-width: 0; }
+/* The 32-character sync ID is a bearer token: show it whole, split into two
+   balanced 16-character lines next to Copy, so it never wraps mid-pair and
+   never leaves a lone character on its own line. */
+.id-row code { min-width: 0; max-width: 16ch; }
 
 .meter {
   width: 100%;

@@ -178,6 +178,9 @@ h3 {
   font-weight: 700;
 }
 
+/* Section heading that carries a state badge (sync-change password: set/not set). */
+#m-protection h3 { display: flex; align-items: center; gap: 8px; }
+
 p { margin: 6px 0; }
 
 label {

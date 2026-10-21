@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>Your bookmarks in every browser, synced and end-to-end encrypted.</b><br />
-  An independent extension compatible with xBrowserSync.
+  Keep several syncs side by side and switch in a click. An independent
+  extension compatible with xBrowserSync.
 </p>
 
 <p align="center">
@@ -32,8 +33,33 @@ It works with **any xBrowserSync service** (the official one, a community
 host or your own) and with the official xBrowserSync apps. A sync created in
 Keepmark opens there, and the other way round. Nothing to migrate.
 
+## Several syncs, one active
+
+A browser is not limited to one sync. Keep **work and home apart**, keep a
+shared **family** sync with its own password, or try a different server
+without losing the one you use: every sync is saved with its own service,
+password and bookmarks, exactly one is active, and switching is a click.
+
+<img src="docs/img/syncs.png" alt="Keepmark manager with three saved syncs (Home active, Work and Family inactive) and the popup showing the same list" />
+
+- **Add a sync** from the manager: create it on the target service, or open
+  one you already use elsewhere. A new sync starts from the bookmarks in this
+  browser; an existing one opens with a reviewed choice (keep the server copy,
+  keep this copy, or merge). The sync you were using stays in the list.
+- **Switch** from the popup or the manager. The sync you leave is saved
+  first, the new one is verified on its server copy and becomes active. An
+  optional short **sync-change password** (a PIN is fine) can gate adding and
+  switching, without ever asking again for the syncs' own long passwords.
+- **Stay in control of the list**: rename a sync, unlink it (the server copy
+  stays untouched), link it again later with its sync ID and password, or
+  delete it from the server when the service speaks API v1.2.
+- **One phone, any sync**: the connection QR always links the Android app to
+  the sync that is active, so moving the phone between syncs is a scan.
+
 ## Highlights
 
+- **Several syncs, side by side.** Work and home, a shared family sync, a
+  second server: saved together, one active at a time, switched in a click.
 - **Private by design.** PBKDF2-SHA256 and AES-GCM in the browser. No
   telemetry, HTTPS-only services, and no access to the pages you visit.
 - **Never lose a bookmark silently.** Conflicts are never resolved behind
@@ -59,8 +85,8 @@ Keepmark opens there, and the other way round. Nothing to migrate.
 | **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
 | **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
-| **Syncs** | Several syncs saved side by side, one active at a time: switch with the optional sync-change password, rename, unlink (link it again later with its sync ID and password), delete from the server |
-| **Add a sync** | Move your bookmarks to another service, into a new or existing sync, with one reviewed confirmation |
+| **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync-change password; rename, unlink (link it again later with its sync ID and password), delete from the server |
+| **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |
 | **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |
 
@@ -89,18 +115,22 @@ wizard the same QR button sits before the manual target credentials.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/img/screens/01-sync.png" width="49%" alt="Popup and status" />
-  <img src="docs/img/screens/02-conflict.png" width="49%" alt="Conflict preview" />
+  <img src="docs/img/screens/01-sync.png" width="49%" alt="Popup and sync status" />
+  <img src="docs/img/screens/02-syncs.png" width="49%" alt="Several saved syncs: Home active, Work and Family inactive" />
 </p>
 
 <p align="center">
-  <img src="docs/img/screens/03-duplicates.png" width="49%" alt="Duplicate cleanup" />
-  <img src="docs/img/screens/04-dark.png" width="49%" alt="Dark theme" />
+  <img src="docs/img/screens/03-conflict.png" width="49%" alt="Conflict choice with merge preview" />
+  <img src="docs/img/screens/04-duplicates.png" width="49%" alt="Duplicate cleanup" />
 </p>
 
 <p align="center">
-  <img src="docs/img/screens/05-private.png" width="49%" alt="Connect a browser" />
-  <img src="docs/img/screens/06-phone.png" width="49%" alt="Connection QR for linking the phone" />
+  <img src="docs/img/screens/05-dark.png" width="49%" alt="Dark theme" />
+  <img src="docs/img/screens/06-private.png" width="49%" alt="Connect a browser: the password stays on the device" />
+</p>
+
+<p align="center">
+  <img src="docs/img/screens/07-phone.png" width="49%" alt="Connection QR for linking the phone" />
 </p>
 
 ## The Keepmark family
