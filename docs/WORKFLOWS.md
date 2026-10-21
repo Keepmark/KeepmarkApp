@@ -96,6 +96,10 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   are stored in clear in this browser.
 - Manager → Sync → `+ Add new sync` opens the form (hidden until requested):
   service URL, `A new sync` or `An existing sync`, credentials, optional name.
+  - The name is prefilled with the service host. Opening the form focuses the
+    first visible field with its text selected — the name when a remembered
+    service hides the URL input — so typing replaces the suggestion instead of
+    being lost on the page body or appended to the host.
   - **A new sync** is additive: it is created on the service from the
     bookmarks currently in this browser and the result reports the uploaded
     count. The sync in use stays in the list. A pending conflict is only a

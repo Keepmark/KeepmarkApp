@@ -231,6 +231,11 @@ async function chooseService(p) {
 }
 async function connectNew(ctx) {
   const p = await open(ctx, 'popup.html?fullpage=1');
+  // A freshly opened popup focuses the first visible field: the URL input is
+  // hidden behind a remembered/default service, so the name gets the caret
+  // (typing right away must not fall on the page body).
+  const popupFocus = await waitFor(() => p.evaluate(() => document.activeElement?.id === 'sync-name'), 5000);
+  check(`${ctx.kind}: popup focuses the name field (no lost typing)`, popupFocus);
   await click(p, 'input[name="conn-mode"][value="new"]');
   await chooseService(p);
   await setVal(p, '#password', PASSWORD);
@@ -382,6 +387,10 @@ async function multiSync(ctx, m, pop, activeId) {
   // + Add new sync → a NEW sync on the same service (uploads the live tree).
   await click(m, '#m-btn-add-sync');
   check(`${ctx.kind}: add-sync form opens`, await visible(m, '#m-link-form'));
+  // A remembered service hides the URL input: the form must focus the name
+  // field (not leave the caret on the body, where typing is silently lost).
+  const addFocus = await m.evaluate(() => document.activeElement?.id ?? '');
+  check(`${ctx.kind}: add-sync focuses the name field (no lost typing)`, addFocus === 'm-link-name', addFocus);
   await shot(ctx, m, 'manager-syncs-add');
   await click(m, 'input[name="m-link-url-provider"][value="custom"]');
   await setVal(m, '#m-link-url', SERVICE);

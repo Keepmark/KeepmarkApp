@@ -12,6 +12,7 @@ import {
   describeUndo,
   undoBannerRemainingMs,
   input,
+  focusFirstVisible,
   validateConnect,
   renderStatusCard,
   send,
@@ -121,6 +122,11 @@ async function refreshAll(pickView = false): Promise<void> {
   await refreshSavedSyncs();
   await refreshUndoBanner();
   await refreshRemovedCard();
+  // Nothing has focus in a freshly opened popup: a remembered service hides
+  // the URL input, so typing a name would silently go to the page body and
+  // the suggested default would be saved. Focus the first visible field with
+  // its suggestion selected, so typing replaces it.
+  if (pickView && !status?.syncEnabled) focusFirstVisible([input('service-url'), input('sync-name')], true);
 }
 
 /** Multi-sync registry rows, rendered in both views. Metadata only: a row

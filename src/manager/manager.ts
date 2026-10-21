@@ -20,6 +20,7 @@ import {
   validateServiceUrl,
   validateSwitch,
   input,
+  focusFirstVisible,
   renderStatusCard,
   send,
   withBusy,
@@ -1539,7 +1540,12 @@ function openAddSync(): void {
   updateLinkForm();
   prefillLinkUrl();
   suggestLinkName();
-  input('m-link-url').focus();
+  // A remembered service hides the URL input (its label is hidden): focusing
+  // it would leave the caret on the page body, so a name typed right after
+  // opening the form would silently go nowhere and the host default would be
+  // saved. Focus the first field the user can see and select it, so typing
+  // replaces the suggestion instead of appending to it.
+  focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
 }
 
 function closeAddSync(): void {

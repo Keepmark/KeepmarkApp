@@ -14,6 +14,7 @@ import {
   describeSyncExpiry,
   describeUndo,
   undoBannerRemainingMs,
+  focusFirstVisible,
   formatBytes,
   renderStatusCard,
   validateConnect,
@@ -409,5 +410,41 @@ describe('validatePasswordChange', () => {
   });
   it('requires the confirmation to match', () => {
     expect(validatePasswordChange({ ...base, confirm: 'typo' })).toBe('New passwords do not match.');
+  });
+});
+
+describe('focusFirstVisible', () => {
+  beforeEach(() => { document.body.innerHTML = ''; });
+
+  it('skips a field hidden by an ancestor and selects the visible fallback', () => {
+    document.body.innerHTML = `
+      <label id="url-row" hidden><input id="url" value="https://service.test" /></label>
+      <label><input id="name" value="service.test" /></label>`;
+    const url = document.getElementById('url') as HTMLInputElement;
+    const name = document.getElementById('name') as HTMLInputElement;
+    focusFirstVisible([url, name], true);
+    expect(document.activeElement).toBe(name);
+    // Selected: typing replaces the suggestion instead of appending to it.
+    expect(name.selectionStart).toBe(0);
+    expect(name.selectionEnd).toBe(name.value.length);
+  });
+
+  it('focuses the first visible field when nothing is hidden', () => {
+    document.body.innerHTML = `
+      <label><input id="url" value="https://service.test" /></label>
+      <label><input id="name" value="service.test" /></label>`;
+    const url = document.getElementById('url') as HTMLInputElement;
+    const name = document.getElementById('name') as HTMLInputElement;
+    focusFirstVisible([url, name], true);
+    expect(document.activeElement).toBe(url);
+    expect(url.selectionEnd).toBe(url.value.length);
+    expect(name.value).toBe('service.test');
+  });
+
+  it('does nothing when every field is hidden', () => {
+    document.body.innerHTML = `<label hidden><input id="url" /></label>`;
+    (document.activeElement as HTMLElement | null)?.blur();
+    focusFirstVisible([document.getElementById('url') as HTMLElement]);
+    expect(document.activeElement).toBe(document.body);
   });
 });

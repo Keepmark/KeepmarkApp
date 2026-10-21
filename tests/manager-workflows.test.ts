@@ -88,6 +88,25 @@ it('creates a new sync from the live bookmarks and reports the uploaded count', 
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.CheckSyncTarget)).toBe(false);
 });
 
+it('focuses the name field when a remembered service hides the URL input', async () => {
+  // The picker hides the custom-URL label (not the input): focusing the URL
+  // would leave the caret on the page body, so a name typed right after
+  // opening the form would silently go nowhere and the host would be saved.
+  (el('m-link-url').closest('label') as HTMLElement).hidden = true;
+  await openAdd();
+  const name = el('m-link-name') as HTMLInputElement;
+  expect(document.activeElement).toBe(name);
+  // The suggestion is selected: typing replaces it instead of appending.
+  expect(name.selectionEnd).toBe(name.value.length);
+  field('m-link-name', 'Casa mia');
+  field('m-link-password', 'password123');
+  field('m-link-confirm', 'password123');
+  el('m-btn-link-direct').click(); await settle();
+  const call = harness.send.mock.calls.find(([m]) => m.command === MessageCommand.ConnectNew)?.[0];
+  expect(call.label).toBe('Casa mia');
+  expect(el('m-link-form').hidden).toBe(true);
+});
+
 it('warns about a pending conflict but still creates the sync', async () => {
   harness.send.mockImplementation(async (msg) => {
     switch (msg.command) {

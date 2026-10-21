@@ -57,6 +57,22 @@ export function input(id: string): HTMLInputElement {
   return $(id) as HTMLInputElement;
 }
 
+/**
+ * Focus the first field the user can actually see, optionally selecting its
+ * text so typing replaces the suggestion instead of appending to it.
+ *
+ * The service picker hides the custom-URL <label> (not the input) when a
+ * remembered service is selected, so `input('...-url').focus()` is a no-op
+ * there: the caret stays on the page body and whatever the user types next
+ * goes nowhere. Callers must pass the alternative fields in fallback order.
+ */
+export function focusFirstVisible(fields: HTMLElement[], select = false): void {
+  const target = fields.find((field) => field.closest('[hidden]') === null);
+  if (!target) return;
+  target.focus();
+  if (select && target instanceof HTMLInputElement) target.select();
+}
+
 export async function send<T>(msg: MessagePayload): Promise<T> {
   const res = (await browser.runtime.sendMessage(msg)) as MessageResponse;
   if (!res || typeof res !== 'object' || !('ok' in res)) {
