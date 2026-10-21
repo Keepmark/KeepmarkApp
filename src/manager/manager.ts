@@ -765,6 +765,9 @@ function countTree(nodes: BookmarkNode[]): number {
  *  the popup card is informational: download and dismissal are backup actions. */
 async function refreshRemovedCard(): Promise<void> {
   const card = $('m-removed-card');
+  const errorBox = $('removed-error');
+  errorBox.hidden = true;
+  errorBox.textContent = '';
   let removed: RemovedSyncSnapshot | null = null;
   try {
     removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });

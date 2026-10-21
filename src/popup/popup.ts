@@ -158,7 +158,8 @@ function countItems(nodes: BookmarkNode[]): number {
   return nodes.reduce((n, node) => n + 1 + countItems(node.children ?? []), 0);
 }
 
-/** Server-removed sync: offer the plaintext copy the background kept. */
+/** Server-removed sync: announce it and point at the manager, which owns the
+ *  kept plaintext copy (download/dismiss are backup actions). */
 async function refreshRemovedCard(): Promise<void> {
   const card = $('p-removed') as HTMLElement;
   let removed: RemovedSyncSnapshot | null = null;
