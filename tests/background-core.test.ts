@@ -1350,35 +1350,21 @@ describe('background core v1.2', () => {
     expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
   });
 
-  it('delete on v1.2 snapshots safety, deletes, unlinks, keeps natives', async () => {
+  it('delete on v1.2 deletes, unlinks, keeps natives and leaves no copy', async () => {
     const state = v12State();
     const { core, store, ports, mockApi, derived } = await linkedV12Core(state);
     await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
-    // Fail-closed safety entry (not a plaintext download anymore).
+    // A deliberate deletion keeps nothing: no download, no safety entry, no
+    // plaintext RemovedSync copy, no notification (the manager reports it).
     expect(ports.downloads).toHaveLength(0);
-    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
-      fileName: string;
-      operation: string;
-      side: string;
-      enc: string | null;
-    }[];
-    expect(safeties).toHaveLength(1);
-    expect(safeties[0]).toMatchObject({ operation: 'delete-remote', side: 'remote', enc: 'derived' });
-    // After unlink the remote-side entry refuses honestly (needs the link).
-    await expect(
-      core.handleMessage({ command: MessageCommand.RestoreSafety, fileName: safeties[0].fileName }),
-    ).rejects.toThrow(/Link the sync/);
+    expect(await core.handleMessage({ command: MessageCommand.GetSafetyList })).toEqual([]);
+    expect(await store.get(StoreKey.RemovedSync)).toBeUndefined();
+    expect(((await core.handleMessage({ command: MessageCommand.GetStatus })) as { removedSync?: boolean }).removedSync).toBe(false);
     expect(state.deleted).toEqual([SYNC_ID]);
-    // ...so the last server copy is kept in plaintext for download instead.
-    const removed = (await core.handleMessage({ command: MessageCommand.GetRemovedSync })) as {
-      bookmarks: BookmarkNode[];
-    } | null;
-    expect(JSON.stringify(removed?.bookmarks)).toContain('"A"');
-    expect(((await core.handleMessage({ command: MessageCommand.GetStatus })) as { removedSync?: boolean }).removedSync).toBe(true);
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     expect(await store.get(StoreKey.SyncInfo)).toEqual({});
     expect(await store.get(StoreKey.SyncRevision)).toBeUndefined();
-    expect(ports.notices.some((n) => n.title === 'Sync deleted from server')).toBe(true);
+    expect(ports.notices).toHaveLength(0);
     // The delete carries no undo by design: the slot is gone with the link.
     expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
     // Natives untouched: the local bookmark survives the server wipe.

@@ -12,7 +12,7 @@ import type { BookmarkNode } from '../src/shared/models';
 import { makeFirefoxAdapter } from '../src/firefox/adapter';
 import { BackgroundCore, type CorePorts } from '../src/background/core';
 import { BookmarkIdMapper } from '../src/shared/id-mapper';
-import { InMemoryLogger } from '../src/shared/logging';
+import { InMemoryLogger, sanitizeSyncId } from '../src/shared/logging';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
 import {
   DataOutOfSyncException,
@@ -20,6 +20,7 @@ import {
   UnsupportedVersionException,
 } from '../src/shared/errors';
 import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
+import { listSafety, writeSafety } from '../src/shared/safety';
 import { makeMockApi } from './firefox-bookmarks.test';
 
 const PASSWORD_A = 'correct horse battery staple';
@@ -426,7 +427,7 @@ describe('multi-sync (saved syncs)', () => {
     // A stays dormant and both server copies stay untouched.
     await expect(
       core.handleMessage({ command: MessageCommand.RemoveSavedSync, serviceUrl: 'https://other.example/', syncId: 'B' }),
-    ).resolves.toEqual({ removed: true, unlinked: true });
+    ).resolves.toEqual({ removed: true, unlinked: true, backups: 1 });
     let list = await saved(core);
     expect(list.syncs.map((r) => r.syncId)).toEqual([idA]);
     expect(list.active).toBeUndefined();
@@ -437,7 +438,7 @@ describe('multi-sync (saved syncs)', () => {
     // A is dormant now: only the row goes, no link change.
     await expect(
       core.handleMessage({ command: MessageCommand.RemoveSavedSync, serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA }),
-    ).resolves.toEqual({ removed: true, unlinked: false });
+    ).resolves.toEqual({ removed: true, unlinked: false, backups: 0 });
     list = await saved(core);
     expect(list.syncs).toHaveLength(0);
     expect(list.active).toBeUndefined();
@@ -709,6 +710,51 @@ describe('multi-sync (saved syncs)', () => {
     expect((await saved(core)).active?.syncId).toBe(idA);
   });
 
+  it('removing a row prunes the safety backups only its key could open', async () => {
+    const s = state();
+    const { core, store } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+    });
+    const tree = makeTree('S', 'https://s.test');
+    // Start from a clean manifest: the connect flows may have left their own
+    // safety entries (payloads become harmless orphans).
+    await store.remove(StoreKey.SafetyIndex);
+    await writeSafety(store, {
+      operation: 'upload-local',
+      side: 'remote',
+      tree,
+      syncId: idA,
+      derivedKey: await deriveKey(PASSWORD_A, idA, SyncClientVersion),
+    });
+    await writeSafety(store, {
+      operation: 'upload-local',
+      side: 'remote',
+      tree,
+      syncId: 'B',
+      derivedKey: await deriveKey(PASSWORD_B, 'B', SyncClientVersion),
+    });
+    expect(await listSafety(store)).toHaveLength(2);
+
+    // B is active: pruning uses its live key, A's backup survives.
+    await expect(
+      core.handleMessage({ command: MessageCommand.RemoveSavedSync, serviceUrl: 'https://other.example/', syncId: 'B' }),
+    ).resolves.toEqual({ removed: true, unlinked: true, backups: 1 });
+    expect((await listSafety(store)).map((e) => e.syncId)).toEqual([sanitizeSyncId(idA)]);
+
+    // A is dormant: its stored key id drives the prune.
+    await expect(
+      core.handleMessage({ command: MessageCommand.RemoveSavedSync, serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA }),
+    ).resolves.toEqual({ removed: true, unlinked: false, backups: 1 });
+    expect(await listSafety(store)).toHaveLength(0);
+  });
+
   it('removing a row that is not in the list is a no-op', async () => {
     const { core } = await setup(state());
     await connectA(core);
@@ -718,6 +764,6 @@ describe('multi-sync (saved syncs)', () => {
         serviceUrl: 'https://api.xbrowsersync.org/',
         syncId: 'never-linked',
       }),
-    ).resolves.toEqual({ removed: false, unlinked: false });
+    ).resolves.toEqual({ removed: false, unlinked: false, backups: 0 });
   });
 });

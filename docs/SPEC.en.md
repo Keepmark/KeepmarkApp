@@ -345,12 +345,14 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   → `change-password` undo → rotate stored derived key (re-read first; abort
   on concurrent link change). The old password dies everywhere immediately.
 - `DeleteRemoteSync`: double v1.2 gate (stored flag, then live `delete`
-  capability; `delete !== true` refuses). Plaintext safety download first,
-  DELETE, then unlink (natives untouched) + notification + result text.
-  No undo slot by design (no server undelete). UI: disabled with reason +
-  hint on v1.1 (`Server delete needs API v1.2 … Unlink only removes this
-  device`); two inline confirms (`Yes, delete` → `Yes, delete for
-  good`, `DeleteRemoteImplication` in `texts.ts`) when enabled.
+  capability; `delete !== true` refuses). DELETE, then unlink (natives
+  untouched) + result text. No backup is taken or kept (a deliberate
+  deletion keeps nothing), any older snapshot of the sync is pruned, and
+  there is no notification or undo slot by design (no server undelete). UI:
+  disabled with reason + hint on v1.1 (`Server delete needs API v1.2 …
+  Unlink only removes this device`); two inline confirms (`Yes, delete` →
+  `Yes, delete for good`, `DeleteRemoteImplication` in `texts.ts`) when
+  enabled.
 - `DisableSync` (Unlink): single inline confirm (`Yes, unlink`,
   `UnlinkImplication`: ID + password needed, unsynced edits, Undo cleared), clears state per §4.3, result text, status redrawn cleared.
 - `UndoLastLink` / `DismissUndo` / `GetUndoState`: one encrypted slot;

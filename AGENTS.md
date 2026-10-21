@@ -270,11 +270,13 @@ editable labels (max 40, case-insensitive uniqueness, host suggestion), the
 manager Sync section with `+ Add new sync` (new syncs upload the LIVE native
 tree and report the count; a pending conflict is a warning), row actions on
 three lines (status/API badge, metadata, text buttons), `Remove…` on every row
-(active = unlink + forget, no last-row rule), `Delete from server…` on the
-active row, and a read-only popup with a modal activation dialog that names the
-sync-change password. Next slices: "Show QR" per row, then KeepmarkMobile
-(credential index + one DB per sync + Syncs page + biometry gate + QR
-add-or-activate).
+(active = unlink + forget, no last-row rule; it also prunes the encrypted
+safety backups only that row's key could open), `Delete from server…` on the
+active row (keeps no copy: no backup is taken or kept, no `RemovedSync`,
+no notification), and a read-only popup with a modal activation dialog that
+names the sync-change password. Next slices: "Show QR" per row, then
+KeepmarkMobile (credential index + one DB per sync + Syncs page + biometry
+gate + QR add-or-activate).
 
 ## QR linking
 

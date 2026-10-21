@@ -20,19 +20,20 @@ describe('workflow texts', () => {
     expect(UnlinkImplication()).toContain('Undo is cleared');
   });
 
-  it('delete names other devices, no undelete, and where the kept copy is', () => {
+  it('delete names other devices, no undelete and no kept copy', () => {
     expect(DeleteRemoteImplication()).toContain('other devices');
     expect(DeleteRemoteImplication()).toContain('no undelete');
-    expect(DeleteRemoteImplication()).toContain("manager's Backup section");
-    expect(DeleteRemoteImplication()).not.toContain('popup');
-    // The safety entry is locked to the deleted sync: never point users there.
+    expect(DeleteRemoteImplication()).toContain('keeps no copy');
+    expect(DeleteRemoteImplication()).not.toContain("Backup section");
+    // The safety entry is deleted with the sync: never point users there.
     expect(DeleteRemoteImplication()).not.toContain('Safety backups');
   });
 
-  it('removed-sync text counts items and warns the file is not encrypted', () => {
+  it('removed-sync text counts items and points at the manager backup', () => {
     expect(removedSyncText(1)).toContain('1 item,');
     expect(removedSyncText(3)).toContain('3 items,');
     expect(removedSyncText(3)).toContain('not encrypted');
+    expect(removedSyncText(3)).toContain("manager's Backup section");
     expect(removedSyncText(3, '2026-10-01T10:00:00Z')).toContain('(last synced');
     expect(removedSyncText(3)).not.toContain('(last synced');
   });

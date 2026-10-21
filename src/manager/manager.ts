@@ -1823,7 +1823,7 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   remove.type = 'button';
   remove.className = 'mini danger';
   remove.id = `m-syncs-rm-${index}`;
-  remove.textContent = t('manager.syncs.remove');
+  remove.textContent = t(isActive ? 'manager.syncs.removeActive' : 'manager.syncs.remove');
   // Removing the active row unlinks this browser (and keeps the server
   // copy): confirmed with its own wording, never disabled.
   remove.addEventListener('click', () => void removeSavedRow(sync, remove.id));
@@ -2004,16 +2004,17 @@ async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> 
   });
   if (!ok) return;
   try {
-    const res = await send<{ removed: boolean; unlinked: boolean }>({
+    const res = await send<{ removed: boolean; unlinked: boolean; backups: number }>({
       command: MessageCommand.RemoveSavedSync,
       serviceUrl: sync.serviceUrl,
       syncId: sync.syncId,
     });
     await refreshSyncs();
     if (res.unlinked) await refreshStatus();
+    const done = t(res.unlinked ? 'manager.syncs.removedActive' : 'manager.syncs.removed', { name });
     showResult(
       'm-syncs-result',
-      t(res.unlinked ? 'manager.syncs.removedActive' : 'manager.syncs.removed', { name }),
+      res.backups > 0 ? `${done} ${t('manager.syncs.backupsPruned', { count: res.backups })}` : done,
     );
   } catch (err) {
     showError('m-syncs-error', (err as Error).message);

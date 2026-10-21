@@ -36,7 +36,10 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
    line of follow-up when the user has something to do (store the sync ID, update
    other devices), and a pointer to Backup → Safety backups when one was made.
 7. **Safety backups** are taken before every overwrite or deletion. A workflow
-   that takes one says so in its confirmation or result.
+   that takes one says so in its confirmation or result. When a saved sync is
+   removed (or dropped by a reset), the encrypted backups that only its key
+   could open are deleted with it: Restore only ever uses the active sync's
+   key, so they could never be opened again.
 
 ## Workflow table
 
@@ -51,12 +54,12 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 | Safety backup: restore | no | `Restore` | always | What is replaced (local or server copy) and that a pre-restore backup is taken. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
 | Unlink this device | yes | `Unlink this device…` (extension: `Unlink this browser…`) | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
-| Delete sync from server (extension, service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete. A plaintext copy of the server data is kept in Manager → Backup (the removed-sync card). |
-| Removed sync (extension) | shown while unlinked after the sync was deleted or removed from the service | Popup: informational notice + `Manage backups`; Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | The popup only says what happened: the kept copy is downloaded or dismissed in the manager. It is the only copy of the removed sync; the download is a plain JSON file, not encrypted. |
+| Delete sync from server (extension, service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
+| Removed sync (extension) | shown while unlinked after the service no longer has the sync | Popup: informational notice + `Manage backups`; Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). The popup says what happened and points to Manager → Backup; the kept copy is downloaded or dismissed there. It is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
 | Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` → sync-change password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved, and a failed save or a pending conflict cancels the switch. The sync's own long password is never asked at activation. Without a sync-change password the dialog is a plain confirmation. |
 | Add a new sync (extension, multi-sync) | no | Manager → Sync → `+ Add new sync` → mode `A new sync` → service URL + password + confirm → `Create and upload` | none: the note says the current sync stays | Uploads the bookmarks currently in this browser and reports how many. A pending conflict is a warning only: the new sync starts from the local tree, while the conflicted sync keeps its server copy. |
-| Remove a saved sync (extension, multi-sync) | manager only | Manager → Sync → `Remove…` on a row | always | Dormant: the row only. Active: this browser is unlinked (the row is the link); the sync and its server copy stay. |
+| Remove a saved sync (extension, multi-sync) | manager only | Manager → Sync → `Remove…` (dormant) / `Remove from here…` (active) | always | Dormant: the row only, server copy stays. Active: this browser is unlinked, the row goes, and the sync plus its server copy stay for the other devices. Forgetting an active row is therefore local; deleting it for everyone is `Delete from server…`. |
 | Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
@@ -111,12 +114,18 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 - Row actions: `Activate` (dormant), `Rename` (metadata only, no password),
   `Unlink` (active: detach this browser, the row stays dormant),
   `Delete from server…` (active only, v1.2: removes the server copy and the
-  row) and `Remove…` (every row).
-  - `Remove…` on a dormant row forgets the row only: bookmarks, server copy
-    and safety backups stay.
-  - `Remove…` on the active row necessarily unlinks this browser (the row is
-    the link), then forgets the row. There is no "remove the active only when
-    it is the last" rule and no "activate another first" step.
+  row) and `Remove…` (dormant) / `Remove from here…` (active).
+  - `Remove…` on a dormant row forgets the row only: bookmarks and the server
+    copy stay. Safety backups that only that sync's key could open are deleted
+    with the row (they could never be restored once the key is gone).
+  - `Remove from here…` on the active row necessarily unlinks this browser
+    (the row is the link), then forgets the row. The confirmation and result
+    say the sync and its server copy stay; `Delete from server…` is the only
+    action that erases them everywhere. There is no "remove the active only
+    when it is the last" rule and no "activate another first" step.
+  - `Delete from server…` keeps nothing: the row goes, no safety backup is
+    taken or kept, and no plaintext removed-sync copy is written. The local
+    bookmarks stay and the result confirms it.
 - The popup is read-only: dormant rows offer only `Activate`, which opens a
   modal dialog asking for the sync-change password (only when one is set) and
   states that it is not the sync's own password. Rename, remove, delete and
@@ -130,7 +139,8 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   replaces the native tree with the target's → the previous sync stays listed.
 - Reset (forgotten password) mints a new vault and deletes every row but the
   active one; the active sync keeps working and is wrapped under the new
-  password. Server copies, safety backups and the undo slot are untouched.
+  password. Server copies and the undo slot are untouched; the encrypted
+  safety backups of the dropped rows go with them.
 - Activating the already-active row is refused; the native tree is never
   re-read from the same sync.
 - The list survives unlink and browser restart; the active row is marked

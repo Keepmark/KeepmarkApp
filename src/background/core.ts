@@ -33,7 +33,7 @@ import {
 
 import { XSyncApiClient } from '../shared/api.js';
 import { isLang, resolveLang, setLang, t, type LangSetting } from '../shared/i18n.js';
-import { decryptData, deriveKey, encryptData } from '../shared/crypto.js';
+import { decryptData, deriveKey, derivedKeyId, encryptData } from '../shared/crypto.js';
 import { compareVersions, DefaultServiceUrl, MinApiVersion, MinNewPasswordLength, PasswordTooShort, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
@@ -60,6 +60,7 @@ import { diffTrees, sameContent } from '../shared/tree-diff.js';
 import {
   deleteSafety,
   listSafety,
+  pruneSafetyForSync,
   readSafetyTree,
   rekeySafety,
   writeSafety,
@@ -1758,11 +1759,13 @@ export class BackgroundCore {
       const existing = findSavedSync(list, active);
       if (!bumpLastUse && existing) return;
       const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      const keyId = info?.password ? await derivedKeyId(info.password).catch(() => undefined) : undefined;
       await this.store.set(
         StoreKey.SavedSyncs,
         upsertSavedSync(list, {
           ...active,
           ...(label ? { label } : {}),
+          ...(keyId ? { keyId } : {}),
           syncVersion: info?.version,
           lastUsedAt: bumpLastUse ? new Date().toISOString() : existing?.lastUsedAt ?? new Date().toISOString(),
         }),
@@ -1938,6 +1941,7 @@ export class BackgroundCore {
   ): Promise<void> {
     if (!identity || !derivedKey) return;
     const credential = await this.sealRowKey(vaultKey, derivedKey);
+    const keyId = await derivedKeyId(derivedKey).catch(() => undefined);
     await this.withSavedSyncs(async (list) => {
       const existing = findSavedSync(list, identity);
       await this.store.set(
@@ -1945,6 +1949,7 @@ export class BackgroundCore {
         upsertSavedSync(list, {
           ...identity,
           lastUsedAt: existing?.lastUsedAt ?? new Date().toISOString(),
+          ...(keyId ? { keyId } : {}),
           credential,
         }),
       );
@@ -2047,11 +2052,13 @@ export class BackgroundCore {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     let removed = 0;
     let kept: 0 | 1 = 0;
+    const droppedRows: SavedSync[] = [];
     await this.withSavedSyncs(async (list) => {
       const rows: SavedSync[] = [];
       if (active) {
         kept = 1;
-        removed = list.filter((row) => !sameSavedSync(row, active)).length;
+        droppedRows.push(...list.filter((row) => !sameSavedSync(row, active)));
+        removed = droppedRows.length;
         const existing = findSavedSync(list, active);
         const credential: SavedSyncCredential | undefined = info?.password
           ? { scheme: 'switch', ...(await wrapCredential(vaultKey, info.password)) }
@@ -2063,13 +2070,22 @@ export class BackgroundCore {
           ...(existing?.label ? { label: existing.label } : {}),
           ...(syncVersion ? { syncVersion } : {}),
           lastUsedAt: existing?.lastUsedAt ?? new Date().toISOString(),
+          ...(existing?.keyId ? { keyId: existing.keyId } : {}),
           ...(credential ? { credential } : {}),
         });
       } else {
+        droppedRows.push(...list);
         removed = list.length;
       }
       await this.store.set(StoreKey.SavedSyncs, rows);
     });
+    // The forgotten rows take their keys with them: their encrypted safety
+    // backups can never be opened again, so drop them with the rows.
+    for (const row of droppedRows) {
+      await pruneSafetyForSync(this.store, { syncId: row.syncId, keyId: row.keyId }).catch((e: unknown) =>
+        this.log.log(XbsLogLevel.Warning, 'sync', `Safety cleanup failed: ${(e as Error)?.message}`),
+      );
+    }
     await this.store.set(StoreKey.SwitchLock, lock);
     return { removed, kept };
   }
@@ -2103,14 +2119,35 @@ export class BackgroundCore {
   private async removeSavedSyncEntry(
     serviceUrl: string,
     syncId: string,
-  ): Promise<{ removed: boolean; unlinked: boolean }> {
+  ): Promise<{ removed: boolean; unlinked: boolean; backups: number }> {
     const target: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
     const active = await this.activeSavedSync();
+    const row = findSavedSync(await this.savedSyncList(), target);
+    // The row's key is the only one that opens its encrypted safety backups:
+    // fingerprint it before the row (and, for the active sync, SyncInfo) goes.
+    let keyId = row?.keyId;
+    if (!keyId && row?.credential?.scheme === 'plain') {
+      keyId = await derivedKeyId(row.credential.key).catch(() => undefined);
+    }
+    if (!keyId && active && sameSavedSync(active, target)) {
+      const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      if (info?.password) keyId = await derivedKeyId(info.password).catch(() => undefined);
+    }
+    let unlinked = false;
     if (active && sameSavedSync(active, target)) {
       await this.disableSync();
-      return { removed: await this.forgetSavedSyncRow(target), unlinked: true };
+      unlinked = true;
     }
-    return { removed: await this.forgetSavedSyncRow(target), unlinked: false };
+    const removed = await this.forgetSavedSyncRow(target);
+    if (!removed) return { removed: false, unlinked, backups: 0 };
+    // Restore only ever uses the active sync's key, so once the row is gone
+    // these snapshots can never be opened again: keeping them would only
+    // spend the global retention and evict backups of live syncs.
+    const backups = await pruneSafetyForSync(this.store, { syncId, keyId }).catch((e: unknown) => {
+      this.log.log(XbsLogLevel.Warning, 'sync', `Safety cleanup failed: ${(e as Error)?.message}`);
+      return 0;
+    });
+    return { removed, unlinked, backups };
   }
 
   /** Optional row name: trimmed, unique (case-insensitive), 40 chars max. */
@@ -2445,9 +2482,9 @@ export class BackgroundCore {
    * v1.2-only: delete the server copy of the linked sync, then unlink this
    * device (natives are untouched). Gated behind the stored supportsV12 flag:
    * on legacy services it throws UnsupportedVersionException and NOTHING is
-   * deleted. There is no server-side undelete, so the safety net is a
-   * fail-closed snapshot taken BEFORE the DELETE plus a double confirm
-   * in the UI — deliberately no undo slot (a PUT-back would 401).
+   * deleted. There is no server-side undelete: the UI double-confirms and no
+   * undo slot is kept (a PUT-back would 401). No backup is taken or kept: a
+   * deliberate deletion keeps nothing, and the local bookmarks stay.
    */
   private async deleteRemoteSync(): Promise<{ deleted: boolean }> {
     const { info } = await this.requireCreds();
@@ -2467,16 +2504,6 @@ export class BackgroundCore {
     if (caps && caps.delete !== true) {
       throw new UnsupportedVersionException(t('api.ErrUnsupportedVersion'));
     }
-    const tree = await this.cachedTree(info);
-    // Fail-closed: no undelete exists server-side. Abort when the snapshot
-    // cannot be written.
-    await writeSafety(this.store, {
-      operation: 'delete-remote',
-      side: 'remote',
-      tree,
-      syncId: info.id,
-      derivedKey: info.password,
-    });
     try {
       await deleteRemoteSync(api, info.id!);
     } catch (err) {
@@ -2487,29 +2514,21 @@ export class BackgroundCore {
       throw err;
     }
     this.log.log(XbsLogLevel.Info, 'sync', `Sync ${sanitizeSyncId(info.id)} deleted from server, unlinking device`);
-    const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     await this.disableSync();
     // The row would only offer an activation that answers 404: drop it.
     await this.forgetSavedSyncRow({ serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl), syncId: info.id! }).catch(
       (e: unknown) => this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs cleanup failed: ${(e as Error)?.message}`),
     );
-    // The safety entry above stays locked to the deleted sync's key, so it
-    // can never be opened again: keep the same plaintext RemovedSync copy a
-    // server-side removal leaves, which Manager → Backup offers for download.
-    // Set AFTER disableSync (a manual unlink retires RemovedSync).
-    await this.store
-      .set(StoreKey.RemovedSync, {
-        bookmarks: tree,
-        lastUpdated,
-        serviceUrl: info.serviceUrl,
-        savedAt: new Date().toISOString(),
-      } satisfies RemovedSyncSnapshot)
-      .catch((e: unknown) =>
-        this.log.log(XbsLogLevel.Warning, 'sync', `RemovedSync snapshot failed: ${(e as Error)?.message}`),
-      );
-    await this.ports.chrome
-      .notify(t('core.deletedTitle'), t('core.deletedBody'))
-      .catch(() => undefined);
+    // A deliberate deletion keeps nothing: any older backup of this sync is
+    // locked to a key this browser just discarded, and the local bookmarks
+    // stay. Drop those entries instead of leaving unreadable rows to consume
+    // the global retention.
+    await pruneSafetyForSync(this.store, {
+      syncId: info.id,
+      keyId: info.password ? await derivedKeyId(info.password).catch(() => undefined) : undefined,
+    }).catch((e: unknown) =>
+      this.log.log(XbsLogLevel.Warning, 'sync', `Safety cleanup failed: ${(e as Error)?.message}`),
+    );
     return { deleted: true };
   }
 
@@ -3066,6 +3085,7 @@ export class BackgroundCore {
   private async doDisableSync(err?: Error): Promise<void> {
     /** Sync the server says is gone: its saved row can never be activated. */
     let deadSync: SavedSyncActive | undefined;
+    let deadKeyId: string | undefined;
     // On server-side deletion the cached copy is the ONLY copy left: stash a
     // plaintext snapshot (tree + lastUpdated + service URL, never the
     // password) before wiping, mirroring upstream setSyncRemoved. The manager
@@ -3078,6 +3098,7 @@ export class BackgroundCore {
         if (info?.id) {
           deadSync = { serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl), syncId: info.id };
         }
+        if (info?.password) deadKeyId = await derivedKeyId(info.password).catch(() => undefined);
         if (info?.password && blob) {
           const tree = JSON.parse(await decryptData(blob, info.password)) as BookmarkNode[];
           await this.store.set(StoreKey.RemovedSync, {
@@ -3111,6 +3132,10 @@ export class BackgroundCore {
     if (deadSync) {
       await this.forgetSavedSyncRow(deadSync).catch((e: unknown) =>
         this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs cleanup failed: ${(e as Error)?.message}`),
+      );
+      // The server copy is gone: its encrypted backups can never be opened.
+      await pruneSafetyForSync(this.store, { syncId: deadSync.syncId, keyId: deadKeyId }).catch((e: unknown) =>
+        this.log.log(XbsLogLevel.Warning, 'sync', `Safety cleanup failed: ${(e as Error)?.message}`),
       );
     }
     await this.setBadge(false);

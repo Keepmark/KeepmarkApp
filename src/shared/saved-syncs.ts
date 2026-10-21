@@ -21,6 +21,9 @@ export interface SavedSync {
   syncVersion?: string;
   /** Last link/activation of this sync (ISO 8601). */
   lastUsedAt: string;
+  /** Fingerprint of the row's derived key (see derivedKeyId), so cleanup can
+   *  match the row's safety backups without unwrapping a switch credential. */
+  keyId?: string;
   /** How to get this row's derived key back: in clear (no switch password
    *  configured) or wrapped under the switch-lock vault. The active row has
    *  one too, so it stays activatable after being demoted. */
@@ -103,6 +106,7 @@ export function upsertSavedSync(list: readonly SavedSync[], entry: SavedSync): S
     serviceUrl,
     label: entry.label ?? (index >= 0 ? next[index].label : undefined),
     syncVersion: entry.syncVersion ?? (index >= 0 ? next[index].syncVersion : undefined),
+    keyId: entry.keyId ?? (index >= 0 ? next[index].keyId : undefined),
     // Refreshing a row without a credential must never drop the stored one.
     credential: entry.credential ?? (index >= 0 ? next[index].credential : undefined),
   };
@@ -145,6 +149,7 @@ export function sanitizeSavedSyncs(value: unknown): SavedSync[] {
       syncId: row.syncId,
       ...(typeof row.label === 'string' && row.label.trim() ? { label: row.label } : {}),
       ...(typeof row.syncVersion === 'string' && row.syncVersion ? { syncVersion: row.syncVersion } : {}),
+      ...(typeof row.keyId === 'string' && row.keyId ? { keyId: row.keyId } : {}),
       ...(normalizeCredential(row.credential) ? { credential: normalizeCredential(row.credential) } : {}),
       lastUsedAt: typeof row.lastUsedAt === 'string' ? row.lastUsedAt : '',
     });

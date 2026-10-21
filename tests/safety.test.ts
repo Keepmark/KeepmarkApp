@@ -7,6 +7,7 @@ import {
   buildFileName,
   deleteSafety,
   listSafety,
+  pruneSafetyForSync,
   readSafetyTree,
   rekeySafety,
   writeSafety,
@@ -125,6 +126,42 @@ describe('safety backups', () => {
     await expect(deleteSafety(store, entry.fileName)).resolves.toBe(true);
     await expect(listSafety(store)).resolves.toEqual([]);
     expect(await store.get(safetyFileKey(entry.fileName))).toBeUndefined();
+  });
+
+  it('prunes only the encrypted snapshots of the removed sync', async () => {
+    const store = new Store(new MemoryBackend());
+    const a = await deriveKey(PASSWORD, 'sync-aaaaaaaa', SyncClientVersion);
+    const b = await deriveKey('another password', 'sync-bbbbbbbb', SyncClientVersion);
+    const entryA = await writeSafety(store, {
+      operation: 'upload-local',
+      side: 'remote',
+      tree: structuredClone(tree),
+      syncId: 'sync-aaaaaaaa',
+      derivedKey: a,
+    });
+    const entryB = await writeSafety(store, {
+      operation: 'upload-local',
+      side: 'remote',
+      tree: structuredClone(tree),
+      syncId: 'sync-bbbbbbbb',
+      derivedKey: b,
+    });
+    const plain = await writeSafety(store, { operation: 'import-backup', side: 'local', tree: structuredClone(tree) });
+
+    // No target match: nothing to do.
+    expect(await pruneSafetyForSync(store, { keyId: 'nope' })).toBe(0);
+    expect(await listSafety(store)).toHaveLength(3);
+
+    // Exact key match removes only A's payload + manifest row; plaintext stays.
+    expect(await pruneSafetyForSync(store, { syncId: 'sync-aaaaaaaa', keyId: entryA.keyId })).toBe(1);
+    expect((await listSafety(store)).map((e) => e.fileName).sort()).toEqual([entryB.fileName, plain.fileName].sort());
+    expect(await store.get(safetyFileKey(entryA.fileName))).toBeUndefined();
+
+    // Legacy row without a keyId: fall back to the truncated sync id.
+    expect(await pruneSafetyForSync(store, { syncId: 'sync-bbbbbbbb' })).toBe(1);
+    expect(await listSafety(store)).toHaveLength(1);
+    expect(await store.get(safetyFileKey(entryB.fileName))).toBeUndefined();
+    expect(await store.get(safetyFileKey(plain.fileName))).toBeDefined();
   });
 
   it('rekeys entries on password change without failing', async () => {

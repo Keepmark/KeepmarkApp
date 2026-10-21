@@ -221,6 +221,35 @@ export async function deleteSafety(store: Store, fileName: string): Promise<bool
 }
 
 /**
+ * Drop the encrypted snapshots of one sync. Its saved row is the only place
+ * its key lives, so once the row is removed Restore can never open them
+ * again: keeping them would only spend the global retention budget and
+ * evict snapshots of live syncs. Plaintext (pre-link) entries are kept: they
+ * need no key. Matching is exact on keyId when known, else on the truncated
+ * sync id (the only sync identifier the manifest stores).
+ */
+export async function pruneSafetyForSync(
+  store: Store,
+  target: { syncId?: string; keyId?: string },
+): Promise<number> {
+  const rows = await listSafety(store);
+  const truncated = target.syncId && target.syncId.length > 8 ? sanitizeSyncId(target.syncId) : undefined;
+  const doomed = rows.filter((entry) => {
+    if (entry.enc !== 'derived') return false;
+    if (target.keyId && entry.keyId) return entry.keyId === target.keyId;
+    return truncated !== undefined && entry.syncId === truncated;
+  });
+  if (doomed.length === 0) return 0;
+  for (const entry of doomed) await store.remove(safetyFileKey(entry.fileName));
+  const names = new Set(doomed.map((entry) => entry.fileName));
+  await store.set(
+    StoreKey.SafetyIndex,
+    rows.filter((entry) => !names.has(entry.fileName)),
+  );
+  return doomed.length;
+}
+
+/**
  * Re-encrypt every entry readable under oldKey with newKey (password-change
  * rotation). Best-effort: failures are collected, never thrown — rotation
  * must not fail the user flow.

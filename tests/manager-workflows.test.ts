@@ -186,10 +186,10 @@ it('asks once before deleting the server sync from the active row', async () => 
 it('removes the active row with a message that names the unlink', async () => {
   el('m-syncs-rm-0').click(); await settle();
   const prompt = document.getElementById('m-syncs-rm-0-confirm')!;
-  expect(prompt.textContent).toContain('unlink this browser');
+  expect(prompt.textContent).toContain('unlink it');
   el('m-syncs-rm-0-yes').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.RemoveSavedSync)).toHaveLength(1);
-  expect(el('m-syncs-result').textContent).toContain('no longer linked');
+  expect(el('m-syncs-result').textContent).toContain('this browser unlinked');
 });
 
 it('changes direction within the verified review without asking to check again', async () => {
