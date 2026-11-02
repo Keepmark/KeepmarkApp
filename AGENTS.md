@@ -256,7 +256,7 @@ already lets the MV3 worker reach the service without any host grant.
 no auto-backup schedule; toolbar toggle + Chromium Menu
 folder edge cases covered by tests but untested live.
 
-**Multi-sync — slices 1–3 DONE (`feature/multisync`):** `SavedSyncs` registry
+**Multi-sync — slices 1–3 DONE (merged in `master`, 0.1.36):** `SavedSyncs` registry
 (upsert on every link, upgrade migration at startup), `GetSavedSyncs` /
 `ActivateSavedSync` / `RemoveSavedSync` / `RenameSavedSync`, popup panel in
 both views, fail-closed push before switching, conflict blocks the switch,
@@ -274,7 +274,9 @@ three lines (status/API badge, metadata, text buttons), `Remove…` on every row
 safety backups only that row's key could open), `Delete from server…` on the
 active row (keeps no copy: no backup is taken or kept, no `RemovedSync`,
 no notification), and a read-only popup with a modal activation dialog that
-names the sync-change password. Next slices: "Show QR" per row, then
+names the sync-change password. Post-review fixes landed in 0.1.34–0.1.36
+(removed-sync copy in Backup, deliberate delete keeps nothing and prunes
+orphaned safety backups). Next slices: "Show QR" per row, then
 KeepmarkMobile (credential index + one DB per sync + Syncs page + biometry
 gate + QR add-or-activate).
 
