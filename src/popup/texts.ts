@@ -35,8 +35,6 @@ export const dupDeleteConfirm = (count: number): { message: string; implication:
 export const dupDeleteDone = (count: number): string => tn('texts.dupDeleteDone', count);
 
 // Status → Danger zone.
-export const UnlinkImplication = (): string => t('texts.unlinkImplication');
-export const UnlinkDone = (): string => t('texts.unlinkDone');
 export const DeleteRemoteImplication = (): string => t('texts.deleteRemoteImplication');
 export const DeleteRemoteDone = (): string => t('texts.deleteRemoteDone');
 

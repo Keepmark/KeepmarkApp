@@ -13,18 +13,31 @@ Both apps use the same words for the same things. Keep this file identical in
 | Item(s) | Bookmarks + folders + separators (counts) | nodes |
 | Connect | Link this device to a new or existing sync | |
 | New sync / Existing sync | The two connect modes | Use existing, … here |
-| Unlink this device | Forget the credentials; local bookmarks stay | extension: "Unlink this browser" |
+| Syncs | The list of saved syncs on this device (manager Sync section, popup card) | saved syncs, saved list, registry |
+| Add a sync (`+ Add a sync`) | Link this browser to a new or existing sync; while another sync is active this browser switches to it and the old one stays in the list (final button: `Connect`, result: `Sync linked`) | Move service, Move to another service, Switch service |
+| Activate | Make an inactive saved sync the active one; this browser's bookmarks become its copy | Open, Load |
+| Active | The saved sync this device is using now | in use, current, linked |
+| Inactive | A saved sync this device is not using right now | dormant, sleeping, idle, stopped |
+| Forget | Remove an inactive sync from the list; the sync and its server copy stay | Remove from the list, Remove |
+| Unlink this device | Forget the credentials of the active sync; its bookmarks stay on this device | Unlink this browser, Remove, Delete |
 | **Download** | Replace the bookmarks on this device with the server copy | Take remote, Pull |
 | **Upload** | Replace the server copy with the bookmarks on this device | Upload local, Upload mine, Overwrite remote, Push |
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
-| Add a sync (`+ Add new sync`) | Link this browser to a new or existing sync; while another sync is active this browser switches to it and the old one stays in the list (final button: `Connect`, result: `Sync linked`) | Move service, Move to another service, Switch service |
-| Activate | Make an inactive saved sync the active one; this browser's bookmarks become its copy | Open, Load |
-| Inactive | A saved sync this browser is not using right now | dormant, sleeping, idle |
 | Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs; it is not the sync's own password | master password, sync password, switch password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
+| Copy of the removed sync | The local copy kept when a sync disappeared from the service; download or dismiss it from Backup | orphan copy, orphan backup |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
+
+`this` follows the platform: both apps say `Unlink this device` (it «Scollega questo
+dispositivo»), never `Unlink this browser`. Android uses the same words for the list
+(Syncs, Active, Inactive, Activate, Forget) once the Syncs page replaces the
+single-sync screens.
+
+Android `Move service` is legacy from the single-sync app: the nav item, the
+`Move to another service` page and the `— Move service` safety origins become
+`Add a sync` when the Syncs page lands. Never copy that wording into new text.
 
 Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete` (second step of a server delete: `Yes, delete for good`), always with `Cancel`.
 The two connect modes are `New sync` / `Existing sync`: where the question above them already carries the noun (`Into which sync?`, it «In quale sincronizzazione?»), the two segmented labels are shortened to `New` / `Existing` (`Nuova` / `Esistente`) so they fit one row.
@@ -56,16 +69,21 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Connect | Collega | Connecter | Conectar | Verbinden |
 | Link / Unlink | Collega / Scollega | Associer / Dissocier | Vincular / Desvincular | Verknüpfen / Trennen |
 | linked | collegato | associé | vinculado | verknüpft |
+| Unlink this device | Scollega questo dispositivo | Dissocier cet appareil | Desvincular este dispositivo | Dieses Gerät trennen |
 | Download | Scarica | Télécharger | Descargar | Herunterladen |
 | Upload | Carica | Envoyer | Subir | Hochladen |
 | Merge | Unisci | Fusionner | Combinar | Zusammenführen |
 | Sync conflict | Conflitto di sincronizzazione | Conflit de synchronisation | Conflicto de sincronización | Synchronisierungskonflikt |
+| Syncs | Sincronizzazioni | Synchronisations | Sincronizaciones | Synchronisierungen |
 | Add a sync | Aggiungi un sync | Ajouter un sync | Añadir un sync | Sync hinzufügen |
 | Activate | Attiva | Activer | Activar | Aktivieren |
+| Active | Attivo | Actif | Activo | Aktiv |
 | Inactive | Inattivo | Inactif | Inactivo | Inaktiv |
+| Forget | Dimentica | Oublier | Olvidar | Vergessen |
 | Sync-change password | password di cambio sync | mot de passe de changement de sync | contraseña de cambio de sync | Sync-Wechselpasswort |
 | Backup | Backup | Sauvegarde | Copia de seguridad | Sicherung |
 | Safety backups | Backup di sicurezza | Sauvegardes de sécurité | Copias de seguridad preventivas | Sicherheitskopien |
+| Copy of the removed sync | Copia del sync rimosso | Copie du sync supprimé | Copia del sync eliminado | Kopie des entfernten Syncs |
 | Export / Restore | Esporta / Ripristina | Exporter / Restaurer | Exportar / Restaurar | Exportieren / Wiederherstellen |
 | Undo | Annulla modifica | Annuler la modification | Deshacer | Rückgängig |
 | Duplicates | Duplicati | Doublons | Duplicados | Duplikate |
@@ -96,16 +114,21 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | this device / this browser | このデバイス / このブラウザ | este dispositivo / este navegador | это устройство / этот браузер | 此设备 / 此浏览器 |
 | Connect | 接続 | Conectar | Подключение | 连接 |
 | Link / Unlink | リンク / リンクを解除 | Vincular / Desvincular | Привязать / Отвязать | 关联 / 取消关联 |
+| Unlink this device | このデバイスのリンクを解除 | Desvincular este dispositivo | Отвязать это устройство | 取消关联此设备 |
 | Download | ダウンロード | Baixar | Скачать | 下载 |
 | Upload | アップロード | Enviar | Отправить | 上传 |
 | Merge | 統合 | Mesclar | Объединить | 合并 |
 | Sync conflict | 同期の競合 | Conflito de sincronização | Конфликт синхронизации | 同步冲突 |
+| Syncs | 同期 | Sincronizações | Синхронизации | 同步 |
 | Add a sync | 同期を追加 | Adicionar sync | Добавить синхронизацию | 添加同步 |
 | Activate | 有効化 | Ativar | Активировать | 启用 |
-| Inactive | 停止中 | Inativo | Неактивен | 未启用 |
+| Active | 使用中 | Ativo | Активна | 使用中 |
+| Inactive | 未使用 | Inativo | Неактивна | 未启用 |
+| Forget | 忘れる | Esquecer | Забыть | 忘记 |
 | Sync-change password | 同期切り替えパスワード | senha de troca de sync | пароль переключения | 同步切换密码 |
 | Backup | バックアップ | Backup | Резервная копия | 备份 |
 | Safety backups | 安全バックアップ | Backups de segurança | Страховочные копии | 安全备份 |
+| Copy of the removed sync | 削除された同期のコピー | Cópia do sync removido | Копия удалённого sync | 已删除同步的副本 |
 | Undo | 元に戻す | Desfazer | Отменить | 撤销 |
 | Duplicates | 重複 | Duplicados | Дубликаты | 重复项 |
 | Yes, download | はい、ダウンロード | Sim, baixar | Да, скачать | 是，下载 |

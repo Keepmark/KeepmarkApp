@@ -183,13 +183,13 @@ it('asks once before deleting the server sync from the active row', async () => 
   expect(document.querySelector('#m-syncs-delete-0-confirm')).toBeNull();
 });
 
-it('removes the active row with a message that names the unlink', async () => {
+it('unlinks the active row with the canonical "Unlink this device" wording', async () => {
   el('m-syncs-rm-0').click(); await settle();
   const prompt = document.getElementById('m-syncs-rm-0-confirm')!;
-  expect(prompt.textContent).toContain('unlink it');
+  expect(prompt.textContent).toContain('Unlink this device from');
   el('m-syncs-rm-0-yes').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.RemoveSavedSync)).toHaveLength(1);
-  expect(el('m-syncs-result').textContent).toContain('this browser unlinked');
+  expect(el('m-syncs-result').textContent).toContain('unlinked');
 });
 
 it('changes direction within the verified review without asking to check again', async () => {

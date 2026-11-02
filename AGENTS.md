@@ -113,7 +113,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - `src/popup/` — small popup (`popup.html` at `src/`, `popup.ts`, `popup.css`,
   shared `ui.ts`): connect + status card + saved syncs (multi-sync) + sync now + open manager. Display
   only; mutations via messages. `saved-syncs.ts` renders the same registry in
-  both views read-only (active tag, `Activate` on dormant rows only) and owns
+  both views read-only (active tag, `Activate` on inactive rows only) and owns
   the modal activation step (sync-change password only when one is set).
   Rename/remove/add/delete live in the manager. The server-removed notice is
   informational too (no download/dismiss), pointing at Backup in the manager.
@@ -121,7 +121,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
   read-only `SwitchPreview` preflight before confirm; the Sync section owns the
-  saved registry (rows + `+ Add new sync` form + optional sync-change password).
+  saved registry (rows + `+ Add a sync` form + optional sync-change password).
 
 ### Build
 
@@ -170,8 +170,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    tree. Without a lock, rows hold `{scheme:'plain', key}` and activation is a
    plain confirmation. The sync's own long password is neither asked nor
    stored. Removing the password unwraps the rows to plain; reset mints a new
-   vault and drops every row but the active one. Rows can be removed in any
-   state: a dormant row is forgotten, the ACTIVE row also unlinks this browser
+   vault and drops every row but the active one. Rows can be forgotten in any
+   state: an inactive row is forgotten, the ACTIVE row also unlinks this device
    (the row is the link; the server copy stays). Never self-pull, never merge
    across syncs. A row does hold the sync ID, a capability token for the
    service's `DELETE`: truncate it in UI, never log it.
@@ -267,11 +267,12 @@ unlink keeps the rows. Slice 2 adds the optional sync-change password
 wrapped rows when set; change rewraps only the vault, remove unwraps the rows,
 reset keeps the active sync and deletes the rest. Slice 3 is the UX rework:
 editable labels (max 40, case-insensitive uniqueness, host suggestion), the
-manager Sync section with `+ Add new sync` (new syncs upload the LIVE native
+manager Sync section with `+ Add a sync` (new syncs upload the LIVE native
 tree and report the count; a pending conflict is a warning), row actions on
-three lines (status/API badge, metadata, text buttons), `Remove…` on every row
-(active = unlink + forget, no last-row rule; it also prunes the encrypted
-safety backups only that row's key could open), `Delete from server…` on the
+three lines (status/API badge, metadata, text buttons), `Forget…` on an
+inactive row and `Unlink this device…` on the active one (no last-row rule;
+the unlink also prunes the encrypted safety backups only that row's key could
+open and never keeps a copy of the server data), `Delete from server…` on the
 active row (keeps no copy: no backup is taken or kept, no `RemovedSync`,
 no notification), and a read-only popup with a modal activation dialog that
 names the sync-change password. Post-review fixes landed in 0.1.34–0.1.36

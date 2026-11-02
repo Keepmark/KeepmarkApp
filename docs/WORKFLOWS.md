@@ -47,19 +47,19 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 |---|---|---|---|---|
 | Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
-| Add a sync (manager → Sync → `+ Add new sync`) | yes | Destination, new/existing sync and credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The old sync stays available. Other devices keep using it until moved. Save the new sync ID and password. |
+| Add a sync (manager → Sync → `+ Add a sync`) | yes | Destination, new/existing sync and credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The old sync stays available. Other devices keep using it until moved. Save the new sync ID and password. |
 | Change password | yes | Current, New, Confirm new → `Change password` | always | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. |
 | Backup: export | no | Backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local or server copy) and that a pre-restore backup is taken. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
-| Unlink this device | yes | `Unlink this device…` (extension: `Unlink this browser…`) | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
+| Unlink this device | yes | `Unlink this device…` | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
 | Delete sync from server (extension, service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
 | Removed sync (extension) | shown while unlinked after the service no longer has the sync | Popup: informational notice + `Manage backups`; Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). The popup says what happened and points to Manager → Backup; the kept copy is downloaded or dismissed there. It is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
 | Activate a saved sync (extension, multi-sync) | no (unlinked) / yes (linked) | Popup → `Syncs` list → `Activate` → sync-change password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved, and a failed save or a pending conflict cancels the switch. The sync's own long password is never asked at activation. Without a sync-change password the dialog is a plain confirmation. |
-| Add a new sync (extension, multi-sync) | no | Manager → Sync → `+ Add new sync` → mode `A new sync` → service URL + password + confirm → `Create and upload` | none: the note says the current sync stays | Uploads the bookmarks currently in this browser and reports how many. A pending conflict is a warning only: the new sync starts from the local tree, while the conflicted sync keeps its server copy. |
-| Remove a saved sync (extension, multi-sync) | manager only | Manager → Sync → `Remove…` (dormant) / `Remove from here…` (active) | always | Dormant: the row only, server copy stays. Active: this browser is unlinked, the row goes, and the sync plus its server copy stay for the other devices. Forgetting an active row is therefore local; deleting it for everyone is `Delete from server…`. |
+| Add a new sync (extension, multi-sync) | no | Manager → Sync → `+ Add a sync` → mode `A new sync` → service URL + password + confirm → `Create and upload` | none: the note says the current sync stays | Uploads the bookmarks currently in this browser and reports how many. A pending conflict is a warning only: the new sync starts from the local tree, while the conflicted sync keeps its server copy. |
+| Forget or unlink a saved sync (extension, multi-sync) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten and the server copy stays. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
 | Duplicates | no | mark → `Delete marked` (per URL or all marked) | always | One copy of each URL always stays. While linked the deletion is uploaded and the other devices get it at their next sync. A safety backup is saved first. |
 
 ## Step and button visibility
@@ -83,7 +83,7 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
 
 ## Multi-sync (saved syncs, extension)
 
-- One sync is active at a time; the others are dormant rows (label, service,
+- One sync is active at a time; the others are inactive rows (label, service,
   sync ID prefix, last use). Every row stores its derived key — under the
   optional sync-change password when one is set, in clear when it is not
   (same exposure as the active key). The sync ID (a capability token the UI
@@ -92,12 +92,12 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   (a PIN of a few digits is fine — only "not empty" is enforced). It wraps a
   random vault key, which wraps every row's key. Changing it rewraps only the
   vault (rows untouched); removing it unwraps the rows to clear; losing it
-  means the dormant keys are gone.
+  means the inactive rows' keys are gone.
 - Set/change/remove/reset it in Manager → Sync → Sync-change password. With a
   password, activation, a new link and any change that demotes the active key
-  ask for it. Without one, a dormant row is a plain confirmation and the rows
+  ask for it. Without one, an inactive row is a plain confirmation and the rows
   are stored in clear in this browser.
-- Manager → Sync → `+ Add new sync` opens the form (hidden until requested):
+- Manager → Sync → `+ Add a sync` opens the form (hidden until requested):
   service URL, `A new sync` or `An existing sync`, credentials, optional name.
   - The name is prefilled with the service host. Opening the form focuses the
     first visible field with its text selected — the name when a remembered
@@ -111,26 +111,26 @@ Words come from `UI-TERMS.md`. Platform differences are listed at the end.
   - **An existing sync** while linked goes through the check/review wizard
     (direction + consequences); while unlinked it connects directly after the
     direction confirmation.
-- Row actions: `Activate` (dormant), `Rename` (metadata only, no password),
-  `Unlink` (active: detach this browser, the row stays dormant),
-  `Delete from server…` (active only, v1.2: removes the server copy and the
-  row) and `Remove…` (dormant) / `Remove from here…` (active).
-  - `Remove…` on a dormant row forgets the row only: bookmarks and the server
+- Row actions: `Activate` (inactive), `Rename` (metadata only, no password),
+  `Unlink this device…` (active only, the row is the link) and
+  `Delete from server…` (active only, v1.2: removes the server copy too), plus
+  `Forget…` (inactive only).
+  - `Forget…` on an inactive row forgets the row only: bookmarks and the server
     copy stay. Safety backups that only that sync's key could open are deleted
     with the row (they could never be restored once the key is gone).
-  - `Remove from here…` on the active row necessarily unlinks this browser
-    (the row is the link), then forgets the row. The confirmation and result
-    say the sync and its server copy stay; `Delete from server…` is the only
-    action that erases them everywhere. There is no "remove the active only
-    when it is the last" rule and no "activate another first" step.
+  - `Unlink this device…` on the active row unlinks this device and forgets the
+    row in one step. The confirmation and result say the bookmarks stay and the
+    sync plus its server copy stay; `Delete from server…` is the only action
+    that erases them everywhere. There is no "remove the active only when it is
+    the last" rule and no "activate another first" step.
   - `Delete from server…` keeps nothing: the row goes, no safety backup is
     taken or kept, and no plaintext removed-sync copy is written. The local
     bookmarks stay and the result confirms it.
-- The popup is read-only: dormant rows offer only `Activate`, which opens a
+- The popup is read-only: inactive rows offer only `Activate`, which opens a
   modal dialog asking for the sync-change password (only when one is set) and
-  states that it is not the sync's own password. Rename, remove, delete and
+  states that it is not the sync's own password. Rename, forget, unlink, delete and
   the add flow live in the manager (footer `Manage`). The saved list is shown
-  when there is something to switch to (2+ rows, or 1 dormant row while
+  when there is something to switch to (2+ rows, or 1 inactive row while
   unlinked); with a single active sync it is hidden.
 - Activating a row = (password when set) → the background unlocks the row's
   key and proves the target with a read-only preflight (version gate + GET +

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { t } from '../src/shared/i18n';
 import {
   DeleteRemoteImplication,
   DirectionOrder,
   LinkImplication,
-  UnlinkImplication,
   directionConfirm,
   dupDeleteConfirm,
   dupDeleteDone,
@@ -15,9 +15,10 @@ import {
 
 describe('workflow texts', () => {
   it('unlink says what is needed to link again and what is lost', () => {
-    expect(UnlinkImplication()).toContain('sync ID and password');
-    expect(UnlinkImplication()).toContain('Unsynced edits stay only here');
-    expect(UnlinkImplication()).toContain('Undo is cleared');
+    const text = t('manager.syncs.unlinkImplication');
+    expect(text).toContain('sync ID and password');
+    expect(text).toContain('edits not yet synced');
+    expect(text).toContain('Undo is cleared');
   });
 
   it('delete names other devices, no undelete and no kept copy', () => {

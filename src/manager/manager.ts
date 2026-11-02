@@ -42,8 +42,6 @@ import {
   directionConfirm,
   dupDeleteConfirm,
   dupDeleteDone,
-  UnlinkDone,
-  UnlinkImplication,
   ImportImplication,
   RemovedSyncDismissImplication,
   SafetyDeleteImplication,
@@ -454,35 +452,6 @@ function initStatusSection(): void {
   });
   $('m-btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, t('popup.copyIdPrompt'));
-  });
-}
-
-async function unlink(anchorId: string): Promise<void> {
-  connectQr?.close();
-  // Disabled buttons don't fire clicks anyway; deleting the server sync
-  // already unlinks, so there is nothing left to unlink afterwards.
-  // Checked BEFORE withBusy (it disables the button while running, so a
-  // check inside would always self-trigger).
-  if (($(anchorId) as HTMLButtonElement).disabled) return;
-  clearMessages();
-  const ok = await confirmInline(anchorId, {
-    message: t('mgr.status.unlinkMessage'),
-    implication: UnlinkImplication(),
-    confirmLabel: t('common.yesUnlink'),
-    danger: true,
-  });
-  if (!ok) return;
-  await withBusy(anchorId, t('busy.unlinking'), async () => {
-    try {
-      await send({ command: MessageCommand.DisableSync });
-      showResult('m-syncs-result', UnlinkDone());
-      status = undefined;
-      ping = undefined;
-      await refreshStatus();
-      await refreshSyncs();
-    } catch (err) {
-      showError('m-syncs-error', (err as Error).message);
-    }
   });
 }
 
@@ -1737,9 +1706,10 @@ function renderSyncsList(): void {
 }
 
 /** One registry row, three lines: name + status (and the API badge on the
- *  active row), then host / ID prefix / last use, then the actions. Remove
- *  exists on every row: on the active one it necessarily unlinks (the row is
- *  the link), on a dormant one it only forgets the row. */
+ *  active row), then host / ID prefix / last use, then the actions. Every row
+ *  has one local action: on the active row it unlinks this device (the row is
+ *  the link), on an inactive one it forgets the row. Both leave the server and
+ *  the local bookmarks alone. */
 function syncRow(sync: SavedSync, index: number): HTMLElement {
   const isActive = isActiveSavedSync(sync, syncsView.active);
   const li = document.createElement('li');
@@ -1793,14 +1763,8 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   actions.append(rename);
 
   if (isActive) {
-    const unlinkBtn = document.createElement('button');
-    unlinkBtn.type = 'button';
-    unlinkBtn.className = 'mini';
-    unlinkBtn.id = 'm-syncs-unlink';
-    unlinkBtn.textContent = t('manager.syncs.unlink');
-    unlinkBtn.addEventListener('click', () => void unlink('m-syncs-unlink'));
-    actions.append(unlinkBtn);
-
+    // The active row has one action that ends the link: Unlink this device.
+    // A second "remove" button would do the same thing under another name.
     const removeRemote = document.createElement('button');
     removeRemote.type = 'button';
     removeRemote.className = 'mini danger';
@@ -1823,9 +1787,9 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   remove.type = 'button';
   remove.className = 'mini danger';
   remove.id = `m-syncs-rm-${index}`;
-  remove.textContent = t(isActive ? 'manager.syncs.removeActive' : 'manager.syncs.remove');
-  // Removing the active row unlinks this browser (and keeps the server
-  // copy): confirmed with its own wording, never disabled.
+  remove.textContent = t(isActive ? 'manager.syncs.unlink' : 'manager.syncs.forget');
+  // On the active row this unlinks this device (the row is the link) and keeps
+  // the server copy: confirmed with its own wording, never disabled.
   remove.addEventListener('click', () => void removeSavedRow(sync, remove.id));
   actions.append(remove);
 
@@ -1994,12 +1958,12 @@ async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> 
   const name = savedSyncName(sync);
   const ok = await confirmInline(anchorId, {
     message: isActive
-      ? t('manager.syncs.removeActiveMessage', { name })
-      : t('popup.saved.removePrompt', { name }),
+      ? t('manager.syncs.unlinkMessage', { name })
+      : t('popup.saved.forgetPrompt', { name }),
     implication: isActive
-      ? t('manager.syncs.removeActiveImplication')
-      : t('popup.saved.removeImplication'),
-    confirmLabel: t('common.remove'),
+      ? t('manager.syncs.unlinkImplication')
+      : t('popup.saved.forgetImplication'),
+    confirmLabel: t(isActive ? 'common.yesUnlink' : 'popup.saved.forget'),
     danger: true,
   });
   if (!ok) return;
@@ -2011,7 +1975,7 @@ async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> 
     });
     await refreshSyncs();
     if (res.unlinked) await refreshStatus();
-    const done = t(res.unlinked ? 'manager.syncs.removedActive' : 'manager.syncs.removed', { name });
+    const done = t(res.unlinked ? 'manager.syncs.unlinked' : 'manager.syncs.forgot', { name });
     showResult(
       'm-syncs-result',
       res.backups > 0 ? `${done} ${t('manager.syncs.backupsPruned', { count: res.backups })}` : done,
