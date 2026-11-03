@@ -64,6 +64,19 @@ describe('sync tasks are modals', () => {
     expect(doc.querySelector('#sec-syncs #m-lock-panel')).toBeNull();
   });
 
+  it('states the loss of a sync lock reset above the fields, with an icon', () => {
+    const dialog = task('m-lock-dialog');
+    const warning = dialog!.querySelector('#m-lock-warning')!;
+    const form = dialog!.querySelector('#m-lock-form')!;
+    expect(warning.classList.contains('task-warning')).toBe(true);
+    // Before the fields, not after them: the consequence comes first.
+    expect(warning.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(warning?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(warning?.querySelector('#m-lock-warning-text')).not.toBeNull();
+    // The old below-the-fields hint is gone.
+    expect(dialog?.querySelector('#m-lock-panel-hint')).toBeNull();
+  });
+
   it('keeps rename and the removals in the row modal', () => {
     const dialog = task('m-row-dialog');
     expect(dialog?.querySelector('#m-row-title')).not.toBeNull();

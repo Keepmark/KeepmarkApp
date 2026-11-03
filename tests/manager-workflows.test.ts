@@ -260,6 +260,52 @@ it('unlinks the active row with the canonical "Unlink this device" wording', asy
   expect(el('m-syncs-result').textContent).toContain('unlinked');
 });
 
+it('warns above the fields when a reset loses the inactive syncs', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://old.test', syncId: 'old' },
+          { serviceUrl: 'https://other.test', syncId: 'other', label: 'Altro' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  el('m-btn-link-lock-reset').click(); await settle();
+  const dialog = el('m-lock-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  const warning = el('m-lock-warning');
+  expect(warning.hidden).toBe(false);
+  expect(el('m-lock-warning-text').textContent).toContain('1 forgotten');
+  // The consequence is read before typing: it precedes the form in the DOM.
+  expect(warning.compareDocumentPosition(el('m-lock-form')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // Reset mints a new vault, so the old password is not asked.
+  expect(el('m-lock-current-row').hidden).toBe(true);
+  expect(el('m-link-lock-new').hidden).toBe(false);
+});
+
+it('keeps the warning hidden for a plain change of the sync lock', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [{ serviceUrl: 'https://old.test', syncId: 'old' }],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  el('m-btn-link-lock-change').click(); await settle();
+  expect((el('m-lock-dialog') as HTMLDialogElement).open).toBe(true);
+  expect(el('m-lock-warning').hidden).toBe(true);
+  expect(el('m-lock-warning-text').textContent).toBe('');
+});
+
 it('renames a row in the same modal, with the name selected', async () => {
   harness.send.mockImplementation(async (msg) => {
     if (msg.command === MessageCommand.GetSavedSyncs) {

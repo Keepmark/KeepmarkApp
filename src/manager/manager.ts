@@ -2159,12 +2159,16 @@ function openLockPanel(action: LockAction, opener: HTMLElement): void {
   ($('m-lock-current-row') as HTMLElement).hidden = !needsCurrent;
   ($('m-lock-new-row') as HTMLElement).hidden = !needsNew;
   ($('m-lock-confirm-row') as HTMLElement).hidden = !needsNew;
-  const hint = $('m-lock-panel-hint') as HTMLElement;
-  hint.hidden = action === 'set' || action === 'change';
-  if (action === 'remove') hint.textContent = t('manager.switchPw.removeImplication');
+  // A task that loses data carries its consequence at the top, before the
+  // fields: set/change only touch the lock, remove demotes the keys and reset
+  // forgets every inactive sync, so those two warn first.
+  const warning = $('m-lock-warning') as HTMLElement;
+  const warningText = $('m-lock-warning-text') as HTMLElement;
+  warning.hidden = action === 'set' || action === 'change';
+  if (action === 'remove') warningText.textContent = t('manager.switchPw.removeImplication');
   if (action === 'reset') {
     const dormant = Math.max(syncsView.syncs.length - (syncsView.active ? 1 : 0), 0);
-    hint.textContent = t('manager.switchPw.resetWarning', { count: dormant });
+    warningText.textContent = t('manager.switchPw.resetWarning', { count: dormant });
   }
   const go = $('m-btn-lock-go') as HTMLButtonElement;
   go.textContent = lockActionLabel(action);
@@ -2182,6 +2186,8 @@ function closeLockPanel(): void {
 function resetLockPanel(): void {
   lockAction = undefined;
   clearSwitchLockFields();
+  ($('m-lock-warning') as HTMLElement).hidden = true;
+  ($('m-lock-warning-text') as HTMLElement).textContent = '';
   ($('switch-pw-error') as HTMLElement).hidden = true;
   refreshSwitchLockUi();
 }

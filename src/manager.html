@@ -397,6 +397,12 @@
          the fields that action needs, never a second panel on the page. -->
     <dialog id="m-lock-dialog" class="task" aria-labelledby="m-lock-title" hidden>
       <h2 id="m-lock-title"></h2>
+      <!-- A task that loses data says so before the fields, with a warning
+           icon: the consequence is read before typing, not found afterwards. -->
+      <div id="m-lock-warning" class="task-warning" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 21.6 20H2.4z"/><path d="M12 9.6v4.6"/><circle cx="12" cy="17.3" r=".9" fill="currentColor" stroke="none"/></svg>
+        <span id="m-lock-warning-text"></span>
+      </div>
       <form id="m-lock-form" autocomplete="off">
         <div id="m-lock-current-row">
           <label><span data-i18n="manager.switchPw.current">Current password</span>
@@ -410,7 +416,6 @@
           <label><span data-i18n="manager.switchPw.confirm">Repeat password</span>
             <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
         </div>
-        <p id="m-lock-panel-hint" class="hint" hidden></p>
         <div class="row">
           <button id="m-btn-lock-go" class="primary" type="submit"></button>
           <button id="m-btn-lock-cancel" type="button" data-i18n="common.cancel">Cancel</button>

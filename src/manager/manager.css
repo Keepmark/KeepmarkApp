@@ -898,6 +898,34 @@ dd:last-of-type { border-bottom: 0; }
 .task .row { margin-top: .2rem; }
 .task .error { margin: 0; }
 
+/* Consequence of a destructive task: above the fields, with a warning icon,
+   so it is read before typing instead of being found after the fact. */
+.task-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: .55rem 0 0;
+  padding: .7rem .85rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: .7rem;
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  color: var(--fg);
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+.task-warning svg {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: .1rem;
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Heading row of a long task: the title and its Cancel are always in sight,
    never at the bottom of a form the user has to scroll. */
 .task-head {

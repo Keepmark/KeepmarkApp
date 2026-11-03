@@ -111,6 +111,10 @@ Words come from `UI-TERMS.md`.
   it next to the title, the short tasks keep it beside their action, and the
   Android panel keeps its Back at the top. The user can always leave without
   scrolling.
+- A task that loses something says it above its fields, with a warning icon, so
+  the consequence is read before typing and not found afterwards (extension:
+  `Reset and forget inactive syncs` warns that the inactive syncs' keys are
+  lost, before the new password).
 - Busy labels: `Checking…`, `Connecting…`, `Downloading…`, `Uploading…`,
   `Merging…`, `Changing…`, `Exporting…`, `Importing…`.
 - A flow that resumes (the extension manager after leaving the page or a browser
