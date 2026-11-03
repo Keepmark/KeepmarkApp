@@ -63,7 +63,6 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
 | `.hint` (12px muted), `.warning` (popup only), `.notice` (manager About) | guidance |
 | `.error[role=alert]` | per-step errors, see §4 |
 | `.result` (manager only, green) / `.preview` (dashed box) | success / dry-run output |
-| `.undo` (dashed warn) | undo banner + text from `describeUndo()` |
 | `.danger` | text-colored destructive buttons (never filled) |
 | `.dup-group/.dup-row/.dup-toggle(.on)/.dup-text/.dup-sub`, `.clean` | duplicates list (manager only) |
 | `#m-log-list` (`pre`, scroll, bordered) | logs |

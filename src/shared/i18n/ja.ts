@@ -564,6 +564,7 @@ export const ja: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'このデバイスのリンクを解除…',
   'manager.syncs.deleteRemote': 'サーバーから削除…',
   'manager.syncs.activateHint': '切り替えると、このブラウザのブックマークは {name} のコピーに置き換わります。サーバー上のデータは削除されません。',
+  'manager.syncs.activateToolbarLocal': 'ブックマークツールバーは同期に含まれていません（設定）。切り替え後もそのブックマークはそのまま残ります。',
   'manager.syncs.activated': '{name} に切り替えました。',
   'manager.syncs.forgot': '{name} を忘れました。サーバーのコピーは残ります。',
   'manager.syncs.connected': '{name} に接続しました。',

@@ -564,6 +564,7 @@ export const en = {
   'manager.syncs.unlink': 'Unlink this device…',
   'manager.syncs.deleteRemote': 'Delete from server…',
   'manager.syncs.activateHint': 'Switching replaces this browser\'s bookmarks with the copy of {name}. Nothing is deleted on the server.',
+  'manager.syncs.activateToolbarLocal': 'The bookmarks toolbar is not part of the sync (Settings), so its bookmarks stay as they are after the switch.',
   'manager.syncs.activated': 'Switched to {name}.',
   'manager.syncs.forgot': '{name} forgotten. The server copy stays.',
   'manager.syncs.connected': 'Connected {name}.',

@@ -210,7 +210,7 @@ describe('multi-sync (saved syncs)', () => {
     await expect(
       core.handleMessage({ command: MessageCommand.VerifySwitchPassword, password: '0000' }),
     ).rejects.toBeInstanceOf(InvalidSwitchPasswordException);
-    expect(await saved(core)).toEqual({ syncs: [], active: undefined, switchLockSet: true });
+    expect(await saved(core)).toEqual({ syncs: [], active: undefined, switchLockSet: true, toolbarSync: true });
   });
 
   it('connect-new registers the linked sync as the active row', async () => {

@@ -565,6 +565,7 @@ export const zh: Record<MessageKey, string> = {
   'manager.syncs.unlink': '取消关联此设备…',
   'manager.syncs.deleteRemote': '从服务器删除…',
   'manager.syncs.activateHint': '切换会用 {name} 的副本替换此浏览器的书签。服务器上不会删除任何内容。',
+  'manager.syncs.activateToolbarLocal': '书签工具栏不在同步范围内（设置），切换后其中的书签保持不变。',
   'manager.syncs.activated': '已切换到 {name}。',
   'manager.syncs.forgot': '已忘记 {name}。服务器副本仍保留。',
   'manager.syncs.connected': '已连接到 {name}。',

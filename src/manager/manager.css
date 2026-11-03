@@ -569,32 +569,6 @@ dd:last-of-type { border-bottom: 0; }
   font-weight: 600;
 }
 
-/* Undo banner: same navy strip as the popup. */
-.undo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-  margin-top: 12px;
-  max-width: min(560px, 100%);
-  padding: 8px 8px 8px 14px;
-  border-radius: 12px;
-  background: var(--navy);
-  color: #fff;
-  font-size: 13px;
-}
-
-.undo #undo-text { flex: 1 1 16ch; min-width: 0; }
-
-.undo .row { margin-top: 0; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-
-.undo button.mini {
-  border: 0;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-
 .notice {
   border-radius: 10px;
   background: color-mix(in srgb, var(--warn) 12%, transparent);

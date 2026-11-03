@@ -567,6 +567,7 @@ export const ro: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Deconectează acest dispozitiv…',
   'manager.syncs.deleteRemote': 'Șterge de pe server…',
   'manager.syncs.activateHint': 'Schimbarea înlocuiește marcajele acestui browser cu copia {name}. Nimic nu se șterge pe server.',
+  'manager.syncs.activateToolbarLocal': 'Bara de marcaje nu face parte din sincronizare (Setări): marcajele ei rămân neschimbate după comutare.',
   'manager.syncs.activated': 'Comutat pe {name}.',
   'manager.syncs.forgot': '{name} uitată. Copia de pe server rămâne.',
   'manager.syncs.connected': 'Conectat {name}.',

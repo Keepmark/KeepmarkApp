@@ -564,6 +564,7 @@ export const es: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Desvincular este dispositivo…',
   'manager.syncs.deleteRemote': 'Eliminar del servidor…',
   'manager.syncs.activateHint': 'El cambio sustituye los marcadores de este navegador por la copia de {name}. En el servidor no se borra nada.',
+  'manager.syncs.activateToolbarLocal': 'La barra de marcadores no forma parte de la sincronización (Ajustes): sus marcadores quedan como están tras el cambio.',
   'manager.syncs.activated': 'Cambiado a {name}.',
   'manager.syncs.forgot': '{name} olvidado. La copia del servidor permanece.',
   'manager.syncs.connected': 'Conectado a {name}.',

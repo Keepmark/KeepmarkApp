@@ -566,6 +566,7 @@ export const ru: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Отвязать это устройство…',
   'manager.syncs.deleteRemote': 'Удалить с сервера…',
   'manager.syncs.activateHint': 'Переключение заменит закладки этого браузера копией {name}. На сервере ничего не удаляется.',
+  'manager.syncs.activateToolbarLocal': 'Панель закладок не входит в синхронизацию (Настройки): её закладки остаются как есть после переключения.',
   'manager.syncs.activated': 'Переключено на {name}.',
   'manager.syncs.forgot': '{name} забыт. Копия на сервере остаётся.',
   'manager.syncs.connected': 'Подключено к {name}.',

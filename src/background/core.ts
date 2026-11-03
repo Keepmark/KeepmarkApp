@@ -1827,6 +1827,7 @@ export class BackgroundCore {
       syncs: await this.savedSyncList(),
       active: await this.activeSavedSync(),
       switchLockSet: (await this.readSwitchLock()) !== undefined,
+      toolbarSync: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true,
     };
   }
 
@@ -2304,21 +2305,12 @@ export class BackgroundCore {
     const v12 = await this.isV12(target.newServiceUrl);
 
     if (target.mode === 'new') {
-      const prev = await this.capturePrev();
       const { id } = await switchService(newApi, this.store, tree, target.newPassword!, target.newServiceUrl, v12);
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
       if (!linked?.password) throw new IncompleteSyncInfoException(t('core.linkMissingMove'));
       if (v12 && linked?.supportsV12 !== true) {
         this.v12cache.set(target.newServiceUrl, false);
       }
-      await this.saveUndo({
-        kind: 'switch-new',
-        opDerivedKey: linked.password!,
-        opSyncId: id,
-        opServiceUrl: target.newServiceUrl,
-        opSupportsV12: linked!.supportsV12 === true,
-        ...prev,
-      });
       await this.afterLink(svc.version, label);
       await this.wrapRowKey(outgoing, outgoingKey, vaultKey);
       await this.wrapActiveRow(vaultKey);
@@ -2356,24 +2348,9 @@ export class BackgroundCore {
     await decryptData(remote.bookmarks, derived);
 
     if (target.direction === 'pull') {
-      const natives = await this.adapter.readAll(syncToolbar);
-      // Fail-closed: the pull destroys the local tree.
-      await writeSafety(this.store, {
-        operation: 'switch-take-remote',
-        side: 'local',
-        tree: natives,
-        syncId: info.id,
-        derivedKey: info.password,
-      });
-      await this.saveUndo({
-        kind: 'switch-pull',
-        opDerivedKey: derived,
-        opSyncId: syncId,
-        opServiceUrl: target.newServiceUrl,
-        ...(await this.capturePrev()),
-        localEnc: await encryptData(JSON.stringify(natives), derived),
-        localCount: countNodes(natives),
-      });
+      // Not destructive in the backup sense: the copy this device leaves is
+      // already on its own server and the switch is reversible by activating
+      // that sync again. No safety snapshot, no undo slot.
       await this.withSuspended(() =>
         pullWithDerivedKey(this.depsFor(newApi, syncToolbar), {
           syncId,
@@ -2403,30 +2380,7 @@ export class BackgroundCore {
         repairBookmarkIds(merged);
       }
       const union = ensureContainersExist(merged);
-      await writeSafety(this.store, {
-        operation: 'merge-local',
-        side: 'local',
-        tree: natives,
-        syncId: info.id,
-        derivedKey: info.password,
-      });
-      await writeSafety(this.store, {
-        operation: 'merge-remote',
-        side: 'remote',
-        tree: remoteTree,
-        syncId,
-        derivedKey: info.password,
-      });
-      await this.saveUndo({
-        kind: 'switch-merge',
-        opDerivedKey: derived,
-        opSyncId: syncId,
-        opServiceUrl: target.newServiceUrl,
-        ...(await this.capturePrev()),
-        localEnc: await encryptData(JSON.stringify(natives), derived),
-        localCount: countNodes(natives),
-        remotePreBlob: remote.bookmarks ?? '',
-      });
+      // A union destroys nothing: both sides keep every item.
       await this.withSuspended(async () => {
         const mappings = await overwriteAll(this.adapter, union, syncToolbar);
         await this.idMapper.set(mappings);
@@ -2458,27 +2412,16 @@ export class BackgroundCore {
       await this.store.set(StoreKey.SyncEnabled, true);
     } else {
       // Push the local tree onto the existing remote (revision CAS on v1.2,
-      // timestamp otherwise, with 412 fallback). Fail-closed first: the push
-      // destroys the server copy, so snapshot it before the PUT.
+      // timestamp otherwise, with 412 fallback). The remote copy was already
+      // decrypted for the password check: parse it so a corrupt blob fails
+      // before the PUT. A 409 surfaces honestly and nothing is overwritten.
+      // A switch takes no safety snapshot (see the pull branch above).
       const remotePlain = await decryptData(remote.bookmarks ?? '', derived);
-      let remoteTree: BookmarkNode[];
       try {
-        remoteTree = (remotePlain ? JSON.parse(remotePlain) : []) as BookmarkNode[];
+        JSON.parse(remotePlain || '[]');
       } catch (err) {
         throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
       }
-      await writeSafety(this.store, {
-        operation: 'switch-upload',
-        side: 'remote',
-        tree: remoteTree,
-        syncId,
-        derivedKey: info.password,
-      });
-      // A 409 surfaces honestly, nothing is lost: the safety backup above
-      // plus the undo slot hold the pre-push state. The slot is persisted
-      // only after the PUT lands so a failed push never clobbers the
-      // previous undo.
-      const prev = await this.capturePrev();
       const encrypted = await encryptData(JSON.stringify(tree), derived);
       let updated: import('../shared/api.js').UpdateBookmarksResponse;
       if (effectiveV12 && remote.meta?.revision !== undefined) {
@@ -2493,15 +2436,6 @@ export class BackgroundCore {
       } else {
         updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
       }
-      await this.saveUndo({
-        kind: 'switch-push',
-        opDerivedKey: derived,
-        opSyncId: syncId,
-        opServiceUrl: target.newServiceUrl,
-        ...prev,
-        remotePreBlob: remote.bookmarks ?? '',
-        localCount: countNodes(tree),
-      });
       await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
       await this.store.set(StoreKey.Bookmarks, encrypted);
       await this.store.set(StoreKey.SyncInfo, {

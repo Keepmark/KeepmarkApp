@@ -564,6 +564,7 @@ export const de: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Dieses Gerät trennen…',
   'manager.syncs.deleteRemote': 'Vom Server löschen…',
   'manager.syncs.activateHint': 'Der Wechsel ersetzt die Lesezeichen dieses Browsers durch die Kopie von {name}. Auf dem Server wird nichts gelöscht.',
+  'manager.syncs.activateToolbarLocal': 'Die Lesezeichen-Symbolleiste gehört nicht zur Synchronisierung (Einstellungen): ihre Lesezeichen bleiben nach dem Wechsel unverändert.',
   'manager.syncs.activated': 'Zu {name} gewechselt.',
   'manager.syncs.forgot': '{name} vergessen. Die Serverkopie bleibt.',
   'manager.syncs.connected': '{name} verbunden.',

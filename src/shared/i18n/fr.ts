@@ -564,6 +564,7 @@ export const fr: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Dissocier cet appareil…',
   'manager.syncs.deleteRemote': 'Supprimer du serveur…',
   'manager.syncs.activateHint': 'Le changement remplace les favoris de ce navigateur par la copie de {name}. Rien n\'est supprimé sur le serveur.',
+  'manager.syncs.activateToolbarLocal': 'La barre de favoris ne fait pas partie de la synchronisation (Paramètres) : ses favoris restent tels quels après le changement.',
   'manager.syncs.activated': 'Passé à {name}.',
   'manager.syncs.forgot': '{name} oublié. La copie serveur reste.',
   'manager.syncs.connected': 'Connecté à {name}.',

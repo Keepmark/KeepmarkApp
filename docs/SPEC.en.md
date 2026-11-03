@@ -397,7 +397,7 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 ## 7. UI specification
 
 Surfaces: popup (`src/popup.html` — connect + status + sync now + manager
-link + undo banner; `?fullpage=1` tab mode for vault copying) and manager
+link; `?fullpage=1` tab mode for vault copying) and manager
 (`src/manager.html`: Status, Backup, Duplicates, Sync, Logs, Settings,
 About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 

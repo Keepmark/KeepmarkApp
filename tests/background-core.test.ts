@@ -783,6 +783,9 @@ describe('background core', () => {
     state.remoteBlob = await encryptData(JSON.stringify(target), targetDerived);
     state.remoteLastUpdated = 't-target';
     state.puts.length = 0;
+    // The link that set the fixture up left its own undo slot: a switch must
+    // not touch it (no snapshot of its own).
+    const undoBefore = await core.handleMessage({ command: MessageCommand.GetUndoState });
     const res = (await core.handleMessage({
       command: MessageCommand.LinkSync,
       link: {
@@ -802,14 +805,14 @@ describe('background core', () => {
     const titles = children.map((c) => c.title);
     expect(titles).toContain('A');
     expect(titles).toContain('T');
+    // A switch is not destructive: no safety snapshot, no undo slot. The
+    // side this device leaves is on its own server, and activating that sync
+    // again brings it back.
     const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
       operation: string;
     }[];
-    expect(safeties.map((s) => s.operation).sort()).toEqual(['merge-local', 'merge-remote']);
-    const undo = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as {
-      kind: string;
-    } | null;
-    expect(undo?.kind).toBe('switch-merge');
+    expect(safeties).toEqual([]);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toEqual(undoBefore);
   });
 
   it('switch to existing sync with pull replaces local with remote', async () => {
@@ -1117,9 +1120,13 @@ describe('background core', () => {
     expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toBeNull();
   });
 
-  it('undo of connect-push puts the server copy back', async () => {
+  it('a switch never takes a safety snapshot nor arms undo', async () => {
+    // Direction push onto an existing sync: the server copy is replaced, but
+    // the switch itself is not a destructive operation (the user can activate
+    // the previous sync again). Only connect/import/restore/duplicates and a
+    // password change snapshot.
     const state = baseState();
-    const { core, store } = await linkedCore(state);
+    const { core } = await linkedCore(state);
     const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
     const stale: BookmarkNode[] = [
       { id: 1, title: BookmarkContainer.Other, children: [] },
@@ -1129,6 +1136,7 @@ describe('background core', () => {
     state.remoteBlob = await encryptData(JSON.stringify(stale), targetDerived);
     state.remoteLastUpdated = 't-target';
     state.puts.length = 0;
+    const undoBefore = await core.handleMessage({ command: MessageCommand.GetUndoState });
     await core.handleMessage({
       command: MessageCommand.LinkSync,
       link: {
@@ -1140,21 +1148,12 @@ describe('background core', () => {
       },
     });
     expect(state.puts).toHaveLength(1);
-    await core.handleMessage({ command: MessageCommand.UndoLastLink });
-    // Last PUT restored the pre-push server blob.
-    expect(state.puts).toHaveLength(2);
-    const back = JSON.parse(await decrypt_blob(state.puts[1].blob, targetDerived));
-    expect(back).toEqual(stale);
-    const info = await store.get<{ serviceUrl?: string }>(StoreKey.SyncInfo);
-    expect(info!.serviceUrl).toBe('https://x.test/');
-  });
-
-  it('failed push-undo keeps the slot and reports conflict honestly', async () => {
-    const state = baseState();
-    const { core } = await linkedCore(state);
-    const targetDerived = await deriveKey('target-password', 'target-id', SyncClientVersion);
-    state.remoteBlob = await encryptData(JSON.stringify([]), targetDerived);
-    state.remoteLastUpdated = 't-target';
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as unknown[];
+    expect(safeties).toEqual([]);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toEqual(undoBefore);
+    // …and a pull switch behaves the same way.
+    state.remoteBlob = await encryptData(JSON.stringify(stale), targetDerived);
+    state.remoteLastUpdated = 't-target-2';
     await core.handleMessage({
       command: MessageCommand.LinkSync,
       link: {
@@ -1162,16 +1161,11 @@ describe('background core', () => {
         mode: 'existing',
         syncId: 'target-id',
         newPassword: 'target-password',
-        direction: 'push',
+        direction: 'pull',
       },
     });
-    state.failNextPut409 = true; // someone else writes before our undo
-    const { DataOutOfSyncException } = await import('../src/shared/errors');
-    await expect(core.handleMessage({ command: MessageCommand.UndoLastLink })).rejects.toBeInstanceOf(
-      DataOutOfSyncException,
-    );
-    const kept = (await core.handleMessage({ command: MessageCommand.GetUndoState })) as { kind: string } | null;
-    expect(kept?.kind).toBe('switch-push');
+    expect((await core.handleMessage({ command: MessageCommand.GetSafetyList })) as unknown[]).toEqual([]);
+    expect(await core.handleMessage({ command: MessageCommand.GetUndoState })).toEqual(undoBefore);
   });
 
   it('dismiss clears the slot and new ops overwrite it', async () => {

@@ -14,7 +14,6 @@ import {
   describeLinkResult,
   describeSyncExpiry,
   describeUndo,
-  undoBannerRemainingMs,
   formatBytes,
   validatePasswordChange,
   validateServiceUrl,
@@ -30,7 +29,7 @@ import {
 import { StoreKey } from '../shared/store.js';
 import { displayPath, formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
-import { cancelAllConfirms, cancelConfirm, clearMessages, confirmInline, showError, showFor } from '../popup/flow.js';
+import { cancelAllConfirms, cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import { TaskDialog } from '../popup/modal.js';
 import {
   ChangePasswordDone,
@@ -51,8 +50,6 @@ import {
   removedSyncText,
   safetyRestoreDone,
   safetyRestoreImplication,
-  undoConfirm,
-  undoneText,
 } from '../popup/texts.js';
 import {
   MessageCommand,
@@ -65,7 +62,6 @@ import {
   type StatusResponse,
   type SwitchLockState,
   type SyncTargetPreview,
-  type UndoState,
   // Conflict resolution types
   type ConflictPreviewResponse,
   type ConflictResolutionDirection,
@@ -226,7 +222,6 @@ async function refreshStatus(): Promise<void> {
   updateLinkGates();
   ($('m-notlinked-hint') as HTMLElement).hidden = !!status?.syncEnabled;
   if (!$('sec-syncs').hidden) void refreshSyncs();
-  await refreshUndoBanner();
 
   // If there's a conflict, fetch the preview and render resolution UI.
   if (status?.conflict) {
@@ -235,26 +230,6 @@ async function refreshStatus(): Promise<void> {
     conflictPreview = undefined;
     renderConflictSection();
   }
-}
-
-/** Kind of the undo slot the banner shows (its confirm names it). */
-let undoKind = '';
-
-async function refreshUndoBanner(): Promise<void> {
-  const banner = $('undo-banner') as HTMLElement;
-  let undo: UndoState | null = null;
-  try {
-    undo = await send<UndoState | null>({ command: MessageCommand.GetUndoState });
-  } catch {
-    undo = null;
-  }
-  if (!undo) {
-    banner.hidden = true;
-    return;
-  }
-  undoKind = undo.kind;
-  $('undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
-  showFor('undo-banner', undoBannerRemainingMs(undo.timestamp), 'm-btn-undo');
 }
 
 /** Fetch detailed conflict preview from background. */
@@ -400,29 +375,6 @@ function initConflictSection(): void {
   $('conflict-btn-pull').addEventListener('click', () => void resolveConflict('pull'));
   $('conflict-btn-push').addEventListener('click', () => void resolveConflict('push'));
   $('conflict-btn-merge').addEventListener('click', () => void resolveConflict('merge'));
-}
-
-function initUndoBanner(): void {
-  $('m-btn-undo').addEventListener('click', async () => {
-    connectQr?.close();
-    clearMessages();
-    // Asked BEFORE withBusy (confirmInline owns the button while open).
-    if (!(await confirmInline('m-btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
-    await withBusy('m-btn-undo', t('busy.undoing'), async () => {
-      try {
-        const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
-        showResult('status-result', undoneText(res.undone));
-        await refreshStatus();
-        await refreshUndoBanner();
-      } catch (err) {
-        showError('status-error', (err as Error).message);
-      }
-    });
-  });
-  $('m-btn-undo-dismiss').addEventListener('click', async () => {
-    await send({ command: MessageCommand.DismissUndo }).catch(() => undefined);
-    ($('undo-banner') as HTMLElement).hidden = true;
-  });
 }
 
 function initSidebar(): void {
@@ -1651,6 +1603,15 @@ function initLogsSection(): void {
   );
 }
 
+/** Bookmarks-toolbar inclusion, read once at init and kept in step by the
+ *  Settings switch: an activation must say when the toolbar stays local. */
+let toolbarSyncEnabled = true;
+
+async function loadToolbarState(): Promise<void> {
+  const res = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => undefined);
+  if (res) toolbarSyncEnabled = res.enabled;
+}
+
 async function renderSettings(): Promise<void> {
   clearMessages();
   // The lock state decides whether the password task asks for its proof.
@@ -1660,6 +1621,7 @@ async function renderSettings(): Promise<void> {
   const toolbar = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => ({
     enabled: true,
   }));
+  toolbarSyncEnabled = toolbar.enabled;
   (input('m-opt-toolbar') as HTMLInputElement).checked = toolbar.enabled;
   let level = 2;
   try {
@@ -1690,6 +1652,7 @@ function initSettingsSection(): void {
     void send({ command: MessageCommand.SetToolbarSync, enabled: (e.target as HTMLInputElement).checked }).catch(
       (err: Error) => showError('settings-error', err.message),
     );
+    toolbarSyncEnabled = (e.target as HTMLInputElement).checked;
   });
   ($('m-opt-verbosity') as HTMLSelectElement).addEventListener('change', async (e) => {
     clearMessages();
@@ -1887,6 +1850,9 @@ function openActivation(sync: SavedSync, opener: HTMLElement): void {
     ? t('popup.saved.passwordHint', { name })
     : t('manager.syncs.activateHint', { name });
   ($('m-syncs-pw-row') as HTMLElement).hidden = !switchLockSet;
+  // A switch replaces every synced container: when the toolbar is excluded it
+  // keeps its bookmarks, which would otherwise look like a failed switch.
+  ($('m-activate-toolbar-note') as HTMLElement).hidden = toolbarSyncEnabled;
   input('m-syncs-activate-pw').value = '';
   const error = $('m-activate-error') as HTMLElement;
   error.textContent = '';
@@ -2402,7 +2368,7 @@ async function init(): Promise<void> {
   );
   initSidebar();
   initStatusSection();
-  initUndoBanner();
+  void loadToolbarState();
   initConflictSection();
   initBackupSection();
   initDuplicatesSection();

@@ -65,7 +65,7 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
   `background.ts` (browser wiring; `@platform/adapter` alias per build).
 - `src/popup/` — small popup: connect (new / existing pull-push-merge),
   status card + read-only saved-sync list (activation dialog) + sync now +
-  undo banner + open manager. Display only; mutations via messages.
+  open manager. Display only; mutations via messages.
 - `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
   (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
@@ -113,16 +113,19 @@ side while offline reappear — the preview says so.
 - Preview shows local-only / remote-only / title-conflicts /
   folders-created / separators-adopted before anything mutates; both flows
   confirm per-counts (popup dialog, add-sync wizard check + confirm).
-- Fail-closed safety snapshots of BOTH sides (`merge-local`,
-  `merge-remote`), undo kinds `connect-merge` / `switch-merge`, PUT on the
-  remote base (revision CAS or timestamp; 409 honest).
+- Fail-closed safety snapshots of BOTH sides on a first link (`merge-local`,
+  `merge-remote`) with undo kind `connect-merge`; a switch-merge snapshots
+  nothing (a union destroys nothing). PUT on the remote base (revision CAS or
+  timestamp; 409 honest).
 
 ## Safety backups
 
 Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,
-ported from the Keepmark Android safety spec): connect pull/push, switch
-pull/push, change-password, import, restore, server delete, bulk duplicate
-cleanup. Snapshot write failure aborts the operation (fail closed); single
+ported from the Keepmark Android safety spec): connect pull/push, change-password,
+import, restore, server delete, bulk duplicate cleanup. **A switch between
+saved syncs is not destructive** — the copy this device leaves is already on
+its own server and activating that sync again brings it back — so it takes no
+snapshot and arms no undo; the manager shows no "last action / undo" banner. Snapshot write failure aborts the operation (fail closed); single
 bookmark add/remove is exempt (mirrors the Android single-delete exception).
 
 - Stored in `storage.local`: `SafetyIndex` manifest rows

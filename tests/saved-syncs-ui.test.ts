@@ -41,6 +41,7 @@ beforeEach(() => {
       <dialog id="p-saved-dialog">
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint"></p>
+        <p id="p-saved-toolbar-note" hidden></p>
         <label id="p-saved-pw-row"><input id="p-saved-password" type="password" /></label>
         <button id="p-saved-activate"></button>
         <button id="p-saved-cancel"></button>
@@ -139,6 +140,16 @@ describe('saved syncs popup panel', () => {
       syncId: 'bbbbbbbb2222',
     });
     expect(onChanged).toHaveBeenCalledWith('activated');
+  });
+
+  it('warns that the bookmarks toolbar stays local when the flag excludes it', () => {
+    panel.render({ ...data, toolbarSync: false });
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-toolbar-note').hidden).toBe(false);
+    // With the toolbar in the sync there is nothing to explain.
+    panel.render(data);
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-toolbar-note').hidden).toBe(true);
   });
 
   it('cancels the password step from its own button', () => {

@@ -564,6 +564,7 @@ export const it: Record<MessageKey, string> = {
   'manager.syncs.unlink': 'Scollega questo dispositivo…',
   'manager.syncs.deleteRemote': 'Elimina dal server…',
   'manager.syncs.activateHint': 'Il cambio sostituisce i segnalibri di questo browser con la copia di {name}. Sul server non viene eliminato nulla.',
+  'manager.syncs.activateToolbarLocal': 'La barra dei segnalibri non fa parte della sincronizzazione (Impostazioni): i suoi segnalibri restano com\'erano dopo il cambio.',
   'manager.syncs.activated': 'Passato a {name}.',
   'manager.syncs.forgot': '{name} dimenticato. La copia sul server resta.',
   'manager.syncs.connected': 'Collegato a {name}.',

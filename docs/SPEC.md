@@ -318,11 +318,14 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   status, max size, local count, target `supportsV12`, and (existing mode)
   remote existence + `lastUpdated`. Requires an existing link (tree source).
 - `SwitchService {newServiceUrl, mode, syncId?, newPassword, direction}`:
-  requires link; quiesce; plaintext safety download of scrapped side;
-  new-mode: create+upload on target (v1.2 iff probed) → undo `switch-new` →
+  requires link; quiesce. **A switch takes no safety snapshot and arms no
+  undo slot**: the side this device leaves is already on its own server and
+  activating that sync again brings it back, so the switch is reversible
+  without a backup. New-mode: create+upload on target (v1.2 iff probed) →
   returns `{id}`. Existing-pull: version gate → password check by decrypt →
-  undo `switch-pull` → overwrite natives. Existing-push: undo only after PUT
-  lands (`switch-push`). UI: destination and credentials are entered together; `Continue`
+  overwrite natives. Existing-push: PUT on the remote base (409 honest).
+  When the bookmarks-toolbar flag is off the toolbar is not synced, so its
+  bookmarks survive the switch: the activation task says so. UI: destination and credentials are entered together; `Continue`
   verifies the target and, in existing mode, decrypts its copy read-only.
   The verified review shows consequences and merge counts. `Connect`
   executes directly, without another confirmation. Changed inputs invalidate
@@ -346,9 +349,13 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
 - `DisableSync` (Unlink): single inline confirm (`Yes, unlink`,
   `UnlinkImplication`: ID + password needed, unsynced edits, Undo cleared), clears state per §4.3, result text, status redrawn cleared.
 - `UndoLastLink` / `DismissUndo` / `GetUndoState`: one encrypted slot;
-  unlink invalidates it; undo restores previous link state; banner describes
-  kind + count + time; inline confirm `Undo the last action?` naming the
-  action in words (`undoConfirm`), result `Undone: <what>.` (`undoneText`).
+  unlink invalidates it; undo restores previous link state. Armed by connect
+  (all directions), import, restore, change-password, duplicates cleanup and
+  batch delete — never by a switch. The manager no longer renders the
+  "last action / undo" banner (Status stays a report); recovery from a
+  destructive step goes through Backup → Safety backups, and the slot stays
+  reachable programmatically for the flows that still use it (`undoConfirm`,
+  `undoneText`).
 - `GetRemovedSync` / `ClearRemovedSync`: surfaces the 401 snapshot with
   Download/Dismiss (manager/popup banner area).
 - `GetConflictState`: returns `{hasConflict, localCount?, remoteLastUpdated?, localTreeEncrypted?}` — called when `status.conflict === true` to render resolution UI.
@@ -389,7 +396,7 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 ## 7. UI specification
 
 Surfaces: popup (`src/popup.html`, connect + status + sync now + manager
-link + undo banner; `?fullpage=1` tab mode for vault copying) and manager
+link; `?fullpage=1` tab mode for vault copying) and manager
 (`src/manager.html`: Status, Backup, Duplicates, Sync, Logs, Settings,
 About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
 

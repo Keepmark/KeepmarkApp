@@ -103,9 +103,13 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - `src/background/core.ts` — `BackgroundCore`: owns the queue; job runners
   (local pull / remote reconcile+push / restore); debounced native events;
   15-min alarm `xbs-sync-updates-check`; all message handlers (connect new +
-  existing, add/remove, backup, switch-service with safety download,
-  duplicates, status, disable); `drain()` loop; `startup()` (install snapshot
-  + resume polling). NO DOM here — must stay service-worker safe.
+  existing, add/remove, backup, switch-service, duplicates, status, disable);
+  `drain()` loop; `startup()` (install snapshot + resume polling). NO DOM
+  here — must stay service-worker safe. Safety snapshots + the undo slot are
+  armed by the destructive flows only (connect, import, restore, password
+  change, duplicates, batch delete, server delete): a switch between saved
+  syncs takes neither — the side this device leaves is already on its own
+  server and activating that sync again brings it back.
 - `src/background/background.ts` — browser wiring: `webextension-polyfill`,
   storage/alarms/listeners/badge/notify/download ports, `onMessage` → wire
   `{ok,data}` / `{ok:false,errorName,message}`, `onInstalled/onStartup`.
@@ -128,7 +132,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   field of its own. Settings holds preferences only (language, the bookmarks
   toolbar switch, log verbosity, Change password): the service, API version,
   sync ID and saved syncs are reported by Status and Sync and are never
-  repeated there.
+  repeated there. Status has no "last action / undo" banner: recovery from a
+  destructive step goes through Backup → Safety backups. With the toolbar
+  switch off, activation shows `manager.syncs.activateToolbarLocal` (the
+  toolbar keeps its own bookmarks across a switch), fed by
+  `SavedSyncsResponse.toolbarSync` in the popup and `GetToolbarSync` in the
+  manager.
 
 ### Build
 

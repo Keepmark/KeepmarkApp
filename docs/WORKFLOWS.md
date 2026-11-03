@@ -40,17 +40,19 @@ Words come from `UI-TERMS.md`.
    line of follow-up when the user has something to do (store the sync ID, update
    other devices), and a pointer to Backup → Safety backups when one was made.
 7. **Safety backups are taken before every destructive step, not on every
-   edit.** A download, upload, import, restore, password change, duplicates
-   cleanup or batch delete snapshots the side it replaces; a move, its undo and
-   a single-item delete rely on Undo instead. Switching to another sync is not
-   destructive: on Android, taking the target's server copy keeps no snapshot
-   (the copy you leave is on the server), while replacing that server copy still
-   does; the extension still snapshots the side it leaves. A workflow that takes
-   a snapshot says so in its confirmation or result. Forgetting a saved sync
-   affects its backups only where their key can never return: the extension
-   deletes them (Restore only uses the active sync's key); Android keeps them,
-   because re-linking the same sync with the same password derives the same key
-   again.
+   edit.** A first link that replaces a side (Connect: existing sync, either
+   direction), a backup import, a restore, a password change, a duplicates
+   cleanup or a batch delete snapshots the side it replaces; a move and a
+   single-item delete rely on Undo instead. **Switching between saved syncs
+   takes no snapshot on either app:** the copy this device leaves is already
+   on its own server and activating that sync again brings it back, so a switch
+   is reversible without a backup. The extension shows no "last action / undo"
+   banner in Status; its visible recovery path is Backup → Safety backups. A
+   workflow that takes a snapshot says so in its confirmation or result.
+   Forgetting a saved sync affects its backups only where their key can never
+   return: the extension deletes them (Restore only uses the active sync's
+   key); Android keeps them, because re-linking the same sync with the same
+   password derives the same key again.
 8. **One task at a time, on its own surface.** An operation that takes over the
    screen — Add a sync, Activate a saved sync, the sync lock, rename / forget /
    unlink / delete of a saved sync, and on the extension Change password — runs

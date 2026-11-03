@@ -267,6 +267,9 @@ export interface SavedSyncsResponse {
   /** False until the manager sets the short switch password: activation is
    *  blocked and new links are refused (rows could not be wrapped). */
   switchLockSet: boolean;
+  /** Bookmarks-toolbar inclusion (default true). An activation replaces every
+   *  synced container, so the UI must say when the toolbar stays local. */
+  toolbarSync?: boolean;
 }
 
 /** Whether the switch password exists (the manager owns set/change/reset). */
