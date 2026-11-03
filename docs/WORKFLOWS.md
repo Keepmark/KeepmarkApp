@@ -52,13 +52,14 @@ Words come from `UI-TERMS.md`.
    because re-linking the same sync with the same password derives the same key
    again.
 8. **One task at a time, on its own surface.** An operation that takes over the
-   screen — Add a sync, Activate a saved sync, the sync lock, and rename /
-   forget / unlink / delete of a saved sync — runs as a single task. On the
-   extension it is a modal dialog: the page behind is inert, Cancel and Escape
-   end it, and opening another task closes the first. On Android the add panel
-   replaces the Syncs list and every other row is disabled while a row
-   confirmation or the rename editor is open. Two operations, two Cancel
-   buttons or a second confirmation are never on screen at once.
+   screen — Add a sync, Activate a saved sync, the sync lock, rename / forget /
+   unlink / delete of a saved sync, and on the extension Change password — runs
+   as a single task. On the extension it is a modal dialog: the page behind is
+   inert, Cancel and Escape end it, and opening another task closes the first.
+   On Android the add panel replaces the Syncs list and every other row is
+   disabled while a row confirmation or the rename editor is open. Two
+   operations, two Cancel buttons or a second confirmation are never on screen
+   at once.
 
 ## Shared workflows
 
@@ -66,7 +67,7 @@ Words come from `UI-TERMS.md`.
 |---|---|---|---|---|
 | Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
-| Change password | yes | Current, New, Confirm new → `Change password` | always | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. |
+| Change password | yes | Current, New, Confirm new (extension: plus the sync lock password when one is set) → `Change password` | extension: the task's warning above the fields is the confirmation; Android: one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. |
 | Backup: export | no | Backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. |

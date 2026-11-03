@@ -125,7 +125,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   saved registry (rows + `+ Add a sync` form + optional sync lock).
   With a password set, `+ Add a sync` asks it first (read-only
   `VerifySwitchPassword`) and only then opens the form, which has no password
-  field of its own.
+  field of its own. Settings holds preferences only (language, the bookmarks
+  toolbar switch, log verbosity, Change password): the service, API version,
+  sync ID and saved syncs are reported by Status and Sync and are never
+  repeated there.
 
 ### Build
 
@@ -230,13 +233,15 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   ID list to maintain). Confirmations use `confirmInline` from the same file,
   never `window.confirm`; workflow texts live in `src/popup/texts.ts`. The
   per-step contract is `docs/WORKFLOWS.md`.
-- Sync-section operations are modal tasks, not inline panels: `TaskDialog` in
-  `src/popup/modal.ts` owns `#m-link-dialog` (add + its sync lock gate as the
-  first step), `#m-activate-dialog`, `#m-lock-dialog` and `#m-row-dialog`
-  (rename/forget/unlink/delete). The registry keeps one open at a time, Escape
-  and a backdrop click close it like Cancel, focus returns to the opener, and
-  every async branch checks `dialog.token` so an answer that lands after the
-  task ended is dropped. Never add a second panel or confirmation for the same
+- Operations that take over the screen are modal tasks, not inline panels:
+  `TaskDialog` in `src/popup/modal.ts` owns `#m-link-dialog` (add + its sync
+  lock gate as the first step), `#m-activate-dialog`, `#m-lock-dialog`,
+  `#m-row-dialog` (rename/forget/unlink/delete) and `#m-pw-dialog` (Settings →
+  Change password: warning above the fields, one submit, its result next to the
+  trigger in the section). The registry keeps one open at a time, Escape and a
+  backdrop click close it like Cancel, focus returns to the opener, and every
+  async branch checks `dialog.token` so an answer that lands after the task
+  ended is dropped. Never add a second panel or confirmation for the same
   operation.
 - Success evidence mirrors it: multi-outcome operations restate WHAT ran
   (mode + direction + target), not just "Done". Build the message in a pure

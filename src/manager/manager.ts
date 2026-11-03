@@ -34,7 +34,6 @@ import { cancelAllConfirms, cancelConfirm, clearMessages, confirmInline, showErr
 import { TaskDialog } from '../popup/modal.js';
 import {
   ChangePasswordDone,
-  ChangePasswordImplication,
   DeleteRemoteDone,
   DeleteRemoteImplication,
   LinkDoneNext,
@@ -121,6 +120,7 @@ let linkDialog: TaskDialog;
 let activateDialog: TaskDialog;
 let lockDialog: TaskDialog;
 let rowDialog: TaskDialog;
+let pwDialog: TaskDialog;
 
 /** Fill an empty move URL with the current link (same host is the common
  * case). Runs on section visits and status refreshes until it sticks. */
@@ -1653,42 +1653,21 @@ function initLogsSection(): void {
 
 async function renderSettings(): Promise<void> {
   clearMessages();
+  // The lock state decides whether the password task asks for its proof.
   await refreshSyncs().catch(() => undefined);
-  const info = $('m-service-info');
-  info.textContent = '';
-  let st: StatusResponse | undefined;
-  try {
-    st = await send<StatusResponse>({ command: MessageCommand.GetStatus });
-  } catch (err) {
-    showError('settings-error', (err as Error).message);
-    return;
-  }
-  let pg: PingResponse | undefined;
-  try {
-    pg = await send<PingResponse>({ command: MessageCommand.Ping });
-  } catch {
-    pg = undefined;
-  }
-  const rows: [string, string][] = [
-    [t('mgr.settings.reachability'), pg?.reachable ? t('mgr.settings.online') : t('mgr.settings.unreachable')],
-    [t('common.service'), st?.serviceUrl ?? '—'],
-    [t('mgr.settings.apiVersion'), pg?.version ?? '—'],
-    [t('mgr.settings.apiContract'), pg?.supportsV12 ?? st?.supportsV12 ? t('mgr.settings.contractV12') : 'v1.1'],
-    [t('mgr.settings.syncExpiry'), describeSyncExpiry(pg?.syncExpiryDays)],
-    [t('common.syncId'), st?.syncId ?? '—'],
-  ];
-  for (const [k, v] of rows) {
-    const dt = document.createElement('dt');
-    dt.textContent = k;
-    const dd = document.createElement('dd');
-    dd.textContent = v;
-    info.append(dt, dd);
-  }
+  // Settings holds preferences only: service, API version, sync ID and the
+  // saved syncs are reported by Status and Sync, never repeated here.
   const toolbar = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => ({
     enabled: true,
   }));
   (input('m-opt-toolbar') as HTMLInputElement).checked = toolbar.enabled;
-  const level = st?.logLevel ?? 2;
+  let level = 2;
+  try {
+    const st = await send<StatusResponse>({ command: MessageCommand.GetStatus });
+    level = st.logLevel ?? 2;
+  } catch (err) {
+    showError('settings-error', (err as Error).message);
+  }
   ($('m-opt-verbosity') as HTMLSelectElement).value = String(level);
   const lang = await send<{ language: string }>({ command: MessageCommand.GetUiLanguage }).catch(() => ({
     language: 'system',
@@ -1729,7 +1708,12 @@ function initSettingsSection(): void {
       showError('settings-error', (err as Error).message);
     }
   });
-  $('m-btn-password').addEventListener('click', () => void changePassword());
+  $('m-btn-password').addEventListener('click', () => openPasswordChange($('m-btn-password')));
+  ($('m-pw-form') as HTMLFormElement).addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitPasswordChange();
+  });
+  ($('m-btn-password-cancel') as HTMLButtonElement).addEventListener('click', () => pwDialog.close());
 }
 
 /** Sync section: registry rows, activation, rename and row actions. Reads the
@@ -2318,38 +2302,43 @@ function readPasswordChange(): { current: string; next: string; confirm: string 
   };
 }
 
-/** Change password: validate → inline confirm with the implications → run. */
-async function changePassword(): Promise<void> {
+function resetPasswordFields(): void {
+  input('m-current-password').value = '';
+  input('m-new-password').value = '';
+  input('m-new-password-confirm').value = '';
+  input('m-pw-switch').value = '';
+}
+
+/** Ends the password task; the dialog's onClose drops every field. */
+function resetPasswordChange(): void {
+  resetPasswordFields();
+  ($('pw-error') as HTMLElement).hidden = true;
+  ($('pw-error') as HTMLElement).textContent = '';
+}
+
+/** Change password: one modal task. Its warning above the fields states the
+ *  consequence, so the final button is the only confirmation. */
+function openPasswordChange(opener: HTMLElement): void {
   connectQr?.close();
   clearMessages();
   ($('pw-result') as HTMLElement).hidden = true;
-  const invalid = validatePasswordChange(readPasswordChange());
-  if (invalid) {
-    showError('pw-error', invalid);
-    return;
-  }
+  resetPasswordFields();
+  refreshSwitchLockUi();
+  pwDialog.open(opener, input('m-current-password'));
+}
+
+async function submitPasswordChange(): Promise<void> {
+  clearMessages();
+  const fields = readPasswordChange();
+  const invalid = validatePasswordChange(fields);
+  if (invalid) return showError('pw-error', invalid);
   // Rotating the key must rewrap the saved row: prove the switch lock.
   const switchPassword = input('m-pw-switch').value;
   if (switchLockSet && !switchPassword) {
-    showError('pw-error', t('core.switchPasswordRequired'));
-    return;
+    return showError('pw-error', t('core.switchPasswordRequired'));
   }
-  const ok = await confirmInline('m-btn-password', {
-    message: t('mgr.settings.changePwMessage'),
-    implication: ChangePasswordImplication(),
-    confirmLabel: t('common.yesChangePw'),
-    danger: true,
-  });
-  if (!ok) return;
-  // Fields stay editable while the confirmation is open: validate what is
-  // there now, not what was there when the button was pressed.
-  const fields = readPasswordChange();
-  const stillInvalid = validatePasswordChange(fields);
-  if (stillInvalid) {
-    showError('pw-error', stillInvalid);
-    return;
-  }
-  await withBusy('m-btn-password', t('busy.changing'), async () => {
+  const token = pwDialog.token;
+  await withBusy('m-btn-password-go', t('busy.changing'), async () => {
     try {
       await send({
         command: MessageCommand.ChangePassword,
@@ -2357,13 +2346,12 @@ async function changePassword(): Promise<void> {
         newPassword: fields.next,
         switchPassword,
       });
-      input('m-current-password').value = '';
-      input('m-new-password').value = '';
-      input('m-new-password-confirm').value = '';
-      input('m-pw-switch').value = '';
+      if (!pwDialog.isOpen || pwDialog.token !== token) return;
+      pwDialog.close();
       showResult('pw-result', ChangePasswordDone());
       await refreshStatus();
     } catch (err) {
+      if (!pwDialog.isOpen || pwDialog.token !== token) return;
       // Never leave the current password or its confirmation in the DOM;
       // the new password stays so only the proof has to be retyped.
       input('m-current-password').value = '';
@@ -2401,6 +2389,7 @@ async function init(): Promise<void> {
   activateDialog = new TaskDialog($('m-activate-dialog') as HTMLDialogElement, { onClose: resetActivation });
   lockDialog = new TaskDialog($('m-lock-dialog') as HTMLDialogElement, { onClose: resetLockPanel });
   rowDialog = new TaskDialog($('m-row-dialog') as HTMLDialogElement, { onClose: resetRowTask });
+  pwDialog = new TaskDialog($('m-pw-dialog') as HTMLDialogElement, { onClose: resetPasswordChange });
   connectQr = new ConnectQrController(
     $('connect-qr'),
     (password, target) => send<ConnectQrPayload>({
