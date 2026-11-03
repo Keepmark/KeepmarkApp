@@ -230,6 +230,14 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   ID list to maintain). Confirmations use `confirmInline` from the same file,
   never `window.confirm`; workflow texts live in `src/popup/texts.ts`. The
   per-step contract is `docs/WORKFLOWS.md`.
+- Sync-section operations are modal tasks, not inline panels: `TaskDialog` in
+  `src/popup/modal.ts` owns `#m-link-dialog` (add + its sync lock gate as the
+  first step), `#m-activate-dialog`, `#m-lock-dialog` and `#m-row-dialog`
+  (rename/forget/unlink/delete). The registry keeps one open at a time, Escape
+  and a backdrop click close it like Cancel, focus returns to the opener, and
+  every async branch checks `dialog.token` so an answer that lands after the
+  task ended is dropped. Never add a second panel or confirmation for the same
+  operation.
 - Success evidence mirrors it: multi-outcome operations restate WHAT ran
   (mode + direction + target), not just "Done". Build the message in a pure
   shared helper (e.g. `describeMoveResult` in `ui.ts`) with a unit test per

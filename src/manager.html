@@ -175,16 +175,6 @@
         </div>
         <ul id="m-syncs-list" class="saved-list"></ul>
         <p id="m-syncs-empty" class="hint" hidden data-i18n="manager.syncs.empty">No saved sync yet: add one below.</p>
-        <div id="m-syncs-activate" class="confirm" hidden>
-          <p><strong id="m-syncs-activate-text"></strong></p>
-          <p id="m-syncs-activate-hint" class="hint"></p>
-          <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
-            <input id="m-syncs-activate-pw" type="password" autocomplete="off" /></label>
-          <div class="row">
-            <button id="m-syncs-activate-go" class="primary" data-i18n="popup.saved.activate">Activate</button>
-            <button id="m-syncs-activate-cancel" data-i18n="common.cancel">Cancel</button>
-          </div>
-        </div>
         <div id="m-syncs-error" class="error" role="alert" hidden></div>
         <div id="m-syncs-result" class="result" role="status" hidden></div>
         <p id="m-delete-v12-hint" class="hint" hidden data-i18n="manager.status.deleteV12Hint">Delete from server needs API v1.2 — this service speaks v1.1, so the sync
@@ -202,84 +192,12 @@
             <button id="m-btn-link-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change sync lock password</button>
             <button id="m-btn-link-lock-remove" class="danger" hidden data-i18n="manager.switchPw.removeBtn">Remove sync lock…</button>
           </div>
-          <div id="m-lock-panel" class="confirm" hidden>
-            <div id="m-lock-current-row">
-              <label><span data-i18n="manager.switchPw.current">Current password</span>
-                <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
-            </div>
-            <div id="m-lock-new-row">
-              <label><span data-i18n="manager.switchPw.new">New password</span>
-                <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
-            </div>
-            <div id="m-lock-confirm-row">
-              <label><span data-i18n="manager.switchPw.confirm">Repeat password</span>
-                <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
-            </div>
-            <p id="m-lock-panel-hint" class="hint" hidden></p>
-            <div class="row">
-              <button id="m-btn-lock-go" class="primary"></button>
-              <button id="m-btn-lock-cancel" data-i18n="common.cancel">Cancel</button>
-            </div>
-            <div id="switch-pw-error" class="error" role="alert" hidden></div>
-          </div>
           <div id="m-lock-forgot" class="row" hidden>
             <button id="m-btn-link-lock-reset" class="mini" data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
           </div>
           <div id="switch-pw-result" class="result" role="status" hidden></div>
         </div>
 
-        <div id="m-link-form" hidden>
-          <h3 data-i18n="manager.syncs.addTitle">Add a sync</h3>
-          <p class="hint" data-i18n="manager.syncs.addHint">Create a new sync or open one you already use on another device. Adding a sync
-            while another is active switches this browser to it; the old sync stays in the list.</p>
-          <label><span data-i18n="manager.syncs.targetUrl">Service URL</span> <input id="m-link-url" type="url" /></label>
-          <fieldset class="options" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="manager.syncs.modeLabel">
-            <legend data-i18n="manager.syncs.modeLegend">Which sync?</legend>
-            <label class="check option"><input type="radio" name="m-link-mode" value="new" checked />
-              <span><b data-i18n="manager.syncs.modeNew">A new sync</b><small data-i18n="manager.syncs.modeNewDesc">Create it on the target service and upload the bookmarks currently in this browser.</small></span></label>
-            <label class="check option"><input type="radio" name="m-link-mode" value="existing" />
-              <span><b data-i18n="manager.syncs.modeExisting">An existing sync</b><small data-i18n="manager.syncs.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
-          </fieldset>
-          <label id="m-link-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-link-id" type="text" class="mono" /></label>
-          <label id="m-link-name-row"><span data-i18n="manager.syncs.nameLabel">Name (optional)</span>
-            <input id="m-link-name" type="text" maxlength="40" autocomplete="off" /></label>
-          <p id="m-link-name-hint" class="hint" hidden data-i18n="manager.syncs.nameHint">Another sync already uses this name: choose a different one.</p>
-          <div id="m-link-existing-pw-slot"></div>
-          <label id="m-link-password-row"><span id="m-link-password-label" data-i18n="manager.syncs.newPassword">New password</span> <input id="m-link-password" type="password" autocomplete="new-password" /></label>
-          <label id="m-link-confirm-row"><span id="m-link-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-link-confirm" type="password" autocomplete="new-password" /></label>
-          <p id="m-link-pw-hint" class="hint" data-i18n="manager.syncs.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
-          <p id="m-link-new-note" class="hint" data-i18n="manager.syncs.newNote">The new sync starts with the bookmarks currently in this browser.
-            The sync you are using now stays in the list.</p>
-          <p id="m-link-conflict" class="notice" hidden data-i18n="manager.syncs.newConflict">There is an unresolved conflict: the new sync will start from
-            the bookmarks in this browser, while the conflicted sync keeps its server copy.</p>
-          <div class="row" id="m-link-check-row"><button id="m-btn-link-check" class="primary" data-i18n="manager.syncs.check">Check target</button></div>
-          <div class="row" id="m-link-direct" hidden><button id="m-btn-link-direct" class="primary" data-i18n="manager.syncs.createUpload">Create and upload</button></div>
-          <div id="link-error" class="error" role="alert" hidden></div>
-          <div id="link-preview" class="preview" hidden></div>
-          <p id="link-gate-hint" class="hint" data-i18n="manager.syncs.gateHint">Confirm opens once the check passes, and only for these exact inputs —
-            change anything and check again.</p>
-          <div id="link-step2" hidden>
-            <h3 data-i18n="manager.syncs.step2">2. Confirm</h3>
-            <div id="m-link-direction-row" hidden>
-              <fieldset class="options" role="radiogroup" aria-label="Sync direction" data-i18n-aria-label="manager.syncs.directionLabel">
-                <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
-                <label class="check option"><input type="radio" name="m-link-direction" value="pull" checked />
-                  <span><b data-i18n="common.keepServerCopy">Keep the server copy</b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
-                <label class="check option"><input type="radio" name="m-link-direction" value="merge" />
-                  <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="manager.syncs.mergeDesc">Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
-                <label class="check option"><input type="radio" name="m-link-direction" value="push" />
-                  <span><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
-              </fieldset>
-            </div>
-            <div id="link-summary" class="hint"></div>
-            <p id="link-merge-counts" class="hint"></p>
-            <p id="link-implication" class="hint"></p>
-            <div class="row" id="link-go-row"><button id="m-btn-link" class="primary" disabled data-i18n="manager.syncs.connect">Connect</button></div>
-            <div id="link-error-2" class="error" role="alert" hidden></div>
-          </div>
-          <div id="link-result" class="result" tabindex="-1" role="status" hidden></div>
-          <div class="row"><button id="m-btn-add-cancel" class="mini" type="button" data-i18n="common.cancel">Cancel</button></div>
-        </div>
       </section>
 
       <section id="sec-logs" hidden>
@@ -385,19 +303,136 @@
         <button id="qr-close" data-i18n="qr.close">Close</button>
       </dialog>
     </div>
-    <!-- Add-sync gate: a focused modal, not a block at the bottom of the Sync
-         section. It asks the sync lock password once, then reveals the wizard. -->
-    <dialog id="m-link-gate" aria-labelledby="m-link-gate-title" aria-describedby="m-link-gate-intro" hidden>
-      <h2 id="m-link-gate-title" data-i18n="manager.switchPw.title">Sync lock</h2>
-      <p id="m-link-gate-intro" class="hint" data-i18n="manager.switchPw.gateIntro">It protects every saved sync, so it is asked once before adding starts.</p>
-      <form id="m-link-gate-form" autocomplete="off">
-        <label for="m-link-gate-pw" data-i18n="popup.saved.changePasswordLabel">Sync lock password</label>
-        <input id="m-link-gate-pw" type="password" autocomplete="off" />
-        <div class="row">
-          <button id="m-btn-link-gate-go" class="primary" type="submit" data-i18n="manager.switchPw.gateBtn">Continue</button>
-          <button id="m-btn-link-gate-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+    <!-- Add a sync: one dialog owns the whole task. The sync lock gate is its
+         first step and the wizard replaces it in place, so the list behind is
+         inert: no row can be activated, renamed or removed halfway through. -->
+    <dialog id="m-link-dialog" class="task gate" aria-labelledby="m-link-gate-title" aria-describedby="m-link-gate-intro" hidden>
+      <div id="m-link-gate">
+        <h2 id="m-link-gate-title" data-i18n="manager.switchPw.title">Sync lock</h2>
+        <p id="m-link-gate-intro" class="hint" data-i18n="manager.switchPw.gateIntro">It protects every saved sync, so it is asked once before adding starts.</p>
+        <form id="m-link-gate-form" autocomplete="off">
+          <label for="m-link-gate-pw" data-i18n="popup.saved.changePasswordLabel">Sync lock password</label>
+          <input id="m-link-gate-pw" type="password" autocomplete="off" />
+          <div class="row">
+            <button id="m-btn-link-gate-go" class="primary" type="submit" data-i18n="manager.switchPw.gateBtn">Continue</button>
+            <button id="m-btn-link-gate-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+          </div>
+          <div id="link-gate-error" class="error" role="alert" hidden></div>
+        </form>
+      </div>
+      <div id="m-link-form" hidden>
+        <div class="task-head">
+          <h2 id="m-link-add-title" data-i18n="manager.syncs.addTitle">Add a sync</h2>
+          <button id="m-btn-add-cancel" class="mini" type="button" data-i18n="common.cancel">Cancel</button>
         </div>
-        <div id="link-gate-error" class="error" role="alert" hidden></div>
+        <p class="hint" data-i18n="manager.syncs.addHint">Create a new sync or open one you already use on another device. Adding a sync
+          while another is active switches this browser to it; the old sync stays in the list.</p>
+        <label><span data-i18n="manager.syncs.targetUrl">Service URL</span> <input id="m-link-url" type="url" /></label>
+        <fieldset class="options" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="manager.syncs.modeLabel">
+          <legend data-i18n="manager.syncs.modeLegend">Which sync?</legend>
+          <label class="check option"><input type="radio" name="m-link-mode" value="new" checked />
+            <span><b data-i18n="manager.syncs.modeNew">A new sync</b><small data-i18n="manager.syncs.modeNewDesc">Create it on the target service and upload the bookmarks currently in this browser.</small></span></label>
+          <label class="check option"><input type="radio" name="m-link-mode" value="existing" />
+            <span><b data-i18n="manager.syncs.modeExisting">An existing sync</b><small data-i18n="manager.syncs.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
+        </fieldset>
+        <label id="m-link-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-link-id" type="text" class="mono" /></label>
+        <label id="m-link-name-row"><span data-i18n="manager.syncs.nameLabel">Name (optional)</span>
+          <input id="m-link-name" type="text" maxlength="40" autocomplete="off" /></label>
+        <p id="m-link-name-hint" class="hint" hidden data-i18n="manager.syncs.nameHint">Another sync already uses this name: choose a different one.</p>
+        <div id="m-link-existing-pw-slot"></div>
+        <label id="m-link-password-row"><span id="m-link-password-label" data-i18n="manager.syncs.newPassword">New password</span> <input id="m-link-password" type="password" autocomplete="new-password" /></label>
+        <label id="m-link-confirm-row"><span id="m-link-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-link-confirm" type="password" autocomplete="new-password" /></label>
+        <p id="m-link-pw-hint" class="hint" data-i18n="manager.syncs.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+        <p id="m-link-new-note" class="hint" data-i18n="manager.syncs.newNote">The new sync starts with the bookmarks currently in this browser.
+          The sync you are using now stays in the list.</p>
+        <p id="m-link-conflict" class="notice" hidden data-i18n="manager.syncs.newConflict">There is an unresolved conflict: the new sync will start from
+          the bookmarks in this browser, while the conflicted sync keeps its server copy.</p>
+        <div class="row" id="m-link-check-row"><button id="m-btn-link-check" class="primary" data-i18n="manager.syncs.check">Check target</button></div>
+        <div class="row" id="m-link-direct" hidden><button id="m-btn-link-direct" class="primary" data-i18n="manager.syncs.createUpload">Create and upload</button></div>
+        <div id="link-error" class="error" role="alert" hidden></div>
+        <div id="link-preview" class="preview" hidden></div>
+        <p id="link-gate-hint" class="hint" data-i18n="manager.syncs.gateHint">Confirm opens once the check passes, and only for these exact inputs —
+          change anything and check again.</p>
+        <div id="link-step2" hidden>
+          <h3 data-i18n="manager.syncs.step2">2. Confirm</h3>
+          <div id="m-link-direction-row" hidden>
+            <fieldset class="options" role="radiogroup" aria-label="Sync direction" data-i18n-aria-label="manager.syncs.directionLabel">
+              <legend data-i18n="popup.connect.directionLegend">Which copy do you want to keep?</legend>
+              <label class="check option"><input type="radio" name="m-link-direction" value="pull" checked />
+                <span><b data-i18n="common.keepServerCopy">Keep the server copy</b><small data-i18n="popup.connect.pullDesc">Download: this browser gets the server bookmarks; its own are replaced.</small></span></label>
+              <label class="check option"><input type="radio" name="m-link-direction" value="merge" />
+                <span><b data-i18n="common.mergeBoth">Merge both</b><small data-i18n="manager.syncs.mergeDesc">Nothing is deleted: items from both copies are kept (counts shown after the check).</small></span></label>
+              <label class="check option"><input type="radio" name="m-link-direction" value="push" />
+                <span><b data-i18n="common.keepThisCopy">Keep this browser's copy</b><small data-i18n="popup.connect.pushDesc">Upload: the server gets this browser's bookmarks; its copy is replaced.</small></span></label>
+            </fieldset>
+          </div>
+          <div id="link-summary" class="hint"></div>
+          <p id="link-merge-counts" class="hint"></p>
+          <p id="link-implication" class="hint"></p>
+          <div class="row" id="link-go-row"><button id="m-btn-link" class="primary" disabled data-i18n="manager.syncs.connect">Connect</button></div>
+          <div id="link-error-2" class="error" role="alert" hidden></div>
+        </div>
+        <div id="link-result" class="result" tabindex="-1" role="status" hidden></div>
+      </div>
+    </dialog>
+
+    <!-- Activate a saved sync: the confirmation and its sync lock password
+         live in one modal, so no other row can be touched meanwhile. -->
+    <dialog id="m-activate-dialog" class="task" aria-labelledby="m-activate-title" hidden>
+      <h2 id="m-activate-title" data-i18n="popup.saved.activate">Activate</h2>
+      <p><strong id="m-syncs-activate-text"></strong></p>
+      <p id="m-syncs-activate-hint" class="hint"></p>
+      <form id="m-activate-form" autocomplete="off">
+        <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
+          <input id="m-syncs-activate-pw" type="password" autocomplete="off" /></label>
+        <div class="row">
+          <button id="m-syncs-activate-go" class="primary" type="submit" data-i18n="popup.saved.activate">Activate</button>
+          <button id="m-syncs-activate-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="m-activate-error" class="error" role="alert" hidden></div>
+      </form>
+    </dialog>
+
+    <!-- Sync lock: one action at a time (set, change, remove, reset) with only
+         the fields that action needs, never a second panel on the page. -->
+    <dialog id="m-lock-dialog" class="task" aria-labelledby="m-lock-title" hidden>
+      <h2 id="m-lock-title"></h2>
+      <form id="m-lock-form" autocomplete="off">
+        <div id="m-lock-current-row">
+          <label><span data-i18n="manager.switchPw.current">Current password</span>
+            <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
+        </div>
+        <div id="m-lock-new-row">
+          <label><span data-i18n="manager.switchPw.new">New password</span>
+            <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
+        </div>
+        <div id="m-lock-confirm-row">
+          <label><span data-i18n="manager.switchPw.confirm">Repeat password</span>
+            <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
+        </div>
+        <p id="m-lock-panel-hint" class="hint" hidden></p>
+        <div class="row">
+          <button id="m-btn-lock-go" class="primary" type="submit"></button>
+          <button id="m-btn-lock-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="switch-pw-error" class="error" role="alert" hidden></div>
+      </form>
+    </dialog>
+
+    <!-- Row task: rename a sync, or forget/unlink/delete it. One dialog for
+         the four, so the row actions never fight each other. -->
+    <dialog id="m-row-dialog" class="task" aria-labelledby="m-row-title" hidden>
+      <h2 id="m-row-title"></h2>
+      <form id="m-row-form" autocomplete="off">
+        <p id="m-row-message"></p>
+        <p id="m-row-implication" class="hint"></p>
+        <label id="m-row-field-row" hidden><span id="m-row-field-label"></span>
+          <input id="m-row-field" type="text" autocomplete="off" /></label>
+        <div class="row">
+          <button id="m-btn-row-go" class="primary" type="submit"></button>
+          <button id="m-btn-row-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="m-row-error" class="error" role="alert" hidden></div>
       </form>
     </dialog>
   <script type="module" src="./manager/manager.ts"></script>

@@ -19,9 +19,10 @@ Words come from `UI-TERMS.md`.
    immediately. Android Connect and conflict resolution show consequences beside
    the chosen direction and apply directly. The extension uses one inline
    confirmation for popup Connect and manager conflict resolution. Other
-   destructive actions use one inline confirmation next to their button, with an
-   explicit action and Cancel. Never add another confirmation after a review. No
-   `window.confirm`, modal or checkbox.
+   destructive actions use one confirmation next to their button (inline, or
+   inside the modal task that owns the operation), with an explicit action and
+   Cancel. Never add another confirmation after a review. No `window.confirm`
+   and no checkbox.
 3. **Direction wording and order.** Everywhere a direction is chosen the options
    are, in this order: `Keep the server copy` (Download), `Merge both`,
    `Keep this device's copy` (Upload; "this browser's copy" in the extension).
@@ -50,6 +51,14 @@ Words come from `UI-TERMS.md`.
    deletes them (Restore only uses the active sync's key); Android keeps them,
    because re-linking the same sync with the same password derives the same key
    again.
+8. **One task at a time, on its own surface.** An operation that takes over the
+   screen — Add a sync, Activate a saved sync, the sync lock, and rename /
+   forget / unlink / delete of a saved sync — runs as a single task. On the
+   extension it is a modal dialog: the page behind is inert, Cancel and Escape
+   end it, and opening another task closes the first. On Android the add panel
+   replaces the Syncs list and every other row is disabled while a row
+   confirmation or the rename editor is open. Two operations, two Cancel
+   buttons or a second confirmation are never on screen at once.
 
 ## Shared workflows
 
@@ -80,10 +89,10 @@ Words come from `UI-TERMS.md`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync (manager → Sync → `+ Add a sync`) | no | Destination, `A new sync` / `An existing sync`, credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The previous sync stays available and other devices keep using it until moved. A new sync is created from the bookmarks currently in this browser and reports the uploaded count. Save the new sync ID and password. |
-| Activate a saved sync (popup) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → sync lock password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync lock the dialog is a plain confirmation. |
-| Forget or unlink a saved sync (manager) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten and the server copy stays; safety backups only that key could open are deleted with it. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
-| Delete sync from server (service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
+| Add a sync (manager → Sync → `+ Add a sync`) | no | Modal task: sync lock password when set (same dialog, first step) → destination, `A new sync` / `An existing sync`, credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The previous sync stays available and other devices keep using it until moved. A new sync is created from the bookmarks currently in this browser and reports the uploaded count. Save the new sync ID and password. |
+| Activate a saved sync (popup or manager) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → modal with the confirmation and, when set, the sync lock password → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync lock the dialog is a plain confirmation. |
+| Forget or unlink a saved sync (manager) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) → confirmation in the row modal | always | Inactive: only the row is forgotten and the server copy stays; safety backups only that key could open are deleted with it. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
+| Delete sync from server (service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row → confirmation in the row modal | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
 | Removed sync | shown while unlinked after the service no longer has the sync | Popup: informational notice only (no actions, no backup wording); Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). The popup states the fact and stops there: the kept copy and its actions belong to Backup, where the user goes on their own. That copy is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
 
 ## Step and button visibility
@@ -98,6 +107,10 @@ Words come from `UI-TERMS.md`.
   failures remain next to Continue.
 - The primary button of a step is disabled only while busy or when a required
   field is empty. Validation messages appear after pressing it.
+- A task never hides its Cancel at the end of a long form: the add wizard keeps
+  it next to the title, the short tasks keep it beside their action, and the
+  Android panel keeps its Back at the top. The user can always leave without
+  scrolling.
 - Busy labels: `Checking…`, `Connecting…`, `Downloading…`, `Uploading…`,
   `Merging…`, `Changing…`, `Exporting…`, `Importing…`.
 - A flow that resumes (the extension manager after leaving the page or a browser

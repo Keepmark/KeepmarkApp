@@ -75,6 +75,12 @@ export function cancelConfirm(anchorId: string): void {
   pending.get(anchorId)?.(false);
 }
 
+/** Cancel every open confirmation: a section switch must not leave one armed
+ *  behind a hidden section, ready to reappear on the next visit. */
+export function cancelAllConfirms(): void {
+  for (const done of [...pending.values()]) done(false);
+}
+
 const hideTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Show element `id` now and hide it after `ms` (re-arming replaces the

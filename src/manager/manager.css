@@ -874,24 +874,13 @@ dd:last-of-type { border-bottom: 0; }
   padding: 0 10px;
 }
 
-.saved-rename {
-  margin-top: 2px;
-}
-
-.saved-rename .row {
-  margin-top: 0;
-  gap: 6px;
-}
-
-.saved-rename input {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Add-sync gate: a focused modal over the Sync section. Same surface and
-   backdrop as the QR dialog, sized for one field and two buttons. */
-#m-link-gate {
-  width: min(24rem, calc(100vw - 2rem));
+/* ---- Sync tasks (src/popup/modal.ts) ----
+   Each operation in the Sync section owns a modal dialog: while it runs the
+   list and every other action are inert, so two operations can never overlap.
+   Same surface and backdrop as the QR dialog; `.gate` narrows the add dialog
+   to the single field of its first step. */
+.task {
+  width: min(44rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
   padding: 1.4rem;
   border: 1px solid var(--border);
@@ -902,18 +891,27 @@ dd:last-of-type { border-bottom: 0; }
   box-shadow: 0 1rem 4rem #0005;
 }
 
-#m-link-gate::backdrop { background: #080c20b8; }
+.task::backdrop { background: #080c20b8; }
+.task.gate { width: min(26rem, calc(100vw - 2rem)); }
+.task h2 { margin: 0 0 .35rem; font-size: 1.2rem; }
+.task form { display: grid; gap: .6rem; margin-top: .9rem; }
+.task .row { margin-top: .2rem; }
+.task .error { margin: 0; }
 
-#m-link-gate h2 {
-  margin: 0 0 .35rem;
-  font-size: 1.2rem;
+/* Heading row of a long task: the title and its Cancel are always in sight,
+   never at the bottom of a form the user has to scroll. */
+.task-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .35rem;
 }
 
-#m-link-gate form {
-  display: grid;
-  gap: .6rem;
-  margin-top: .9rem;
-}
+.task-head h2 { margin: 0; }
 
-#m-link-gate .row { margin-top: .2rem; }
-#m-link-gate #link-gate-error { margin: 0; }
+/* The add wizard is a long form; the other tasks hold one field or one
+   question, so they keep a narrower surface. */
+#m-activate-dialog,
+#m-lock-dialog,
+#m-row-dialog { width: min(30rem, calc(100vw - 2rem)); }

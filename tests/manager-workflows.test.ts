@@ -65,14 +65,75 @@ beforeEach(async () => {
   el('m-link-url-check').click(); await settle();
 });
 
-it('keeps the add form hidden until requested and cancels it', async () => {
-  expect(el('m-link-form').hidden).toBe(true);
+it('opens the add wizard in its own modal and cancels the whole task', async () => {
+  const dialog = el('m-link-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(false);
   await openAdd();
+  expect(dialog.open).toBe(true);
   expect(el('m-link-form').hidden).toBe(false);
-  expect(el('m-btn-add-sync').hidden).toBe(true);
-  el('m-btn-add-cancel').click();
-  expect(el('m-link-form').hidden).toBe(true);
+  // The list stays on the page but behind the modal layer: inert, not gone.
   expect(el('m-btn-add-sync').hidden).toBe(false);
+  el('m-btn-add-cancel').click();
+  expect(dialog.open).toBe(false);
+  expect(el('m-link-form').hidden).toBe(true);
+});
+
+it('asks the sync lock password in the same modal before revealing the wizard', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [{ serviceUrl: 'https://old.test', syncId: 'old' }],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    if (msg.command === MessageCommand.VerifySwitchPassword) return { ok: true };
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  const dialog = el('m-link-dialog') as HTMLDialogElement;
+  await openAdd();
+  // One dialog: the gate is step one, the wizard is still hidden.
+  expect(dialog.open).toBe(true);
+  expect(el('m-link-gate').hidden).toBe(false);
+  expect(el('m-link-form').hidden).toBe(true);
+  field('m-link-gate-pw', 'pin');
+  el('m-btn-link-gate-go').click(); await settle();
+  expect(dialog.open).toBe(true);
+  expect(el('m-link-gate').hidden).toBe(true);
+  expect(el('m-link-form').hidden).toBe(false);
+});
+
+it('asks the sync lock password in the activation modal', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://old.test', syncId: 'old' },
+          { serviceUrl: 'https://other.test', syncId: 'other', label: 'Altro' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    if (msg.command === MessageCommand.ActivateSavedSync) return { activated: true };
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  el('m-syncs-act-1').click(); await settle();
+  const dialog = el('m-activate-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  expect(el('m-syncs-pw-row').hidden).toBe(false);
+  expect(el('m-syncs-activate-text').textContent).toContain('Altro');
+  // No password, no switch: the error stays inside the modal.
+  el('m-syncs-activate-go').click(); await settle();
+  expect(el('m-activate-error').textContent).not.toBe('');
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.ActivateSavedSync)).toBe(false);
+  field('m-syncs-activate-pw', 'pin');
+  el('m-syncs-activate-go').click(); await settle();
+  const call = harness.send.mock.calls.find(([m]) => m.command === MessageCommand.ActivateSavedSync)?.[0];
+  expect(call).toMatchObject({ syncId: 'other', switchPassword: 'pin' });
+  expect(dialog.open).toBe(false);
 });
 
 it('creates a new sync from the live bookmarks and reports the uploaded count', async () => {
@@ -178,18 +239,58 @@ it('verifies the password for an existing target before revealing its final acti
 
 it('asks once before deleting the server sync from the active row', async () => {
   el('m-syncs-delete-0').click(); await settle();
-  el('m-syncs-delete-0-yes').click(); await settle();
+  const dialog = el('m-row-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  expect(el('m-row-message').textContent).not.toBe('');
+  // Destructive: the initial focus is Cancel, never the red button.
+  expect(document.activeElement).toBe(el('m-btn-row-cancel'));
+  el('m-btn-row-go').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.DeleteRemoteSync)).toHaveLength(1);
-  expect(document.querySelector('#m-syncs-delete-0-confirm')).toBeNull();
+  expect(dialog.open).toBe(false);
 });
 
 it('unlinks the active row with the canonical "Unlink this device" wording', async () => {
   el('m-syncs-rm-0').click(); await settle();
-  const prompt = document.getElementById('m-syncs-rm-0-confirm')!;
-  expect(prompt.textContent).toContain('Unlink this device from');
-  el('m-syncs-rm-0-yes').click(); await settle();
+  const dialog = el('m-row-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  expect(el('m-row-title').textContent).toBe('Unlink this device');
+  expect(el('m-row-message').textContent).toContain('Unlink this device from');
+  el('m-btn-row-go').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.RemoveSavedSync)).toHaveLength(1);
   expect(el('m-syncs-result').textContent).toContain('unlinked');
+});
+
+it('renames a row in the same modal, with the name selected', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [{ serviceUrl: 'https://old.test', syncId: 'old', label: 'Casa' }],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: false,
+      };
+    }
+    if (msg.command === MessageCommand.RenameSavedSync) return { renamed: true };
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  el('m-syncs-rename-0').click(); await settle();
+  const dialog = el('m-row-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  expect((el('m-row-field') as HTMLInputElement).value).toBe('Casa');
+  field('m-row-field', 'Ufficio');
+  el('m-btn-row-go').click(); await settle();
+  const call = harness.send.mock.calls.find(([m]) => m.command === MessageCommand.RenameSavedSync)?.[0];
+  expect(call).toMatchObject({ label: 'Ufficio' });
+  expect(dialog.open).toBe(false);
+});
+
+it('never keeps two sync tasks open at once', async () => {
+  el('m-syncs-rm-0').click(); await settle();
+  expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(true);
+  // Opening the add task closes the row task first: one operation at a time.
+  el('m-btn-add-sync').click(); await settle();
+  expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(false);
+  expect((el('m-link-dialog') as HTMLDialogElement).open).toBe(true);
 });
 
 it('changes direction within the verified review without asking to check again', async () => {

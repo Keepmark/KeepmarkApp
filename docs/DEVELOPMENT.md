@@ -10,6 +10,12 @@ Full product and verification spec: [`SPEC.en.md`](SPEC.en.md).
 Same robustness rules as Keepmark for Android: whole-blob sync, merge only
 as an explicit previewed choice (never silent), byte-level crypto interop.
 
+One task at a time: every operation of the Sync section (add a sync with its
+sync lock gate, activate, the sync lock itself, rename/forget/unlink/delete)
+runs inside its own modal `<dialog>` (`src/popup/modal.ts`). The page behind is
+inert, opening another task closes the first, and an answer that arrives after
+its task ended is discarded by token. Shared rules: [`WORKFLOWS.md`](WORKFLOWS.md).
+
 ## Stack
 
 TypeScript strict + `webextension-polyfill` + `lzutf8@0.6.0` + Vitest + Vite.
@@ -64,8 +70,9 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
   (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
   Rename/Activate/Unlink/Remove/Delete from server, `+ Add new sync` wizard
-  with target + merge preview, optional sync lock), Logs, Settings
-  (toolbar toggle via background, password change), About.
+  with target + merge preview, optional sync lock — each operation is a modal
+  task dialog, never an inline panel that can overlap another one), Logs,
+  Settings (toolbar toggle via background, password change), About.
 - `src/popup.html`, `src/background.html` — vite entries (land at output root).
 - `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
 - `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.
