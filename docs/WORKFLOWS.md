@@ -38,8 +38,11 @@ Words come from `UI-TERMS.md`.
 6. **Results say what happened and what to do next**: one line of outcome, one
    line of follow-up when the user has something to do (store the sync ID, update
    other devices), and a pointer to Backup → Safety backups when one was made.
-7. **Safety backups are taken before every overwrite or deletion.** A workflow
-   that takes one says so in its confirmation or result. Forgetting a saved sync
+7. **Safety backups are taken before every destructive step, not on every
+   edit.** A download, upload, import, restore, password change, sync switch,
+   duplicates cleanup or batch delete snapshots the side it replaces; a move, its
+   undo and a single-item delete rely on Undo instead. A workflow that takes a
+   snapshot says so in its confirmation or result. Forgetting a saved sync
    affects its backups only where their key can never return: the extension
    deletes them (Restore only uses the active sync's key); Android keeps them,
    because re-linking the same sync with the same password derives the same key
