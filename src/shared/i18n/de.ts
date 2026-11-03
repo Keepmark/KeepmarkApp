@@ -26,7 +26,6 @@ export const de: Record<MessageKey, string> = {
   'popup.connect.modeExisting': 'Bestehende Synchronisierung',
   'popup.connect.hintNew': 'Erstellt eine Synchronisierung auf dem Dienst und lädt die Lesezeichen dieses Browsers hoch.',
   'popup.connect.hintExisting': 'Verknüpft diesen Browser mit einer Sync-ID deines anderen Geräts.',
-  'common.details': 'Details',
   'common.serviceUrl': 'Dienst-URL',
   'common.syncId': 'Sync-ID',
   'popup.connect.syncIdPlaceholder': 'Sync-ID deines anderen Geräts',

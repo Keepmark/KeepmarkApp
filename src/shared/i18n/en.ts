@@ -26,7 +26,6 @@ export const en = {
   'popup.connect.modeExisting': 'Existing sync',
   'popup.connect.hintNew': 'Create a sync on the service and upload this browser\'s bookmarks.',
   'popup.connect.hintExisting': 'Link this browser to a sync ID from your other device.',
-  'common.details': 'Details',
   'common.serviceUrl': 'Service URL',
   'common.syncId': 'Sync ID',
   'popup.connect.syncIdPlaceholder': 'Sync ID from your other device',

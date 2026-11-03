@@ -26,7 +26,6 @@ export const ja: Record<MessageKey, string> = {
   'popup.connect.modeExisting': '既存の同期',
   'popup.connect.hintNew': 'サービス上に同期を作成し、このブラウザのブックマークをアップロードします。',
   'popup.connect.hintExisting': '別のデバイスの同期 ID にこのブラウザをリンクします。',
-  'common.details': '詳細',
   'common.serviceUrl': 'サービス URL',
   'common.syncId': '同期 ID',
   'popup.connect.syncIdPlaceholder': '別のデバイスの同期 ID',

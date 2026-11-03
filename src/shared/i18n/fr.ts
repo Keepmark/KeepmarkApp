@@ -26,7 +26,6 @@ export const fr: Record<MessageKey, string> = {
   'popup.connect.modeExisting': 'Synchronisation existante',
   'popup.connect.hintNew': 'Crée une synchronisation sur le service et envoie les favoris de ce navigateur.',
   'popup.connect.hintExisting': 'Associe ce navigateur à un ID de synchronisation de votre autre appareil.',
-  'common.details': 'Détails',
   'common.serviceUrl': 'URL du service',
   'common.syncId': 'ID de synchronisation',
   'popup.connect.syncIdPlaceholder': 'ID de synchronisation de votre autre appareil',

@@ -28,7 +28,6 @@ export const ru: Record<MessageKey, string> = {
   'popup.connect.modeExisting': 'Существующая синхронизация',
   'popup.connect.hintNew': 'Создать синхронизацию на сервисе и отправить закладки этого браузера.',
   'popup.connect.hintExisting': 'Привязать этот браузер к ID синхронизации с другого устройства.',
-  'common.details': 'Подробности',
   'common.serviceUrl': 'URL сервиса',
   'common.syncId': 'ID синхронизации',
   'popup.connect.syncIdPlaceholder': 'ID синхронизации с другого устройства',

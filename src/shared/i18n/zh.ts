@@ -27,7 +27,6 @@ export const zh: Record<MessageKey, string> = {
   'popup.connect.modeExisting': '已有同步',
   'popup.connect.hintNew': '在服务上创建同步，并上传此浏览器的书签。',
   'popup.connect.hintExisting': '将此浏览器关联到您另一台设备的同步 ID。',
-  'common.details': '详情',
   'common.serviceUrl': '服务 URL',
   'common.syncId': '同步 ID',
   'popup.connect.syncIdPlaceholder': '另一台设备的同步 ID',
