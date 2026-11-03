@@ -1986,26 +1986,82 @@ async function removeSavedRow(sync: SavedSync, anchorId: string): Promise<void> 
 }
 
 /** Protection card: offered with 2+ syncs, change/remove/reset once a lock
- *  exists (even with a single row, so it can always be removed). */
+ *  exists (even with a single row, so it can always be removed). The card shows
+ *  only the state and the actions; one action at a time opens the panel below
+ *  with just the fields it needs. */
+type LockAction = 'set' | 'change' | 'remove' | 'reset';
+let lockAction: LockAction | undefined;
+
 function refreshSwitchLockUi(): void {
   const rows = syncsView.syncs.length;
-  const dormant = Math.max(rows - (syncsView.active ? 1 : 0), 0);
   const state = $('m-link-state');
   state.textContent = switchLockSet ? t('manager.switchPw.isSet') : t('manager.switchPw.notSet');
   state.classList.toggle('ok', switchLockSet);
   ($('m-protection') as HTMLElement).hidden = !switchLockSet && rows < 2;
-  ($('m-link-lock-current') as HTMLElement).hidden = !switchLockSet;
   ($('m-btn-link-lock-set') as HTMLElement).hidden = switchLockSet;
   ($('m-btn-link-lock-change') as HTMLElement).hidden = !switchLockSet;
   ($('m-btn-link-lock-remove') as HTMLElement).hidden = !switchLockSet;
-  ($('m-btn-link-lock-reset') as HTMLElement).hidden = !switchLockSet;
-  $('m-link-lock-new-label').textContent = switchLockSet
-    ? t('manager.switchPw.new')
-    : t('manager.switchPw.setNew');
-  $('m-link-lock-reset-warning').textContent = t('manager.switchPw.resetWarning', { count: dormant });
+  const panelOpen = lockAction !== undefined;
+  ($('m-lock-actions') as HTMLElement).hidden = panelOpen;
+  ($('m-lock-forgot') as HTMLElement).hidden = panelOpen || !switchLockSet;
   // The proof is asked by every flow that changes or demotes the active key.
   ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
   ($('m-link-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
+}
+
+/** Trigger labels keep the ellipsis ("Remove…"); the button that runs the
+ *  action drops it. Punctuation only, so it needs no translation. */
+const withoutEllipsis = (s: string): string => s.replace(/\s*…$/, '');
+
+function lockActionLabel(action: LockAction): string {
+  switch (action) {
+    case 'set':
+      return withoutEllipsis(t('manager.switchPw.setBtn'));
+    case 'change':
+      return withoutEllipsis(t('manager.switchPw.changeBtn'));
+    case 'remove':
+      return withoutEllipsis(t('manager.switchPw.removeBtn'));
+    case 'reset':
+      return t('manager.switchPw.resetGo');
+  }
+}
+
+function openLockPanel(action: LockAction): void {
+  lockAction = action;
+  clearMessages();
+  ($('switch-pw-result') as HTMLElement).hidden = true;
+  clearSwitchLockFields();
+  // Remove demotes the rows with the current password alone; reset mints a new
+  // vault, so it asks only for the new one (the old password is unknown by
+  // definition). Change is the only flow that needs all three.
+  const needsCurrent = action === 'change' || action === 'remove';
+  const needsNew = action !== 'remove';
+  ($('m-lock-current-row') as HTMLElement).hidden = !needsCurrent;
+  ($('m-lock-new-row') as HTMLElement).hidden = !needsNew;
+  ($('m-lock-confirm-row') as HTMLElement).hidden = !needsNew;
+  const hint = $('m-lock-panel-hint') as HTMLElement;
+  hint.hidden = action === 'set' || action === 'change';
+  if (action === 'remove') hint.textContent = t('manager.switchPw.removeImplication');
+  if (action === 'reset') {
+    const dormant = Math.max(syncsView.syncs.length - (syncsView.active ? 1 : 0), 0);
+    hint.textContent = t('manager.switchPw.resetWarning', { count: dormant });
+  }
+  const panel = $('m-lock-panel') as HTMLElement;
+  const go = $('m-btn-lock-go') as HTMLButtonElement;
+  panel.hidden = false;
+  panel.classList.toggle('danger', action === 'remove' || action === 'reset');
+  go.textContent = lockActionLabel(action);
+  go.className = action === 'remove' || action === 'reset' ? 'danger' : 'primary';
+  refreshSwitchLockUi();
+  input(needsCurrent ? 'm-link-lock-current-pw' : 'm-link-lock-new').focus();
+}
+
+function closeLockPanel(): void {
+  lockAction = undefined;
+  clearSwitchLockFields();
+  ($('m-lock-panel') as HTMLElement).hidden = true;
+  ($('switch-pw-error') as HTMLElement).hidden = true;
+  refreshSwitchLockUi();
 }
 
 function switchLockFields(): { current: string; next: string; confirm: string } {
@@ -2035,112 +2091,79 @@ function initSyncsSection(): void {
   input('m-syncs-activate-pw').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') void activatePending();
   });
-  ($('m-btn-link-lock-set') as HTMLButtonElement).addEventListener('click', () => void setSwitchPassword());
-  ($('m-btn-link-lock-change') as HTMLButtonElement).addEventListener('click', () => void changeSwitchPassword());
-  ($('m-btn-link-lock-remove') as HTMLButtonElement).addEventListener('click', () => void removeSwitchPasswordFlow());
-  ($('m-btn-link-lock-reset') as HTMLButtonElement).addEventListener('click', () => {
-    clearMessages();
-    ($('m-link-lock-reset-box') as HTMLElement).hidden = false;
-  });
-  ($('m-btn-link-lock-reset-cancel') as HTMLButtonElement).addEventListener('click', () => {
-    ($('m-link-lock-reset-box') as HTMLElement).hidden = true;
-  });
-  ($('m-btn-link-lock-reset-go') as HTMLButtonElement).addEventListener('click', () => void resetSwitchPassword());
+  ($('m-btn-link-lock-set') as HTMLButtonElement).addEventListener('click', () => openLockPanel('set'));
+  ($('m-btn-link-lock-change') as HTMLButtonElement).addEventListener('click', () => openLockPanel('change'));
+  ($('m-btn-link-lock-remove') as HTMLButtonElement).addEventListener('click', () => openLockPanel('remove'));
+  ($('m-btn-link-lock-reset') as HTMLButtonElement).addEventListener('click', () => openLockPanel('reset'));
+  ($('m-btn-lock-go') as HTMLButtonElement).addEventListener('click', () => void submitLockPanel());
+  ($('m-btn-lock-cancel') as HTMLButtonElement).addEventListener('click', () => closeLockPanel());
+  for (const id of ['m-link-lock-current-pw', 'm-link-lock-new', 'm-link-lock-confirm']) {
+    input(id).addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') void submitLockPanel();
+    });
+  }
 }
 
-async function setSwitchPassword(): Promise<void> {
+/** One submit for the open panel: each action asks only for its own proof.
+ *  Set and change wrap the vault; remove demotes the rows with the current
+ *  password; reset mints a new vault and forgets the dormant rows. */
+async function submitLockPanel(): Promise<void> {
+  const action = lockAction;
+  if (!action) return;
   clearMessages();
   ($('switch-pw-result') as HTMLElement).hidden = true;
   const fields = switchLockFields();
-  const invalid = validateSwitchLockFields(fields);
-  if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-link-lock-set', t('busy.changing'), async () => {
+  if (action === 'change' || action === 'remove') {
+    if (!fields.current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
+  }
+  if (action !== 'remove') {
+    const invalid = validateSwitchLockFields(fields);
+    if (invalid) return showError('switch-pw-error', invalid);
+  }
+  await withBusy('m-btn-lock-go', t('busy.changing'), async () => {
     try {
-      await send({ command: MessageCommand.SetSwitchPassword, password: fields.next, confirm: fields.confirm });
-      clearSwitchLockFields();
-      showResult('switch-pw-result', t('manager.switchPw.setDone'));
-      await refreshSyncs();
-      await refreshStatus();
-    } catch (err) {
-      showError('switch-pw-error', (err as Error).message);
-    }
-  });
-}
-
-async function changeSwitchPassword(): Promise<void> {
-  clearMessages();
-  ($('switch-pw-result') as HTMLElement).hidden = true;
-  const fields = switchLockFields();
-  if (!fields.current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
-  const invalid = validateSwitchLockFields(fields);
-  if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-link-lock-change', t('busy.changing'), async () => {
-    try {
-      await send({
-        command: MessageCommand.ChangeSwitchPassword,
-        current: fields.current,
-        next: fields.next,
-        confirm: fields.confirm,
-      });
-      clearSwitchLockFields();
-      showResult('switch-pw-result', t('manager.switchPw.changeDone'));
-      await refreshSyncs();
-    } catch (err) {
-      // Wrong current password: keep nothing but the message.
-      input('m-link-lock-current-pw').value = '';
-      showError('switch-pw-error', (err as Error).message);
-    }
-  });
-}
-
-/** Remove: confirm the current password, unwrap every row to clear storage,
- *  delete the lock. The doors open, the rows stay. */
-async function removeSwitchPasswordFlow(): Promise<void> {
-  clearMessages();
-  ($('switch-pw-result') as HTMLElement).hidden = true;
-  const current = input('m-link-lock-current-pw').value;
-  if (!current) return showError('switch-pw-error', t('core.switchPasswordRequired'));
-  const ok = await confirmInline('m-btn-link-lock-remove', {
-    message: t('manager.switchPw.removeMessage'),
-    implication: t('manager.switchPw.removeImplication'),
-    confirmLabel: t('manager.switchPw.removeBtn'),
-    danger: true,
-  });
-  if (!ok) return;
-  await withBusy('m-btn-link-lock-remove', t('busy.changing'), async () => {
-    try {
-      const res = await send<{ rows: number }>({
-        command: MessageCommand.RemoveSwitchPassword,
-        current,
-      });
-      clearSwitchLockFields();
-      showResult('switch-pw-result', t('manager.switchPw.removeDone', { count: res.rows }));
-      await refreshSyncs();
-    } catch (err) {
-      input('m-link-lock-current-pw').value = '';
-      showError('switch-pw-error', (err as Error).message);
-    }
-  });
-}
-
-async function resetSwitchPassword(): Promise<void> {
-  clearMessages();
-  ($('switch-pw-result') as HTMLElement).hidden = true;
-  const fields = switchLockFields();
-  const invalid = validateSwitchLockFields(fields);
-  if (invalid) return showError('switch-pw-error', invalid);
-  await withBusy('m-btn-link-lock-reset-go', t('busy.changing'), async () => {
-    try {
+      if (action === 'set') {
+        await send({ command: MessageCommand.SetSwitchPassword, password: fields.next, confirm: fields.confirm });
+        closeLockPanel();
+        showResult('switch-pw-result', t('manager.switchPw.setDone'));
+        await refreshSyncs();
+        await refreshStatus();
+        return;
+      }
+      if (action === 'change') {
+        await send({
+          command: MessageCommand.ChangeSwitchPassword,
+          current: fields.current,
+          next: fields.next,
+          confirm: fields.confirm,
+        });
+        closeLockPanel();
+        showResult('switch-pw-result', t('manager.switchPw.changeDone'));
+        await refreshSyncs();
+        return;
+      }
+      if (action === 'remove') {
+        const res = await send<{ rows: number }>({
+          command: MessageCommand.RemoveSwitchPassword,
+          current: fields.current,
+        });
+        closeLockPanel();
+        showResult('switch-pw-result', t('manager.switchPw.removeDone', { count: res.rows }));
+        await refreshSyncs();
+        await refreshStatus();
+        return;
+      }
       const res = await send<{ removed: number; kept: number }>({
         command: MessageCommand.ResetSwitchPassword,
         next: fields.next,
         confirm: fields.confirm,
       });
-      clearSwitchLockFields();
-      ($('m-link-lock-reset-box') as HTMLElement).hidden = true;
+      closeLockPanel();
       showResult('switch-pw-result', t('manager.switchPw.resetDone', { count: res.removed }));
       await refreshSyncs();
     } catch (err) {
+      // A wrong proof must not stay in the field.
+      if (action === 'change' || action === 'remove') input('m-link-lock-current-pw').value = '';
       showError('switch-pw-error', (err as Error).message);
     }
   });

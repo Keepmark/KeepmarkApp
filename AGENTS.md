@@ -116,7 +116,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   both views read-only (active tag, `Activate` on inactive rows only) and owns
   the modal activation step (sync-change password only when one is set).
   Rename/remove/add/delete live in the manager. The server-removed notice is
-  informational too (no download/dismiss), pointing at Backup in the manager.
+  informational only (the fact, no backup wording, no actions): the kept copy
+  lives in the manager's Backup section, where the user goes on their own.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a

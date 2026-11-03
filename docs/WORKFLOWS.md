@@ -78,7 +78,7 @@ Words come from `UI-TERMS.md`.
 | Activate a saved sync (popup) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → sync-change password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync-change password the dialog is a plain confirmation. |
 | Forget or unlink a saved sync (manager) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten and the server copy stays; safety backups only that key could open are deleted with it. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
 | Delete sync from server (service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
-| Removed sync | shown while unlinked after the service no longer has the sync | Popup: informational notice + `Manage backups`; Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). It is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
+| Removed sync | shown while unlinked after the service no longer has the sync | Popup: informational notice only (no actions, no backup wording); Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). The popup states the fact and stops there: the kept copy and its actions belong to Backup, where the user goes on their own. That copy is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
 
 ## Step and button visibility
 
@@ -134,6 +134,12 @@ Words come from `UI-TERMS.md`.
   password, activation, a new link and any change that demotes the active key ask
   for it. Without one, an inactive row is a plain confirmation and the rows are
   stored in clear in this browser (same exposure as the active key).
+- The section shows only the state (`Set` / `Not set`) and the actions; one
+  action at a time opens a single panel with just the fields that action needs:
+  `Set…` (new + repeat), `Change…` (current + new + repeat), `Remove…` (current
+  alone, with the consequence as the confirmation) and `Forgot it? Reset…` (new
+  + repeat, below the actions, since it is the last resort). Cancel closes the
+  panel and clears its fields; a wrong current password is never kept.
 - Reset (forgotten password) mints a new vault and deletes every row but the
   active one; the active sync keeps working and is wrapped under the new
   password. Server copies and the undo slot are untouched; the encrypted safety

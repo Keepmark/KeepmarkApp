@@ -213,29 +213,36 @@
             <span id="m-link-state" class="tag"></span></h3>
           <p class="hint" data-i18n="manager.switchPw.hint">Optional: require a short password (a PIN is fine) to activate or add syncs. Without
             it the switch is one click and the saved keys are stored unencrypted in this browser.</p>
-          <div id="m-link-lock-current" hidden>
-            <label><span data-i18n="manager.switchPw.current">Current sync-change password</span>
-              <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
-          </div>
-          <label><span id="m-link-lock-new-label" data-i18n="manager.switchPw.new">New sync-change password</span>
-            <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
-          <label><span id="m-link-lock-confirm-label" data-i18n="manager.switchPw.confirm">Repeat sync-change password</span>
-            <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
-          <div class="row">
+          <!-- One action at a time: the buttons below open a panel that asks
+               only what that action needs (remove asks the current password). -->
+          <div class="row" id="m-lock-actions">
             <button id="m-btn-link-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set sync-change password</button>
             <button id="m-btn-link-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change sync-change password</button>
             <button id="m-btn-link-lock-remove" class="danger" hidden data-i18n="manager.switchPw.removeBtn">Remove sync-change password…</button>
-            <button id="m-btn-link-lock-reset" hidden data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
           </div>
-          <div id="m-link-lock-reset-box" class="confirm danger" hidden>
-            <p><strong data-i18n="manager.switchPw.resetTitle">Reset the sync-change password</strong></p>
-            <p id="m-link-lock-reset-warning" class="hint"></p>
-            <div class="row">
-              <button id="m-btn-link-lock-reset-go" class="danger" data-i18n="manager.switchPw.resetGo">Reset and remove dormant syncs</button>
-              <button id="m-btn-link-lock-reset-cancel" data-i18n="common.cancel">Cancel</button>
+          <div id="m-lock-panel" class="confirm" hidden>
+            <div id="m-lock-current-row">
+              <label><span data-i18n="manager.switchPw.current">Current sync-change password</span>
+                <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
             </div>
+            <div id="m-lock-new-row">
+              <label><span data-i18n="manager.switchPw.new">New sync-change password</span>
+                <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
+            </div>
+            <div id="m-lock-confirm-row">
+              <label><span data-i18n="manager.switchPw.confirm">Repeat sync-change password</span>
+                <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
+            </div>
+            <p id="m-lock-panel-hint" class="hint" hidden></p>
+            <div class="row">
+              <button id="m-btn-lock-go" class="primary"></button>
+              <button id="m-btn-lock-cancel" data-i18n="common.cancel">Cancel</button>
+            </div>
+            <div id="switch-pw-error" class="error" role="alert" hidden></div>
           </div>
-          <div id="switch-pw-error" class="error" role="alert" hidden></div>
+          <div id="m-lock-forgot" class="row" hidden>
+            <button id="m-btn-link-lock-reset" class="mini" data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
+          </div>
           <div id="switch-pw-result" class="result" role="status" hidden></div>
         </div>
 

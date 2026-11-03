@@ -5,7 +5,6 @@
 import browser from 'webextension-polyfill';
 import { ServicePicker } from './service-picker.js';
 import { formatDate, formatTime, t } from '../shared/i18n.js';
-import type { BookmarkNode } from '../shared/models.js';
 import {
   $,
   copyText,
@@ -24,7 +23,6 @@ import {
   MessageCommand,
   type MergePreview,
   type PingResponse,
-  type RemovedSyncSnapshot,
   type SavedSyncsResponse,
   type StatusResponse,
   type UndoState,
@@ -40,7 +38,6 @@ import {
 import {
   type Direction,
   directionConfirm,
-  removedSyncText,
   undoConfirm,
   undoneText,
 } from './texts.js';
@@ -121,7 +118,7 @@ async function refreshAll(pickView = false): Promise<void> {
   conflictAction.hidden = !status?.conflict;
   await refreshSavedSyncs();
   await refreshUndoBanner();
-  await refreshRemovedCard();
+  refreshRemovedCard();
   // Nothing has focus in a freshly opened popup: a remembered service hides
   // the URL input, so typing a name would silently go to the page body and
   // the suggested default would be saved. Focus the first visible field with
@@ -158,37 +155,11 @@ function updateConnectName(): void {
   input('sync-name').value = url ? suggestSavedSyncName(url, savedNames) : '';
 }
 
-/** Folders + bookmarks in a tree; callers skip the root containers. Kept
- * local: backup.js would pull crypto into the popup bundle. */
-function countItems(nodes: BookmarkNode[]): number {
-  return nodes.reduce((n, node) => n + 1 + countItems(node.children ?? []), 0);
-}
-
-/** Server-removed sync: announce it and point at the manager, which owns the
- *  kept plaintext copy (download/dismiss are backup actions). */
-async function refreshRemovedCard(): Promise<void> {
-  const card = $('p-removed') as HTMLElement;
-  let removed: RemovedSyncSnapshot | null = null;
-  if (status?.removedSync && !status.syncEnabled) {
-    try {
-      removed = await send<RemovedSyncSnapshot | null>({ command: MessageCommand.GetRemovedSync });
-    } catch {
-      removed = null;
-    }
-  }
-  if (!removed) {
-    card.hidden = true;
-    return;
-  }
-  $('p-removed-text').textContent = removedSyncText(
-    removed.bookmarks.reduce((n, root) => n + countItems(root.children ?? []), 0),
-    removed.lastUpdated,
-  );
-  card.hidden = false;
-}
-
-function initRemovedCard(): void {
-  $('btn-removed-open-backup').addEventListener('click', () => openManager('backup'));
+/** Server-removed sync: the popup only states the fact. The kept copy and its
+ *  actions belong to the manager's Backup section, so nothing about backups is
+ *  announced here. */
+function refreshRemovedCard(): void {
+  ($('p-removed') as HTMLElement).hidden = !(status?.removedSync && !status.syncEnabled);
 }
 
 /** Kind of the undo slot the banner shows (its confirm names it). */
@@ -440,7 +411,6 @@ async function init(): Promise<void> {
   }
   await initConnect();
   initMain();
-  initRemovedCard();
   const onSavedChanged = async (_kind: SavedSyncsChange): Promise<void> => {
     showView('main');
     await refreshAll();
