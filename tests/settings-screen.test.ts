@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Settings holds preferences only: service, API version, sync ID and the saved
-// syncs are reported by Status and Sync. The bookmarks-toolbar switch explains
-// what it does, and changing the sync password is a modal task whose warning
+// syncs are reported by Status and Sync. Every container is always synced (no
+// toolbar switch), and changing the sync password is a modal task whose warning
 // states the consequence above the fields.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -43,27 +43,19 @@ describe('settings screen', () => {
 
   it('groups the remaining preferences instead of one flat column', () => {
     const groups = settings.querySelectorAll('.settings-group');
-    expect(groups.length).toBe(2);
-    // The first card is named after what it holds, not after another section.
-    expect(groups[0]?.querySelector('h3[data-i18n="manager.settings.toolbarGroup"]')).not.toBeNull();
-    expect(groups[1]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
-    // Language stays the plain top field, before the cards.
+    expect(groups.length).toBe(1);
+    expect(groups[0]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
+    // Language stays the plain top field, before the card.
     expect(settings.querySelector('#m-opt-language')).not.toBeNull();
     expect(settings.querySelector('.settings-group #m-opt-language')).toBeNull();
   });
 
-  it('explains the bookmarks-toolbar switch instead of naming it alone', () => {
-    const check = settings.querySelector('.check');
-    const box = check?.querySelector('input#m-opt-toolbar') as HTMLInputElement | null;
-    const label = check?.querySelector('b[data-i18n="manager.settings.toolbar"]');
-    const hint = check?.querySelector('small[data-i18n="manager.settings.toolbarHint"]');
-    expect(box?.type).toBe('checkbox');
-    expect(label?.textContent).toMatch(/include the bookmarks toolbar/i);
-    // The hint says what happens on both sides and when it applies.
-    expect(hint?.textContent).toMatch(/uploaded/i);
-    expect(hint?.textContent).toMatch(/stays local/i);
-    expect(hint?.textContent).toMatch(/next sync/i);
-    expect(en['manager.settings.toolbarHint']).toContain('nothing there is uploaded');
+  it('offers no toolbar switch: every container is always synced', () => {
+    expect(settings.querySelector('#m-opt-toolbar')).toBeNull();
+    expect(settings.querySelector('[data-i18n="manager.settings.toolbar"]')).toBeNull();
+    expect(doc.getElementById('m-activate-toolbar-note')).toBeNull();
+    expect(doc.getElementById('p-saved-toolbar-note')).toBeNull();
+    expect('manager.settings.toolbarHint' in en).toBe(false);
   });
 
   it('changes the password in a modal task opened from the active sync', () => {

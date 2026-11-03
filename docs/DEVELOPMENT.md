@@ -131,15 +131,28 @@ saved syncs is not destructive** — the copy this device leaves is already on
 its own server and activating that sync again brings it back — so it takes no
 snapshot and arms no undo; the manager shows no "last action / undo" banner.
 **A sync is not destructive either, until it is massive**: a pull or a push
-that would add or remove more than `MaxSilentSyncChanges` (5) nodes is not an
-ordinary edit, so it snapshots the side it replaces first — `sync-pull` for the
-copy in this browser (right before the natives are replaced,
+that would add, remove or move more than `MaxSilentSyncChanges` (10) nodes is
+not an ordinary edit, so it snapshots the side it replaces first — `sync-pull`
+for the copy in this browser (right before the natives are replaced,
 `PullMeta.beforeReplace`), `sync-push` for the server copy (compared against
 the last synced tree, fetched just for the snapshot). `changedNodeCount` in
-`src/shared/tree-diff.ts` measures it: bookmarks by normalized URL, folders by
-path below the three roots. Snapshot write failure aborts the operation (fail
-closed); single bookmark add/remove is exempt (mirrors the Android
-single-delete exception).
+`src/shared/tree-diff.ts` measures it: bookmarks by normalized URL and folders
+by path below the three roots, counted per parent, so a move is a removal plus
+an addition and moving a folder with more than five bookmarks is massive too.
+Snapshot write failure aborts the operation (fail closed); single bookmark
+add/remove is exempt (mirrors the Android single-delete exception).
+
+Every container (Menu, Other, Toolbar) is always synced. The old "Include the
+bookmarks toolbar in the sync" switch is gone: with it off, a switch never
+wrote the target sync's toolbar (so the browser kept the previous one) and the
+next push replaced the server's toolbar with that stale copy. Installs that
+still carry the legacy key are migrated once at startup
+(`adoptToolbarOnUpgrade`): the local toolbar is snapshotted fail-closed
+(`toolbar-adopt`), replaced with the active sync's toolbar, then the key is
+dropped. The native replace itself is atomic for the link state: the link is
+saved only after the natives were rewritten, and a failed replace puts the
+previous bookmarks back (best effort) so the app never claims a switch that the
+browser did not perform.
 
 - Stored in `storage.local`: `SafetyIndex` manifest rows
   (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated

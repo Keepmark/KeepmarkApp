@@ -181,7 +181,6 @@ export interface CoreOptions {
 
 interface Creds {
   info: SyncInfo;
-  syncToolbar: boolean;
 }
 
 /** Persisted conflict (StoreKey.ConflictState). The local tree is encrypted
@@ -346,11 +345,6 @@ export class BackgroundCore {
         return { cleared: true };
       case MessageCommand.ChangePassword:
         return this.withCredentialChange(() => this.changePassword(msg.currentPassword, msg.newPassword));
-      case MessageCommand.GetToolbarSync:
-        return { enabled: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true };
-      case MessageCommand.SetToolbarSync:
-        await this.store.set(StoreKey.SyncBookmarksToolbar, msg.enabled);
-        return { enabled: msg.enabled };
       case MessageCommand.GetUiLanguage:
         return { language: (await this.store.get<LangSetting>(StoreKey.UiLanguage)) ?? 'system' };
       case MessageCommand.SetUiLanguage: {
@@ -456,18 +450,18 @@ export class BackgroundCore {
   }
 
   private async doLocalJob(): Promise<void> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     // A pending conflict waits for the user: never pull over it.
     if (await this.hasConflict()) {
       this.log.log(XbsLogLevel.Info, 'sync', 'Pull skipped: conflict pending user resolution');
       return;
     }
-    if (await this.captureIfRootsMoved(info, syncToolbar)) throw new ConflictCapturedException();
+    if (await this.captureIfRootsMoved(info)) throw new ConflictCapturedException();
     // Native edits that never reached the server (offline push, then the
     // in-memory queue died with an MV3 worker sleep / browser restart) would
     // be wiped by clearAndPopulate. Surface them as a conflict instead.
     if (await this.store.get<string>(StoreKey.Bookmarks)) {
-      const pending = await this.reconcileNatives(info, syncToolbar);
+      const pending = await this.reconcileNatives(info);
       const local = ensureContainersExist(pending.next);
       // Only REAL unpushed content counts: a reconcile that flags a change
       // but yields the cached content (id/mapping noise) is not an edit, and
@@ -496,7 +490,7 @@ export class BackgroundCore {
           this.log.log(XbsLogLevel.Info, 'sync', 'Pull: unchanged (304)');
           return;
         }
-        const deps = this.depsFor(api, syncToolbar);
+        const deps = this.depsFor(api);
         const pulled = await this.withSuspended(() =>
           pullWithDerivedKey(deps, {
             syncId: info.id!,
@@ -506,7 +500,7 @@ export class BackgroundCore {
             remoteVersion: full.version ?? undefined,
             meta: full.meta,
             supportsV12: true,
-            beforeReplace: (remote, natives) => this.guardMassivePull(info, syncToolbar, remote, natives),
+            beforeReplace: (remote, natives) => this.guardMassivePull(info, remote, natives),
           }, info.serviceUrl),
         );
         if (pulled.updateRemote) {
@@ -524,7 +518,7 @@ export class BackgroundCore {
       }
     }
     const res = await api.getBookmarks(info.id!);
-    const deps = this.depsFor(api, syncToolbar);
+    const deps = this.depsFor(api);
     const pulled = await this.withSuspended(() =>
       pullWithDerivedKey(deps, {
         syncId: info.id!,
@@ -534,7 +528,7 @@ export class BackgroundCore {
         remoteVersion: res.version ?? undefined,
         meta: res.meta,
         supportsV12: false,
-        beforeReplace: (remote, natives) => this.guardMassivePull(info, syncToolbar, remote, natives),
+        beforeReplace: (remote, natives) => this.guardMassivePull(info, remote, natives),
       }, info.serviceUrl),
     );
     if (pulled.updateRemote) {
@@ -602,15 +596,15 @@ export class BackgroundCore {
   /** Reconcile native -> synced and push when anything changed. `adopted` = the
    *  server already held our content (nothing to push, nothing to lose). */
   async pushAfterNativeChange(): Promise<{ pushed: boolean; conflict?: boolean; adopted?: boolean }> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     if (this.suspended > 0) {
       // Lost otherwise: the debounce alarm is one-shot and already consumed.
       // Remember it and re-schedule when the suspend window closes.
       this.dirtyDuringSuspend = true;
       return { pushed: false };
     }
-    if (await this.captureIfRootsMoved(info, syncToolbar)) return { pushed: false, conflict: true };
-    const { next: reconciled, mappings, changed } = await this.reconcileNatives(info, syncToolbar);
+    if (await this.captureIfRootsMoved(info)) return { pushed: false, conflict: true };
+    const { next: reconciled, mappings, changed } = await this.reconcileNatives(info);
     if (await this.hasConflict()) {
       // Conflict pending: keep the stored local side current (the user's
       // latest edits are what "Upload local" / "Merge" will use), no push.
@@ -639,7 +633,7 @@ export class BackgroundCore {
         // that is not a conflict. Otherwise persist it for the user.
         const fresh = await this.fetchRemote(api, info).catch(() => undefined);
         if (fresh && sameContent(next, ensureContainersExist(fresh.tree))) {
-          await this.adoptRemote(api, info, syncToolbar, fresh.res);
+          await this.adoptRemote(api, info, fresh.res);
           return { pushed: false, adopted: true };
         }
         await this.captureConflict(info, next, fresh?.res.lastUpdated ?? '');
@@ -658,13 +652,10 @@ export class BackgroundCore {
    */
   private async guardMassivePull(
     info: SyncInfo,
-    syncToolbar: boolean,
     remote: BookmarkNode[],
     natives: BookmarkNode[],
   ): Promise<void> {
-    const scoped = (tree: BookmarkNode[]): BookmarkNode[] =>
-      syncToolbar ? tree : tree.filter((node) => node.title !== BookmarkContainer.Toolbar);
-    const magnitude = changedNodeCount(scoped(natives), scoped(remote));
+    const magnitude = changedNodeCount(natives, remote);
     if (magnitude <= MaxSilentSyncChanges) return;
     await writeSafety(this.store, {
       operation: 'sync-pull',
@@ -721,7 +712,7 @@ export class BackgroundCore {
    * picks pull/push/merge, each of which rebuilds the mappings). Links made
    * before the key existed adopt the current roots once.
    */
-  private async captureIfRootsMoved(info: SyncInfo, syncToolbar: boolean): Promise<boolean> {
+  private async captureIfRootsMoved(info: SyncInfo): Promise<boolean> {
     const current = await this.adapter.rootKey();
     const recorded = await this.store.get<string>(StoreKey.NativeRootKey);
     if (recorded === undefined) {
@@ -731,7 +722,7 @@ export class BackgroundCore {
     if (recorded === current) return false;
     this.log.log(XbsLogLevel.Warning, 'sync', `Native bookmark roots changed (${recorded} -> ${current}): conflict captured`);
     const pending = await this.hasConflict();
-    const local = ensureContainersExist(await this.adapter.readAll(syncToolbar));
+    const local = ensureContainersExist(await this.adapter.readAll());
     if (pending) {
       await this.captureConflict(info, local, undefined, false, 'roots');
     } else {
@@ -745,15 +736,11 @@ export class BackgroundCore {
   /** Pure native -> synced pass over the cached tree (nothing persisted). */
   private async reconcileNatives(
     info: SyncInfo,
-    syncToolbar: boolean,
   ): Promise<{ next: BookmarkNode[]; mappings: Awaited<ReturnType<BookmarkIdMapper['all']>>; changed: boolean }> {
     let next = await this.cachedTree(info);
     let mappings = await this.idMapper.all();
     let changed = false;
-    const containers = this.adapter.syncContainers.filter(
-      (c) => syncToolbar || c !== BookmarkContainer.Toolbar,
-    );
-    for (const container of containers) {
+    for (const container of this.adapter.syncContainers) {
       const natives = await this.adapter.readContainer(container);
       const r = reconcileContainer(
         natives,
@@ -874,11 +861,10 @@ export class BackgroundCore {
   private async adoptRemote(
     api: XSyncApiClient,
     info: SyncInfo,
-    syncToolbar: boolean,
     res: import('../shared/api.js').GetBookmarksResponse,
   ): Promise<void> {
     await this.withSuspended(() =>
-      pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+      pullWithDerivedKey(this.depsFor(api), {
         syncId: info.id!,
         derivedKey: info.password!,
         blob: res.bookmarks ?? '',
@@ -895,13 +881,13 @@ export class BackgroundCore {
    * other device merged us in meanwhile) has nothing to resolve: adopt the
    * remote and clear it. Returns true when it was dropped.
    */
-  private async dropPhantomConflict(info: SyncInfo, syncToolbar: boolean): Promise<boolean> {
+  private async dropPhantomConflict(info: SyncInfo): Promise<boolean> {
     const conflict = await this.loadConflict(info);
     if (!conflict) return false;
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const { res, tree } = await this.fetchRemote(api, info);
     if (!sameContent(ensureContainersExist(conflict.localTree), ensureContainersExist(tree))) return false;
-    await this.adoptRemote(api, info, syncToolbar, res);
+    await this.adoptRemote(api, info, res);
     await this.store.remove(StoreKey.ConflictState);
     this.log.log(XbsLogLevel.Info, 'sync', 'Conflict cleared: both sides already hold the same bookmarks');
     return true;
@@ -931,9 +917,9 @@ export class BackgroundCore {
   private async doRestoreJob(bookmarks?: BookmarkNode[]): Promise<void> {
     if (!bookmarks) throw new UnexpectedResponseException(t('core.nothingToRestore'));
     const tree = bookmarks;
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     // Restore overwrites natives: snapshot first like every mutating flow.
-    const natives = await this.adapter.readAll(syncToolbar);
+    const natives = await this.adapter.readAll();
     // Fail-closed safety net alongside the undo slot.
     await writeSafety(this.store, {
       operation: 'restore',
@@ -954,7 +940,7 @@ export class BackgroundCore {
       remotePreBlob: currentBlob,
     });
     await this.withSuspended(async () => {
-      const mappings = await overwriteAll(this.adapter, tree, syncToolbar);
+      const mappings = await overwriteAll(this.adapter, tree);
       await this.idMapper.set(mappings);
     });
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
@@ -984,8 +970,7 @@ export class BackgroundCore {
     if (!info?.id) return;
     if (await this.hasConflict()) {
       // Phantom conflicts clear themselves; real ones wait for the user.
-      const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
-      if (!(await this.dropPhantomConflict(info, syncToolbar).catch(() => false))) return;
+      if (!(await this.dropPhantomConflict(info).catch(() => false))) return;
     }
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     const remote = await api.getLastUpdated(info.id);
@@ -1022,10 +1007,9 @@ export class BackgroundCore {
       const api = this.makeApi(serviceUrl);
       const svc = await checkService(api, this.log);
       const v12 = await this.isV12(serviceUrl);
-      const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       const prev = await this.capturePrev();
       const created = await this.withSuspended(() =>
-        createNewSync(this.depsFor(api, syncToolbar), password, serviceUrl, v12),
+        createNewSync(this.depsFor(api), password, serviceUrl, v12),
       );
       const id = created.id;
       const linked = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
@@ -1079,11 +1063,10 @@ export class BackgroundCore {
       const api = this.makeApi(serviceUrl);
       const svc = await checkService(api, this.log);
       const v12 = await this.isV12(serviceUrl);
-      const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
       if (direction === 'push') {
-        await this.connectPushExisting(api, serviceUrl, syncId, password, syncToolbar, v12);
+        await this.connectPushExisting(api, serviceUrl, syncId, password, v12);
       } else if (direction === 'merge') {
-        await this.connectMergeExisting(api, serviceUrl, syncId, password, syncToolbar, v12);
+        await this.connectMergeExisting(api, serviceUrl, syncId, password, v12);
       } else {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
@@ -1094,7 +1077,7 @@ export class BackgroundCore {
           throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
         }
         const derived = options.derivedKey ?? (await deriveKey(password, syncId, remoteVersion));
-        const natives = await this.adapter.readAll(syncToolbar);
+        const natives = await this.adapter.readAll();
         // v1.2 links read the extended shape so meta flows; a 412 falls back
         // to the legacy shape instead of failing the link.
         let res: import('../shared/api.js').GetBookmarksResponse;
@@ -1130,7 +1113,7 @@ export class BackgroundCore {
           derivedKey: derived,
         });
         const pulled = await this.withSuspended(() =>
-          pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+          pullWithDerivedKey(this.depsFor(api), {
             syncId,
             derivedKey: derived,
             blob: res.bookmarks ?? '',
@@ -1168,7 +1151,6 @@ export class BackgroundCore {
     serviceUrl: string,
     syncId: string,
     password: string,
-    syncToolbar: boolean,
     v12: boolean,
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
@@ -1211,7 +1193,7 @@ export class BackgroundCore {
     // failed PUT must not clobber the previous undo.
     const prev = await this.capturePrev();
     const localTree = await this.withSuspended(async () => {
-      const natives = await this.adapter.readAll(syncToolbar);
+      const natives = await this.adapter.readAll();
       const withIds = ensureContainersExist(natives);
       return withIds;
     });
@@ -1239,7 +1221,7 @@ export class BackgroundCore {
       localCount: countNodes(remoteTree),
     });
     await this.withSuspended(async () => {
-      const mappings = await this.adapter.rebuildMappings(localTree, syncToolbar);
+      const mappings = await this.adapter.rebuildMappings(localTree);
       await this.idMapper.set(mappings);
     });
     await this.store.set(StoreKey.SyncInfo, {
@@ -1281,8 +1263,7 @@ export class BackgroundCore {
     } catch (err) {
       throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
     }
-    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
-    const natives = await this.adapter.readAll(syncToolbar);
+    const natives = await this.adapter.readAll();
     return mergeTrees(natives, remoteTree).stats;
   }
 
@@ -1298,7 +1279,6 @@ export class BackgroundCore {
     serviceUrl: string,
     syncId: string,
     password: string,
-    syncToolbar: boolean,
     v12: boolean,
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
@@ -1331,7 +1311,7 @@ export class BackgroundCore {
     } catch (err) {
       throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
     }
-    const natives = await this.adapter.readAll(syncToolbar);
+    const natives = await this.adapter.readAll();
     const { tree: merged } = mergeTrees(natives, remoteTree);
     if (!validateBookmarkIds(merged)) {
       // Defensive only: merge assigns fresh ids above the remote max, so a
@@ -1364,10 +1344,6 @@ export class BackgroundCore {
       localCount: countNodes(natives),
       remotePreBlob: res.bookmarks ?? '',
     });
-    await this.withSuspended(async () => {
-      const mappings = await overwriteAll(this.adapter, union, syncToolbar);
-      await this.idMapper.set(mappings);
-    });
     const encrypted = await encryptData(JSON.stringify(union), derived);
     let updated: import('../shared/api.js').UpdateBookmarksResponse;
     // Base = the remote just read; a stored revision belongs to the PREVIOUS link.
@@ -1384,6 +1360,12 @@ export class BackgroundCore {
     } else {
       updated = await api.updateBookmarks(syncId, encrypted, res.lastUpdated!, false);
     }
+    // Natives only after the server accepted the union: a failed PUT leaves
+    // the browser untouched (nothing is lost, the next sync pulls the union).
+    await this.withSuspended(async () => {
+      const mappings = await overwriteAll(this.adapter, union);
+      await this.idMapper.set(mappings);
+    });
     await this.store.set(StoreKey.SyncInfo, {
       id: syncId,
       password: derived,
@@ -1646,7 +1628,7 @@ export class BackgroundCore {
   }
 
   private async importBackup(json: string, password: string): Promise<{ count: number; safety: string }> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     const imported = await importBackup(json, password);
     // Backups predate validation: duplicate/non-integer ids would ride the
     // positional mappings straight onto the server. Repair before populating.
@@ -1654,7 +1636,7 @@ export class BackgroundCore {
       validateBookmarkIds(imported) ? imported : repairBookmarkIds(imported),
     );
     const count = countNodes(tree);
-    const natives = await this.adapter.readAll(syncToolbar);
+    const natives = await this.adapter.readAll();
     // Fail-closed: the import destroys the local tree. Abort when the
     // snapshot cannot be written.
     const safety = await writeSafety(this.store, {
@@ -1676,7 +1658,7 @@ export class BackgroundCore {
       remotePreBlob: currentBlob,
     });
     await this.withSuspended(async () => {
-      const mappings = await overwriteAll(this.adapter, tree, syncToolbar);
+      const mappings = await overwriteAll(this.adapter, tree);
       await this.idMapper.set(mappings);
     });
     this.queue.enqueue('remote', false);
@@ -1711,11 +1693,10 @@ export class BackgroundCore {
       throw new IncompleteSyncInfoException(t('core.linkBackupSync'));
     }
     const tree = await readSafetyTree(this.store, entry, info?.password);
-    const toolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
     // Snapshot the state being replaced, fail-closed.
     let preFile = '';
     if (entry.side === 'local') {
-      const natives = await this.adapter.readAll(toolbar);
+      const natives = await this.adapter.readAll();
       preFile = (
         await writeSafety(this.store, {
           operation: 'pre-restore',
@@ -1726,7 +1707,7 @@ export class BackgroundCore {
         })
       ).fileName;
       await this.withSuspended(async () => {
-        const mappings = await overwriteAll(this.adapter, tree, toolbar);
+        const mappings = await overwriteAll(this.adapter, tree);
         await this.idMapper.set(mappings);
       });
       if (info?.id && info.password) {
@@ -1750,7 +1731,7 @@ export class BackgroundCore {
       const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
       await this.pushCurrent(api, info, tree);
       await this.withSuspended(async () => {
-        const mappings = await overwriteAll(this.adapter, tree, toolbar);
+        const mappings = await overwriteAll(this.adapter, tree);
         await this.idMapper.set(mappings);
       });
     }
@@ -1762,11 +1743,11 @@ export class BackgroundCore {
    * overwrite, ONE push. The result names the safety net (R7.5).
    */
   private async removeDuplicates(ids: number[]): Promise<{ deleted: number; safety: string }> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     // Prune the CURRENT natives (reconciled over the cache), so edits that
     // are not pushed yet survive the overwrite below.
     await this.quiesce();
-    const tree = (await this.reconcileNatives(info, syncToolbar)).next;
+    const tree = (await this.reconcileNatives(info)).next;
     // Structural lock: the newest copy (max id) of each group can never be
     // selected — a crafted/buggy caller cannot wipe a group silently.
     const locked = new Set<number>();
@@ -1778,7 +1759,7 @@ export class BackgroundCore {
     const pruned = deleteByIds(tree, doomed);
     const deleted = countNodes(tree) - countNodes(pruned);
     if (deleted === 0) return { deleted: 0, safety: '' };
-    const natives = await this.adapter.readAll(syncToolbar);
+    const natives = await this.adapter.readAll();
     const safety = await writeSafety(this.store, {
       operation: 'duplicates-cleanup',
       side: 'local',
@@ -1798,7 +1779,7 @@ export class BackgroundCore {
       remotePreBlob: currentBlob,
     });
     await this.withSuspended(async () => {
-      const mappings = await overwriteAll(this.adapter, ensureContainersExist(pruned), syncToolbar);
+      const mappings = await overwriteAll(this.adapter, ensureContainersExist(pruned));
       await this.idMapper.set(mappings);
     });
     this.queue.enqueue('remote', false);
@@ -1899,7 +1880,6 @@ export class BackgroundCore {
       syncs: await this.savedSyncList(),
       active: await this.activeSavedSync(),
       switchLockSet: (await this.readSwitchLock()) !== undefined,
-      toolbarSync: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true,
     };
   }
 
@@ -2257,8 +2237,7 @@ export class BackgroundCore {
     if (!info?.id || !info.password) return;
     await this.quiesce();
     if (await this.hasConflict()) throw new UnexpectedResponseException(t('core.savedConflictPending'));
-    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
-    const pending = await this.reconcileNatives(info, syncToolbar);
+    const pending = await this.reconcileNatives(info);
     if (!pending.changed) return;
     const pushed = await this.pushAfterNativeChange();
     if (pushed.conflict) throw new UnexpectedResponseException(t('core.savedConflictPending'));
@@ -2372,7 +2351,7 @@ export class BackgroundCore {
     target: SyncTarget,
     unlockedVault?: CryptoKey,
   ): Promise<{ id: string }> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     // Relinking/creating the same row may keep its own label; another row may not.
     const label = await this.assertSavedSyncLabelAvailable(
       target.label,
@@ -2458,7 +2437,7 @@ export class BackgroundCore {
       // already on its own server and the switch is reversible by activating
       // that sync again. No safety snapshot, no undo slot.
       await this.withSuspended(() =>
-        pullWithDerivedKey(this.depsFor(newApi, syncToolbar), {
+        pullWithDerivedKey(this.depsFor(newApi), {
           syncId,
           derivedKey: derived,
           blob: remote.bookmarks ?? '',
@@ -2479,7 +2458,7 @@ export class BackgroundCore {
       } catch (err) {
         throw new UnexpectedResponseException(t('err.remoteCorruptShort'), { cause: err });
       }
-      const natives = await this.adapter.readAll(syncToolbar);
+      const natives = await this.adapter.readAll();
       const { tree: merged } = mergeTrees(natives, remoteTree);
       if (!validateBookmarkIds(merged)) {
         this.log.log(XbsLogLevel.Warning, 'sync', 'Merged tree failed id validation, repairing');
@@ -2487,10 +2466,6 @@ export class BackgroundCore {
       }
       const union = ensureContainersExist(merged);
       // A union destroys nothing: both sides keep every item.
-      await this.withSuspended(async () => {
-        const mappings = await overwriteAll(this.adapter, union, syncToolbar);
-        await this.idMapper.set(mappings);
-      });
       const encrypted = await encryptData(JSON.stringify(union), derived);
       let updated: import('../shared/api.js').UpdateBookmarksResponse;
       if (effectiveV12 && remote.meta?.revision !== undefined) {
@@ -2505,6 +2480,12 @@ export class BackgroundCore {
       } else {
         updated = await newApi.updateBookmarks(syncId, encrypted, remote.lastUpdated!, false);
       }
+      // Natives only after the server accepted the union: a failed PUT leaves
+      // the browser untouched and the switch aborts with the old link intact.
+      await this.withSuspended(async () => {
+        const mappings = await overwriteAll(this.adapter, union);
+        await this.idMapper.set(mappings);
+      });
       await this.store.set(StoreKey.LastUpdated, updated.lastUpdated);
       await this.store.set(StoreKey.Bookmarks, encrypted);
       await this.store.set(StoreKey.SyncInfo, {
@@ -2697,10 +2678,10 @@ export class BackgroundCore {
     };
   }
 
-  private async restoreNatives(tree: BookmarkNode[], syncToolbar: boolean): Promise<void> {
+  private async restoreNatives(tree: BookmarkNode[]): Promise<void> {
     await this.withSuspended(async () => {
-      await this.adapter.clearAndPopulate(tree, syncToolbar);
-      await this.idMapper.set(await this.adapter.rebuildMappings(tree, syncToolbar));
+      await this.adapter.clearAndPopulate(tree);
+      await this.idMapper.set(await this.adapter.rebuildMappings(tree));
     });
   }
 
@@ -2754,11 +2735,10 @@ export class BackgroundCore {
     const slot = await this.store.get<UndoSlotData>(StoreKey.UndoSlot);
     if (!slot) throw new UnexpectedResponseException(t('core.nothingToUndo'));
     await this.quiesce();
-    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
 
     if (slot.localEnc) {
       const tree = JSON.parse(await decryptData(slot.localEnc, slot.opDerivedKey)) as BookmarkNode[];
-      await this.restoreNatives(tree, syncToolbar);
+      await this.restoreNatives(tree);
     }
     let putBack = false;
     if (slot.remotePreBlob) {
@@ -2866,7 +2846,7 @@ export class BackgroundCore {
 
   /** Detailed merge preview for the conflict resolution UI (fresh remote). */
   private async getConflictPreview(): Promise<ConflictPreviewResponse> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     const conflict = await this.loadConflict(info);
     if (!conflict) {
       throw new UnexpectedResponseException(t('core.noConflictPreview'));
@@ -2878,7 +2858,7 @@ export class BackgroundCore {
     const diff = diffTrees(local, remote);
     if (diff.identical) {
       // Nothing to resolve: adopt the server copy and clear the conflict.
-      await this.adoptRemote(api, info, syncToolbar, res);
+      await this.adoptRemote(api, info, res);
       await this.store.remove(StoreKey.ConflictState);
       this.log.log(XbsLogLevel.Info, 'sync', 'Conflict cleared on preview: both sides identical');
     }
@@ -2904,7 +2884,7 @@ export class BackgroundCore {
    * success, so a failed attempt can simply be retried.
    */
   private async resolveConflict(direction: ConflictResolutionDirection): Promise<{ resolved: boolean }> {
-    const { info, syncToolbar } = await this.requireCreds();
+    const { info } = await this.requireCreds();
     const conflict = await this.loadConflict(info);
     if (!conflict) {
       throw new UnexpectedResponseException(t('core.noConflictResolve'));
@@ -2922,7 +2902,7 @@ export class BackgroundCore {
       const { res } = await this.fetchRemote(api, info);
       const linked = (await this.store.get<SyncInfo>(StoreKey.SyncInfo))!;
       const pulled = await this.withSuspended(() =>
-        pullWithDerivedKey(this.depsFor(api, syncToolbar), {
+        pullWithDerivedKey(this.depsFor(api), {
           syncId: info.id!,
           derivedKey: info.password!,
           blob: res.bookmarks ?? '',
@@ -2949,7 +2929,7 @@ export class BackgroundCore {
       await this.pushOnBase(api, info, tree, res);
       // Natives already hold the local side: re-anchor the id mappings on it.
       await this.withSuspended(async () => {
-        const mappings = await this.adapter.rebuildMappings(tree, syncToolbar);
+        const mappings = await this.adapter.rebuildMappings(tree);
         await this.idMapper.set(mappings);
       });
       await this.store.remove(StoreKey.ConflictState);
@@ -2983,7 +2963,7 @@ export class BackgroundCore {
           continue;
         }
         await this.withSuspended(async () => {
-          const mappings = await overwriteAll(this.adapter, merged, syncToolbar);
+          const mappings = await overwriteAll(this.adapter, merged);
           await this.idMapper.set(mappings);
         });
         break;
@@ -3246,11 +3226,16 @@ export class BackgroundCore {
     await this.loadLanguage();
     if (this.started) return;
     await this.applyVerbosity();
+    // Before any sync: a legacy install with the toolbar excluded would
+    // otherwise reconcile its stale toolbar and push it over the server copy.
+    await this.adoptToolbarOnUpgrade().catch((err) =>
+      this.log.log(XbsLogLevel.Warning, 'sync', `Toolbar adoption failed: ${(err as Error)?.message}`),
+    );
     try {
       // Write-once: every MV3 wake would otherwise contaminate the install
       // backup with already-synced natives.
       if ((await this.store.get(StoreKey.InstallBackup)) === undefined) {
-        const snapshot = await this.adapter.readAll(true);
+        const snapshot = await this.adapter.readAll();
         await this.store.set(
           StoreKey.InstallBackup,
           JSON.stringify({ bookmarks: snapshot, date: new Date().toISOString() }),
@@ -3274,17 +3259,46 @@ export class BackgroundCore {
     this.started = true;
   }
 
+  /**
+   * One-shot upgrade from the retired "Include the bookmarks toolbar in the
+   * sync" switch. With it off the browser kept a stale local toolbar: a switch
+   * never wrote the target sync's toolbar, and the next push would have
+   * replaced the server's copy with that stale toolbar. Every container is
+   * synced now, so the browser must show the active sync's toolbar. The local
+   * toolbar is snapshotted fail-closed first; a failed snapshot keeps the
+   * legacy key and retries on the next wake.
+   */
+  private async adoptToolbarOnUpgrade(): Promise<void> {
+    const legacy = await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar);
+    if (legacy === undefined) return;
+    const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+    if (legacy === false && info?.id && info.password) {
+      const tree = ensureContainersExist(await this.cachedTree(info));
+      const toolbar = tree.find((n) => n.title === BookmarkContainer.Toolbar)?.children ?? [];
+      await writeSafety(this.store, {
+        operation: 'toolbar-adopt',
+        side: 'local',
+        tree: await this.adapter.readAll(),
+        syncId: info.id,
+        derivedKey: info.password,
+      });
+      const mappings = await this.adapter.replaceContainer(BookmarkContainer.Toolbar, toolbar);
+      await this.idMapper.set(mappings);
+      this.log.log(XbsLogLevel.Info, 'sync', 'Bookmarks toolbar adopted from the active sync');
+    }
+    await this.store.remove(StoreKey.SyncBookmarksToolbar);
+  }
+
   // ---------------------------------------------------------------- helpers
 
-  private depsFor(api: XSyncApiClient, syncToolbar: boolean): SyncDeps {
-    return { api, store: this.store, native: this.adapter, idMapper: this.idMapper, log: this.log, syncToolbar };
+  private depsFor(api: XSyncApiClient): SyncDeps {
+    return { api, store: this.store, native: this.adapter, idMapper: this.idMapper, log: this.log };
   }
 
   private async requireCreds(): Promise<Creds> {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (!info?.id || !info.password) throw new IncompleteSyncInfoException(t('core.notConnected'));
-    const syncToolbar = (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true;
-    return { info, syncToolbar };
+    return { info };
   }
 
   private async cachedTree(info: SyncInfo): Promise<BookmarkNode[]> {

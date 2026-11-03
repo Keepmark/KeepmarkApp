@@ -36,6 +36,8 @@ export enum StoreKey {
   /** Short switch password that gates activation: salt + vault key wrapped
    *  with the password-derived key. Never contains the password itself. */
   SwitchLock = 'switchLock',
+  /** Legacy (<= 0.1.44): the retired "include the toolbar" switch. Read once
+   *  at startup for the migration, then removed. Never written again. */
   SyncBookmarksToolbar = 'syncBookmarksToolbar',
   SyncEnabled = 'syncEnabled',
   SyncHash = 'syncHash',
@@ -77,7 +79,6 @@ export interface KeyValueBackend {
 
 const defaults = new Map<StoreKey, unknown>([
   [StoreKey.SyncEnabled, false],
-  [StoreKey.SyncBookmarksToolbar, true],
   [StoreKey.DarkModeEnabled, false],
   [StoreKey.BookmarkIdMappings, []],
   [StoreKey.UiLanguage, 'system'],

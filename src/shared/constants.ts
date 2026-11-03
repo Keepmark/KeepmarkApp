@@ -42,9 +42,11 @@ export const SyncPollIntervalMs = 15 * 60 * 1000;
 /** HTTP timeout for /info probes (mirrors checkServiceStatus 3000ms). */
 export const ServiceProbeTimeoutMs = 3000;
 
-/** A sync that adds or removes more nodes than this is treated as a massive
- *  change and gets a safety snapshot of the side it replaces. */
-export const MaxSilentSyncChanges = 5;
+/** A sync that adds, removes or moves more nodes than this is treated as a
+ *  massive change and gets a safety snapshot of the side it replaces. A move
+ *  counts as a removal plus an addition, so moving a folder with more than
+ *  half this many bookmarks also triggers the snapshot. */
+export const MaxSilentSyncChanges = 10;
 
 /** Default HTTP timeout for bookmark up/downloads. */
 export const DefaultHttpTimeoutMs = 12000;

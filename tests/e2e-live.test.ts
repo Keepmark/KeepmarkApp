@@ -53,16 +53,18 @@ function makeDeps(api: XSyncApiClient): { deps: SyncDeps; store: Store; mockApi:
     api,
     store,
     native: {
-      readAll: (t) => getNativeBookmarksAsBookmarks(mockApi, t),
-      clearAndPopulate: async (b, t) => {
-        await clearNativeBookmarks(mockApi, t);
-        await createNativeBookmarksFromBookmarks(mockApi, b, t);
+      readAll: () => getNativeBookmarksAsBookmarks(mockApi),
+      clearAndPopulate: async (b) => {
+        await clearNativeBookmarks(mockApi);
+        await createNativeBookmarksFromBookmarks(mockApi, b);
       },
-      rebuildMappings: (b, t) => buildIdMappings(mockApi, b, t),
+      rebuildMappings: (b) => buildIdMappings(mockApi, b),
+      replaceContainer: async () => {
+        throw new Error('not used in this suite');
+      },
     },
     idMapper: new BookmarkIdMapper(store),
     log: new InMemoryLogger(),
-    syncToolbar: true,
   };
   return { deps, store, mockApi };
 }

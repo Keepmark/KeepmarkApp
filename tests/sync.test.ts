@@ -29,7 +29,6 @@ type MockBookmarksApi = ReturnType<typeof makeMockApi>;
 
 function makeDeps(
   api: Partial<XSyncApiClient>,
-  syncToolbar = true,
 ): { deps: SyncDeps; store: Store; mockApi: MockBookmarksApi } {
   const store = new Store(new MemoryBackend());
   const mockApi = makeMockApi();
@@ -37,16 +36,18 @@ function makeDeps(
     api: api as XSyncApiClient,
     store,
     native: {
-      readAll: (t) => getNativeBookmarksAsBookmarks(mockApi, t),
-      clearAndPopulate: async (b, t) => {
-        await clearNativeBookmarks(mockApi, t);
-        await createNativeBookmarksFromBookmarks(mockApi, b, t);
+      readAll: () => getNativeBookmarksAsBookmarks(mockApi),
+      clearAndPopulate: async (b) => {
+        await clearNativeBookmarks(mockApi);
+        await createNativeBookmarksFromBookmarks(mockApi, b);
       },
-      rebuildMappings: (b, t) => buildIdMappings(mockApi, b, t),
+      rebuildMappings: (b) => buildIdMappings(mockApi, b),
+      replaceContainer: async () => {
+        throw new Error('not used in this suite');
+      },
     },
     idMapper: new BookmarkIdMapper(store),
     log: new InMemoryLogger(),
-    syncToolbar,
   };
   return { deps, store, mockApi };
 }

@@ -210,7 +210,7 @@ describe('multi-sync (saved syncs)', () => {
     await expect(
       core.handleMessage({ command: MessageCommand.VerifySwitchPassword, password: '0000' }),
     ).rejects.toBeInstanceOf(InvalidSwitchPasswordException);
-    expect(await saved(core)).toEqual({ syncs: [], active: undefined, switchLockSet: true, toolbarSync: true });
+    expect(await saved(core)).toEqual({ syncs: [], active: undefined, switchLockSet: true });
   });
 
   it('connect-new registers the linked sync as the active row', async () => {
@@ -328,7 +328,7 @@ describe('multi-sync (saved syncs)', () => {
       direction: 'pull',
       switchPassword: SWITCH,
     });
-    expect(nativeUrls(await adapter.readAll(true))).toContain('https://b.test');
+    expect(nativeUrls(await adapter.readAll())).toContain('https://b.test');
 
     await core.handleMessage({
       command: MessageCommand.ActivateSavedSync,
@@ -338,7 +338,7 @@ describe('multi-sync (saved syncs)', () => {
     });
     const list = await saved(core);
     expect(list.active?.syncId).toBe(idA);
-    const urls = nativeUrls(await adapter.readAll(true));
+    const urls = nativeUrls(await adapter.readAll());
     expect(urls).toContain('https://a.test');
     expect(urls).not.toContain('https://b.test');
     expect((await core.handleMessage({ command: MessageCommand.GetStatus })) as { syncId: string }).toMatchObject({
@@ -352,7 +352,7 @@ describe('multi-sync (saved syncs)', () => {
       syncId: 'B',
       switchPassword: SWITCH,
     });
-    expect(nativeUrls(await adapter.readAll(true))).toContain('https://b.test');
+    expect(nativeUrls(await adapter.readAll())).toContain('https://b.test');
     expect((await saved(core)).syncs).toHaveLength(2);
   });
 
@@ -370,7 +370,7 @@ describe('multi-sync (saved syncs)', () => {
       direction: 'pull',
       switchPassword: SWITCH,
     });
-    const before = nativeUrls(await adapter.readAll(true));
+    const before = nativeUrls(await adapter.readAll());
     const putsBefore = s.puts.length;
 
     await expect(
@@ -383,7 +383,7 @@ describe('multi-sync (saved syncs)', () => {
     ).rejects.toThrow(/password|credentials|decrypt/i);
 
     expect((await saved(core)).active?.syncId).toBe('B');
-    expect(nativeUrls(await adapter.readAll(true))).toEqual(before);
+    expect(nativeUrls(await adapter.readAll())).toEqual(before);
     expect(s.puts).toHaveLength(putsBefore);
   });
 
@@ -430,7 +430,7 @@ describe('multi-sync (saved syncs)', () => {
     // B kept the edit it would otherwise have lost to the switch.
     expect(await docUrls(s, 'B', PASSWORD_B)).toContain('https://late.test');
     // And the natives now hold A's tree.
-    expect(nativeUrls(await adapter.readAll(true))).toContain('https://a.test');
+    expect(nativeUrls(await adapter.readAll())).toContain('https://a.test');
   });
 
   it('a pending conflict blocks the switch with nothing rewritten', async () => {
@@ -461,7 +461,7 @@ describe('multi-sync (saved syncs)', () => {
       conflict: true,
     });
 
-    const before = nativeUrls(await adapter.readAll(true));
+    const before = nativeUrls(await adapter.readAll());
     await expect(
       core.handleMessage({
         command: MessageCommand.ActivateSavedSync,
@@ -472,7 +472,7 @@ describe('multi-sync (saved syncs)', () => {
     ).rejects.toThrow(/conflict/i);
 
     expect((await saved(core)).active?.syncId).toBe(info.syncId);
-    expect(nativeUrls(await adapter.readAll(true))).toEqual(before);
+    expect(nativeUrls(await adapter.readAll())).toEqual(before);
   });
 
   it('removing any row is local-only; removing the active one also unlinks', async () => {
@@ -531,7 +531,7 @@ describe('multi-sync (saved syncs)', () => {
     });
     list = await saved(core);
     expect(list.active?.syncId).toBe(idA);
-    expect(nativeUrls(await adapter.readAll(true))).toContain('https://a.test');
+    expect(nativeUrls(await adapter.readAll())).toContain('https://a.test');
   });
 
   it('a wrong switch password changes nothing, even with unpushed edits on the active sync', async () => {
@@ -550,7 +550,7 @@ describe('multi-sync (saved syncs)', () => {
     });
     // Unpushed edit on the ACTIVE sync: the pre-flight must not touch it.
     await native.create({ parentId: 'unfiled_____', title: 'Late', url: 'https://late.test' });
-    const beforeNative = nativeUrls(await adapter.readAll(true));
+    const beforeNative = nativeUrls(await adapter.readAll());
     const beforePuts = s.puts.length;
     const beforeUndo = await store.get(StoreKey.UndoSlot);
 
@@ -564,7 +564,7 @@ describe('multi-sync (saved syncs)', () => {
     ).rejects.toThrow(/password|credentials|decrypt/i);
 
     expect(s.puts).toHaveLength(beforePuts); // no push of the active side
-    expect(nativeUrls(await adapter.readAll(true))).toEqual(beforeNative);
+    expect(nativeUrls(await adapter.readAll())).toEqual(beforeNative);
     expect((await saved(core)).active?.syncId).toBe('B');
     expect(await store.get(StoreKey.UndoSlot)).toEqual(beforeUndo); // slot intact
   });
@@ -653,7 +653,7 @@ describe('multi-sync (saved syncs)', () => {
     });
     const list = await saved(core);
     expect(list.active?.syncId).toBe(idA);
-    expect(nativeUrls(await adapter.readAll(true))).toContain('https://a.test');
+    expect(nativeUrls(await adapter.readAll())).toContain('https://a.test');
   });
 
   it('changing the switch password keeps the saved keys usable', async () => {

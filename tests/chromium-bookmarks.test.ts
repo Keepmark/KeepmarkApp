@@ -126,7 +126,7 @@ describe('chromium native service', () => {
     const folder: NativeNode = { id: 'f', parentId: '2', title: 'F', dateAdded: 1, children: [sep('s1')] };
     other.children!.push(sep('s0'), folder);
     api.nodes.set('f', folder);
-    const bookmarks = await getNativeBookmarksAsBookmarks(api, false);
+    const bookmarks = await getNativeBookmarksAsBookmarks(api);
     const otherNodes = bookmarks.find((b) => b.title === BookmarkContainer.Other)!.children!;
     expect(otherNodes[0].url).toBe(SeparatorUrl);
     expect(otherNodes[1].children![0].url).toBe(SeparatorUrl);
@@ -139,7 +139,7 @@ describe('chromium native service', () => {
       { title: BookmarkContainer.Other, children: [{ title: 'a', url: 'https://a.example/' }] },
       { title: BookmarkContainer.Toolbar, children: [{ title: 'b', url: 'https://b.example/' }] },
     ];
-    await createNativeBookmarksFromBookmarks(api, synced, true);
+    await createNativeBookmarksFromBookmarks(api, synced);
     expect(api.nodes.get('5')!.children!.map((c) => c.title)).toEqual(['a']);
     expect(api.nodes.get('4')!.children!.map((c) => c.title)).toEqual(['b']);
   });
@@ -156,14 +156,14 @@ describe('chromium native service', () => {
         children: [{ id: 2, title: 'O', url: 'https://o.test' }],
       },
     ];
-    const created = await createNativeBookmarksFromBookmarks(api, structuredClone(synced), true);
+    const created = await createNativeBookmarksFromBookmarks(api, structuredClone(synced));
     expect(created).toBe(3); // menu folder + menu link + other link
     const otherChildren = await api.getChildren('2');
     const menuFolder = otherChildren.find((c) => c.title === BookmarkContainer.Menu)!;
     expect(menuFolder).toBeDefined();
     expect(menuFolder.children).toHaveLength(1);
 
-    const back = await getNativeBookmarksAsBookmarks(api, true);
+    const back = await getNativeBookmarksAsBookmarks(api);
     const menu = back.find((c) => c.title === BookmarkContainer.Menu)!;
     expect(menu.children).toHaveLength(1);
     expect(menu.children![0].url).toBe('https://m.test');
@@ -171,7 +171,7 @@ describe('chromium native service', () => {
     const other = back.find((c) => c.title === BookmarkContainer.Other)!;
     expect(other.children!.map((b) => b.title)).not.toContain(BookmarkContainer.Menu);
 
-    const mappings = await buildIdMappings(api, back, true);
+    const mappings = await buildIdMappings(api, back);
     expect(mappings.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -179,10 +179,10 @@ describe('chromium native service', () => {
     const api = makeChromiumMockApi();
     await api.create({ parentId: '2', title: '───' });
     await api.create({ parentId: '1', title: '|' });
-    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const synced = await getNativeBookmarksAsBookmarks(api);
     const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
     expect(other.children![0].url).toBe('xbs:separator');
-    await clearNativeBookmarks(api, true);
+    await clearNativeBookmarks(api);
     expect(await api.getChildren('2')).toHaveLength(0);
   });
 

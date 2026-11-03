@@ -68,22 +68,21 @@ export async function getContainerIds(api: BookmarkApi): Promise<ContainerIds> {
   return { other: other.id, toolbar: toolbar.id };
 }
 
-export function getNativeBookmarksAsBookmarks(api: BookmarkApi, syncToolbar: boolean): Promise<BookmarkNode[]> {
-  return getContainerIds(api).then((ids) => readAll(api, ids, opts, syncToolbar));
+export function getNativeBookmarksAsBookmarks(api: BookmarkApi): Promise<BookmarkNode[]> {
+  return getContainerIds(api).then((ids) => readAll(api, ids, opts));
 }
 
-export function clearNativeBookmarks(api: BookmarkApi, syncToolbar: boolean): Promise<void> {
-  return getContainerIds(api).then((ids) => clearAll(api, ids, syncToolbar));
+export function clearNativeBookmarks(api: BookmarkApi): Promise<void> {
+  return getContainerIds(api).then((ids) => clearAll(api, ids));
 }
 
 export function createNativeBookmarksFromBookmarks(
   api: BookmarkApi,
   bookmarks: BookmarkNode[],
-  syncToolbar: boolean,
 ): Promise<number> {
-  return getContainerIds(api).then((ids) => populate(api, ids, bookmarks, opts, syncToolbar));
+  return getContainerIds(api).then((ids) => populate(api, ids, bookmarks, opts));
 }
 
-export function buildIdMappings(api: BookmarkApi, bookmarks: BookmarkNode[], syncToolbar: boolean) {
-  return getContainerIds(api).then((ids) => buildMappings(api, ids, bookmarks, opts, syncToolbar));
+export function buildIdMappings(api: BookmarkApi, bookmarks: BookmarkNode[]) {
+  return getContainerIds(api).then((ids) => buildMappings(api, ids, bookmarks, opts));
 }

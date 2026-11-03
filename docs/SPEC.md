@@ -327,8 +327,9 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   without a backup. New-mode: create+upload on target (v1.2 iff probed) →
   returns `{id}`. Existing-pull: version gate → password check by decrypt →
   overwrite natives. Existing-push: PUT on the remote base (409 honest).
-  When the bookmarks-toolbar flag is off the toolbar is not synced, so its
-  bookmarks survive the switch: the activation task says so. UI: destination and credentials are entered together; `Continue`
+  Every container is always synced, so the natives always end up showing the
+  target sync's tree; the link is saved only after the natives were rewritten
+  and a failed replace restores the previous bookmarks. UI: destination and credentials are entered together; `Continue`
   verifies the target and, in existing mode, decrypts its copy read-only.
   The verified review shows consequences and merge counts. `Connect`
   executes directly, without another confirmation. Changed inputs invalidate
@@ -377,8 +378,7 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
 ALL keys live in the `StoreKey` enum; string-literal storage access outside
 `store.ts` is a defect (qa #6). Backend: `browser.storage.local`
 (`BrowserLocalBackend`); `MemoryBackend` for tests. Defaults: `SyncEnabled
-false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
-`BookmarkIdMappings []`.
+false`, `DarkModeEnabled false`, `BookmarkIdMappings []`.
 
 | Key | Content | Notes |
 |---|---|---|
@@ -393,7 +393,7 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 | `InstallBackup installBackup` | first-run natives + date | write-once |
 | `LogVerbosity logVerbosity` | `XbsLogLevel` number | applied at startup |
 | `TraceLog traceLog` | ring buffer (cap 1000) | via `InMemoryLogger` |
-| `SyncBookmarksToolbar` | bool default true | toolbar container inclusion |
+| `SyncBookmarksToolbar` | legacy bool (<= 0.1.44) | retired toolbar switch; read once at startup for the migration, then removed |
 | Legacy-tolerant | `alternateSearchBarPosition`, `autoFetchMetadata`, `autoBackUpSchedule`, `checkForAppUpdates`, `darkModeEnabled`, `display*`, `installationId`, `lastUpgradeVersion`, `telemetryEnabled` | accepted keys from original-client shape; no telemetry collected |
 
 ## 7. UI specification

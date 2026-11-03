@@ -112,7 +112,9 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   server and activating that sync again brings it back. A sync itself takes
   none either, unless it is massive: `guardMassivePull` / `guardMassivePush`
   snapshot the replaced side when `changedNodeCount` exceeds
-  `MaxSilentSyncChanges` (5), fail-closed.
+  `MaxSilentSyncChanges` (10), fail-closed. Additions, removals and moves all
+  count; a move is a removal plus an addition, so moving a folder with more
+  than five bookmarks also triggers it.
 - `src/background/background.ts` — browser wiring: `webextension-polyfill`,
   storage/alarms/listeners/badge/notify/download ports, `onMessage` → wire
   `{ok,data}` / `{ok:false,errorName,message}`, `onInstalled/onStartup`.
@@ -132,20 +134,21 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   saved registry (rows + `+ Add a sync` form + optional sync lock).
   With a password set, `+ Add a sync` asks it first (read-only
   `VerifySwitchPassword`) and only then opens the form, which has no password
-  field of its own. Settings holds preferences only (language, one card named
-  after what it holds — the bookmarks-toolbar switch — and the log panel folded
-  behind one "Show logs" button that carries the verbosity and the current
-  log). No card points at another section: the service, API version, sync ID
+  field of its own. Settings holds preferences only (language and the log panel
+  folded behind one "Show logs" button that carries the verbosity and the
+  current log). No card points at another section: the service, API version,
+  sync ID
   and saved syncs are reported by Status and Sync and are never mentioned
   there. Change password is a row action on the active sync (the long password
   belongs to the sync), never a Settings section, and it does not ask the sync
   lock password: the background re-wraps the saved key under the previous one.
   Status has no "last action / undo" banner: recovery from a destructive step
-  goes through Backup → Safety backups. With the toolbar
-  switch off, activation shows `manager.syncs.activateToolbarLocal` (the
-  toolbar keeps its own bookmarks across a switch), fed by
-  `SavedSyncsResponse.toolbarSync` in the popup and `GetToolbarSync` in the
-  manager.
+  goes through Backup → Safety backups. Every container is always synced
+  (Menu, Other, Toolbar): the retired "Include the bookmarks toolbar in the
+  sync" switch (<= 0.1.44) made a switch look half-done and let a stale
+  toolbar overwrite the server's on the next push. A one-shot startup
+  migration (`adoptToolbarOnUpgrade`) snapshots the stale local toolbar
+  fail-closed and replaces it with the active sync's copy.
 
 ### Build
 

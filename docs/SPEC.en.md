@@ -378,8 +378,7 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
 ALL keys live in the `StoreKey` enum; string-literal storage access outside
 `store.ts` is a defect (qa #6). Backend: `browser.storage.local`
 (`BrowserLocalBackend`); `MemoryBackend` for tests. Defaults: `SyncEnabled
-false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
-`BookmarkIdMappings []`.
+false`, `DarkModeEnabled false`, `BookmarkIdMappings []`.
 
 | Key | Content | Notes |
 |---|---|---|
@@ -394,7 +393,7 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 | `InstallBackup installBackup` | first-run natives + date | write-once |
 | `LogVerbosity logVerbosity` | `XbsLogLevel` number | applied at startup |
 | `TraceLog traceLog` | ring buffer (cap 1000) | via `InMemoryLogger` |
-| `SyncBookmarksToolbar` | bool, default true | toolbar container inclusion |
+| `SyncBookmarksToolbar` | legacy bool (<= 0.1.44) | retired toolbar switch; read once at startup for the migration, then removed |
 | Legacy-tolerant | `alternateSearchBarPosition`, `autoFetchMetadata`, `autoBackUpSchedule`, `checkForAppUpdates`, `darkModeEnabled`, `display*`, `installationId`, `lastUpgradeVersion`, `telemetryEnabled` | accepted keys from the original-client shape; no telemetry collected |
 
 ## 7. UI specification

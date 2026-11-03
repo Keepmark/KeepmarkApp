@@ -25,9 +25,6 @@ export class SavedSyncsPanel {
   private switchLockSet = false;
   /** Row waiting for the switch password (only when a lock is set). */
   private pending?: SavedSync;
-  /** Toolbar inclusion, carried by the last payload (default: synced). */
-  private toolbarSync = true;
-
   constructor(
     private readonly prefix: string,
     private readonly onChanged: (kind: SavedSyncsChange) => Promise<void>,
@@ -78,7 +75,6 @@ export class SavedSyncsPanel {
     this.syncs = data.syncs;
     this.active = data.active;
     this.switchLockSet = data.switchLockSet;
-    this.toolbarSync = data.toolbarSync ?? true;
     const card = this.el('card');
     const list = this.el('list');
     list.replaceChildren();
@@ -137,9 +133,6 @@ export class SavedSyncsPanel {
       ? t('popup.saved.passwordHint', { name })
       : t('popup.saved.activateHintNoPassword', { name });
     ($(`${this.prefix}-pw-row`) as HTMLElement).hidden = !this.switchLockSet;
-    // The switch replaces every synced container: with the toolbar excluded
-    // its bookmarks stay put, which must not look like a failed switch.
-    this.el('toolbar-note').hidden = this.toolbarSync;
     this.password().value = '';
     this.clearError();
     this.dialog().showModal();

@@ -35,10 +35,9 @@ export interface NativeAdapter extends NativeOps {
 export async function overwriteAll(
   adapter: NativeAdapter,
   bookmarks: BookmarkNode[],
-  syncToolbar: boolean,
 ): Promise<BookmarkIdMapping[]> {
-  await adapter.clearAndPopulate(bookmarks, syncToolbar);
-  return adapter.rebuildMappings(bookmarks, syncToolbar);
+  await adapter.clearAndPopulate(bookmarks);
+  return adapter.rebuildMappings(bookmarks);
 }
 
 export { BookmarkContainer };

@@ -216,13 +216,6 @@
         <!-- Preferences only: service, API version, sync ID and the saved
              syncs have their own sections (Status, Sync), so they are never
              repeated here. -->
-        <div class="settings-group">
-          <h3 data-i18n="manager.settings.toolbarGroup">Bookmarks toolbar</h3>
-          <label class="check"><input id="m-opt-toolbar" type="checkbox" />
-            <span><b data-i18n="manager.settings.toolbar">Include the bookmarks toolbar in the sync</b>
-              <small data-i18n="manager.settings.toolbarHint">Its bookmarks are uploaded and a download updates it. Off, the toolbar stays local — nothing there is uploaded or removed — and the bookmarks already on the server stay there. Applies from the next sync.</small></span></label>
-        </div>
-
         <!-- Troubleshooting only: the log is not a feature the user reads,
              so it stays folded behind one button and keeps its own section
              out of the sidebar. -->
@@ -382,7 +375,6 @@
       <h2 id="m-activate-title" data-i18n="popup.saved.activate">Activate</h2>
       <p><strong id="m-syncs-activate-text"></strong></p>
       <p id="m-syncs-activate-hint" class="hint"></p>
-      <p id="m-activate-toolbar-note" class="hint" data-i18n="manager.syncs.activateToolbarLocal" hidden></p>
       <form id="m-activate-form" autocomplete="off">
         <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
           <input id="m-syncs-activate-pw" type="password" autocomplete="off" /></label>

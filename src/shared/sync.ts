@@ -32,7 +32,6 @@ export interface SyncDeps {
   native: NativeOps;
   idMapper: BookmarkIdMapper;
   log: IXbsLogger;
-  syncToolbar: boolean;
 }
 
 /** Probe the service and enforce MinApiVersion. Used at connect time. */
@@ -127,11 +126,11 @@ export async function createNewSync(
   serviceUrl?: string,
   v12 = false,
 ): Promise<{ id: string; bookmarkCount: number }> {
-  const { api, store, native, idMapper, log, syncToolbar } = deps;
-  const bookmarks = await native.readAll(syncToolbar);
+  const { api, store, native, idMapper, log } = deps;
+  const bookmarks = await native.readAll();
   const { id } = await createAndUpload(api, store, bookmarks, password, serviceUrl, v12);
 
-  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
+  const mappings = await native.rebuildMappings(bookmarks);
   await idMapper.set(mappings);
   log.log(XbsLogLevel.Info, 'sync', 'New sync created and native bookmarks uploaded');
   // Callers report what was uploaded: a fresh sync always starts from the
@@ -245,7 +244,7 @@ export async function pullExistingSync(
   serviceUrl?: string,
   v12 = false,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
-  const { api, store, native, idMapper, log, syncToolbar } = deps;
+  const { api, store, native, idMapper, log } = deps;
   const versionRes = await api.getVersion(syncId);
   const remoteVersion = versionRes.version;
   if (!remoteVersion) {
@@ -301,7 +300,7 @@ export async function pullWithDerivedKey(
   input: { syncId: string; derivedKey: string; blob: string; lastUpdated: string; remoteVersion?: string } & PullMeta,
   serviceUrl?: string,
 ): Promise<{ bookmarks: BookmarkNode[]; lastUpdated: string; updateRemote: boolean }> {
-  const { store, native, idMapper, log, syncToolbar } = deps;
+  const { store, native, idMapper, log } = deps;
   const plain = await decryptData(input.blob, input.derivedKey);
   let bookmarks: BookmarkNode[];
   try {
@@ -326,14 +325,38 @@ export async function pullWithDerivedKey(
     updateRemote = true;
   }
 
-  // The hook sees the native tree before anything is touched. Reading it is
-  // only needed when a caller guards the replace (a massive-change snapshot).
+  // The natives are read before anything is touched: the hook gets the tree
+  // it is about to replace (massive-change snapshot), and a failed replace can
+  // put the previous bookmarks back instead of leaving a half-wiped browser
+  // while the OLD sync is still marked active.
+  const previous = await native.readAll();
   if (input.beforeReplace) {
-    await input.beforeReplace(bookmarks, await native.readAll(syncToolbar));
+    await input.beforeReplace(bookmarks, previous);
   }
-  await native.clearAndPopulate(bookmarks, syncToolbar);
-  const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
-  await idMapper.set(mappings);
+  try {
+    await native.clearAndPopulate(bookmarks);
+    const mappings = await native.rebuildMappings(bookmarks);
+    await idMapper.set(mappings);
+  } catch (err) {
+    // Best effort: the switch must not "succeed" in storage when the browser
+    // does not show the new tree. The original error always wins.
+    try {
+      await native.clearAndPopulate(previous);
+      await idMapper.set(await native.rebuildMappings(previous));
+      log.log(
+        XbsLogLevel.Warning,
+        'sync',
+        `Native replace failed, previous bookmarks restored: ${(err as Error)?.message}`,
+      );
+    } catch (rollbackErr) {
+      log.log(
+        XbsLogLevel.Error,
+        'sync',
+        `Native replace failed AND rollback failed: ${(rollbackErr as Error)?.message}`,
+      );
+    }
+    throw err;
+  }
   await saveSyncState(
     store,
     { id: input.syncId, password: input.derivedKey, version: input.remoteVersion },

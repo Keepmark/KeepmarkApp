@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentKey, diffTrees, sameContent } from '../src/shared/tree-diff';
+import { changedNodeCount, contentKey, diffTrees, sameContent } from '../src/shared/tree-diff';
 import type { BookmarkNode } from '../src/shared/models';
 
 const bm = (id: number, title: string, url: string, extra: Partial<BookmarkNode> = {}): BookmarkNode => ({ id, title, url, ...extra });
@@ -54,5 +54,35 @@ describe('tree-diff', () => {
     (r[0].children![1] as BookmarkNode).description = '';
     (r[0].children![1] as BookmarkNode).tags = [];
     expect(contentKey(base())).toBe(contentKey(r));
+  });
+});
+
+describe('changedNodeCount', () => {
+  const loose = (count: number): BookmarkNode[] => [
+    folder(1, '[xbs] Other', Array.from({ length: count }, (_v, i) => bm(100 + i, `m${i}`, `https://m${i}.example/`))),
+  ];
+  const inFolder = (count: number): BookmarkNode[] => [
+    folder(1, '[xbs] Other', [
+      folder(10, 'Dev', Array.from({ length: count }, (_v, i) => bm(100 + i, `m${i}`, `https://m${i}.example/`))),
+    ]),
+  ];
+
+  it('an ordinary addition is one change', () => {
+    expect(changedNodeCount(loose(3), loose(4))).toBe(1);
+  });
+
+  it('a bookmark moved between folders counts as removal plus addition', () => {
+    const before: BookmarkNode[] = [folder(1, '[xbs] Other', [folder(2, 'Dev', [bm(3, 'A', 'https://a.example/')])])];
+    const after: BookmarkNode[] = [folder(1, '[xbs] Other', [folder(2, 'Dev', []), bm(3, 'A', 'https://a.example/')])];
+    expect(changedNodeCount(before, after)).toBe(2);
+  });
+
+  it('moving a folder that holds > MaxSilentSyncChanges / 2 bookmarks is massive', () => {
+    expect(changedNodeCount(inFolder(6), loose(6))).toBeGreaterThan(10);
+    expect(changedNodeCount(inFolder(3), loose(3))).toBeLessThanOrEqual(10);
+  });
+
+  it('a wipe counts every removed node', () => {
+    expect(changedNodeCount(loose(12), loose(0))).toBe(12);
   });
 });

@@ -46,7 +46,10 @@ export type SafetyOperation =
    *  was snapshotted before the download replaced it. */
   | 'sync-pull'
   /** Same, upload side: the server copy was snapshotted before the replace. */
-  | 'sync-push';
+  | 'sync-push'
+  /** One-shot upgrade from the retired toolbar switch: the stale local
+   *  toolbar was snapshotted before the active sync's toolbar replaced it. */
+  | 'toolbar-adopt';
 
 /** One manifest row (mirrors Keepmark safety-index.json). */
 export interface SafetyEntry {

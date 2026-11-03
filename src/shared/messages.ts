@@ -49,8 +49,6 @@ export enum MessageCommand {
   ChangePassword = 'change-password',
   GetRemovedSync = 'get-removed-sync',
   ClearRemovedSync = 'clear-removed-sync',
-  GetToolbarSync = 'get-toolbar-sync',
-  SetToolbarSync = 'set-toolbar-sync',
   GetUiLanguage = 'get-ui-language',
   SetUiLanguage = 'set-ui-language',
   PreviewBackup = 'preview-backup',
@@ -267,9 +265,6 @@ export interface SavedSyncsResponse {
   /** False until the manager sets the short switch password: activation is
    *  blocked and new links are refused (rows could not be wrapped). */
   switchLockSet: boolean;
-  /** Bookmarks-toolbar inclusion (default true). An activation replaces every
-   *  synced container, so the UI must say when the toolbar stays local. */
-  toolbarSync?: boolean;
 }
 
 /** Whether the switch password exists (the manager owns set/change/reset). */
@@ -360,8 +355,6 @@ export type MessagePayload =
       currentPassword: string;
       newPassword: string;
     }
-  | { command: MessageCommand.GetToolbarSync }
-  | { command: MessageCommand.SetToolbarSync; enabled: boolean }
   | { command: MessageCommand.GetUiLanguage }
   | { command: MessageCommand.SetUiLanguage; language: LangSetting }
   | { command: MessageCommand.PreviewBackup; json: string; password: string }

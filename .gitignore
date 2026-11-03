@@ -7,3 +7,5 @@ build/
 ## Local agent settings
 .claude/
 .aura/
+# Local scratch memory (never pushed): pointers to shared test syncs.
+.local/

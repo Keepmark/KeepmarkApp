@@ -1621,26 +1621,12 @@ function initLogsSection(): void {
   });
 }
 
-/** Bookmarks-toolbar inclusion, read once at init and kept in step by the
- *  Settings switch: an activation must say when the toolbar stays local. */
-let toolbarSyncEnabled = true;
-
-async function loadToolbarState(): Promise<void> {
-  const res = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => undefined);
-  if (res) toolbarSyncEnabled = res.enabled;
-}
-
 async function renderSettings(): Promise<void> {
   clearMessages();
   // The lock state decides whether the password task asks for its proof.
   await refreshSyncs().catch(() => undefined);
   // Settings holds preferences only: service, API version, sync ID and the
   // saved syncs are reported by Status and Sync, never repeated here.
-  const toolbar = await send<{ enabled: boolean }>({ command: MessageCommand.GetToolbarSync }).catch(() => ({
-    enabled: true,
-  }));
-  toolbarSyncEnabled = toolbar.enabled;
-  (input('m-opt-toolbar') as HTMLInputElement).checked = toolbar.enabled;
   let level = 2;
   try {
     const st = await send<StatusResponse>({ command: MessageCommand.GetStatus });
@@ -1665,12 +1651,6 @@ function initSettingsSection(): void {
     } catch (err) {
       showError('settings-error', (err as Error).message);
     }
-  });
-  (input('m-opt-toolbar') as HTMLInputElement).addEventListener('change', (e) => {
-    void send({ command: MessageCommand.SetToolbarSync, enabled: (e.target as HTMLInputElement).checked }).catch(
-      (err: Error) => showError('settings-error', err.message),
-    );
-    toolbarSyncEnabled = (e.target as HTMLInputElement).checked;
   });
   ($('m-opt-verbosity') as HTMLSelectElement).addEventListener('change', async (e) => {
     clearMessages();
@@ -1876,9 +1856,6 @@ function openActivation(sync: SavedSync, opener: HTMLElement): void {
     ? t('popup.saved.passwordHint', { name })
     : t('manager.syncs.activateHint', { name });
   ($('m-syncs-pw-row') as HTMLElement).hidden = !switchLockSet;
-  // A switch replaces every synced container: when the toolbar is excluded it
-  // keeps its bookmarks, which would otherwise look like a failed switch.
-  ($('m-activate-toolbar-note') as HTMLElement).hidden = toolbarSyncEnabled;
   input('m-syncs-activate-pw').value = '';
   const error = $('m-activate-error') as HTMLElement;
   error.textContent = '';
@@ -2392,7 +2369,6 @@ async function init(): Promise<void> {
   );
   initSidebar();
   initStatusSection();
-  void loadToolbarState();
   initConflictSection();
   initBackupSection();
   initDuplicatesSection();

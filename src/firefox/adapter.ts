@@ -8,8 +8,10 @@ import type { BookmarkIdMapping } from '../shared/id-mapper.js';
 import {
   buildMappings,
   clearAll,
+  clearContainer,
   ContainerNotFoundError,
   populate,
+  populateContainer,
   readAll,
   type BookmarkApi,
   type ContainerIds,
@@ -33,16 +35,22 @@ export function makeFirefoxAdapter(api: BookmarkApi): NativeAdapter {
       return `${c.menu}|${c.other}|${c.toolbar}`;
     },
 
-    readAll: async (syncToolbar) => readAll(api, await ids(), opts, syncToolbar),
+    readAll: async () => readAll(api, await ids(), opts),
 
-    clearAndPopulate: async (bookmarks, syncToolbar) => {
+    clearAndPopulate: async (bookmarks) => {
       const c = await ids();
-      await clearAll(api, c, syncToolbar);
-      await populate(api, c, bookmarks, opts, syncToolbar);
+      await clearAll(api, c);
+      await populate(api, c, bookmarks, opts);
     },
 
-    rebuildMappings: async (bookmarks, syncToolbar) =>
-      buildMappings(api, await ids(), bookmarks, opts, syncToolbar),
+    rebuildMappings: async (bookmarks) => buildMappings(api, await ids(), bookmarks, opts),
+
+    replaceContainer: async (container, children) => {
+      const c = await ids();
+      await clearContainer(api, c, container);
+      await populateContainer(api, c, opts, container, children);
+      return buildMappings(api, c, await readAll(api, c, opts), opts);
+    },
 
     readContainer: async (container) => {
       const c = await ids();

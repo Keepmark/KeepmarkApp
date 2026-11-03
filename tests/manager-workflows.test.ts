@@ -177,35 +177,6 @@ it('changes the active sync password from its row, without the switch lock', asy
   expect(el('m-syncs-result').hidden).toBe(false);
 });
 
-it('says the bookmarks toolbar stays local when the flag excludes it', async () => {
-  harness.send.mockImplementation(async (msg) => {
-    if (msg.command === MessageCommand.GetToolbarSync) return { enabled: false };
-    if (msg.command === MessageCommand.GetUiLanguage) return { language: 'system' };
-    if (msg.command === MessageCommand.GetSavedSyncs) {
-      return {
-        syncs: [
-          { serviceUrl: 'https://old.test', syncId: 'old' },
-          { serviceUrl: 'https://other.test', syncId: 'other', label: 'Altro' },
-        ],
-        active: { serviceUrl: 'https://old.test', syncId: 'old' },
-        switchLockSet: false,
-        toolbarSync: false,
-      };
-    }
-    return null;
-  });
-  // Settings reads the flag; the activation task must then say the toolbar
-  // keeps its own bookmarks, otherwise the switch looks half-done.
-  (document.querySelector('#sidebar button[data-section="settings"]') as HTMLButtonElement).click();
-  await settle();
-  await openSyncs();
-  el('m-syncs-act-1').click(); await settle();
-  expect((el('m-activate-dialog') as HTMLDialogElement).open).toBe(true);
-  expect(el('m-activate-toolbar-note').hidden).toBe(false);
-  // The wording lives in the catalog, not in the markup.
-  expect(el('m-activate-toolbar-note').getAttribute('data-i18n')).toBe('manager.syncs.activateToolbarLocal');
-});
-
 it('creates a new sync from the live bookmarks and reports the uploaded count', async () => {
   await openAdd();
   field('m-link-password', 'password123');

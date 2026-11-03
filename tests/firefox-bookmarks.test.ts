@@ -88,16 +88,16 @@ describe('firefox native service', () => {
     await api.create({ parentId: 'unfiled_____', type: 'separator' });
     await api.create({ parentId: 'menu________', title: 'Menu link', url: 'https://menu.test' });
 
-    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const synced = await getNativeBookmarksAsBookmarks(api);
     expect(synced.map((c) => c.title)).toContain(BookmarkContainer.Other);
     const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
     expect(other.children).toHaveLength(2);
     expect(other.children![1]).toEqual({ url: 'xbs:separator', id: expect.any(Number) });
 
-    await clearNativeBookmarks(api, true);
+    await clearNativeBookmarks(api);
     expect(await api.getChildren('unfiled_____')).toHaveLength(0);
 
-    const created = await createNativeBookmarksFromBookmarks(api, synced, true);
+    const created = await createNativeBookmarksFromBookmarks(api, synced);
     expect(created).toBe(3);
     const children = await api.getChildren('unfiled_____');
     expect(children.map((c) => c.type)).toEqual(['bookmark', 'separator']);
@@ -106,8 +106,8 @@ describe('firefox native service', () => {
   it('buildIdMappings aligns native and synced children positionally', async () => {
     const api = makeMockApi();
     await api.create({ parentId: 'unfiled_____', title: 'A', url: 'https://a.test' });
-    const synced = await getNativeBookmarksAsBookmarks(api, true);
-    const mappings = await buildIdMappings(api, synced, true);
+    const synced = await getNativeBookmarksAsBookmarks(api);
+    const mappings = await buildIdMappings(api, synced);
     expect(mappings).toHaveLength(1);
     expect(mappings[0].syncedId).toBe(
       synced.find((c) => c.title === BookmarkContainer.Other)!.children![0].id,
@@ -117,7 +117,7 @@ describe('firefox native service', () => {
   it('treats legacy title+newtab nodes as separators', async () => {
     const api = makeMockApi();
     await api.create({ parentId: 'unfiled_____', title: HorizontalSeparatorTitle, url: 'about:newtab' });
-    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const synced = await getNativeBookmarksAsBookmarks(api);
     const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
     expect(other.children![0].url).toBe('xbs:separator');
   });
@@ -131,7 +131,7 @@ describe('firefox native service', () => {
     await api.create({ parentId: 'unfiled_____', title: 'FO' });
     await api.create({ parentId: 'toolbar_____', title: 'T', url: 'https://t.test' });
     await api.create({ parentId: 'unfiled_____', title: 'O', url: 'https://o.test' });
-    const synced = await getNativeBookmarksAsBookmarks(api, true);
+    const synced = await getNativeBookmarksAsBookmarks(api);
     const other = synced.find((c) => c.title === BookmarkContainer.Other)!;
     const toolbar = synced.find((c) => c.title === BookmarkContainer.Toolbar)!;
     expect(toolbar.children!.map((b) => b.title)).toEqual(['FT', 'T']);
@@ -139,14 +139,6 @@ describe('firefox native service', () => {
     expect(toolbar.children![1].id).toBe(3);
     expect(other.children![0].id).toBe(2);
     expect(other.children![1].id).toBe(4);
-  });
-
-  it('skips toolbar when syncToolbar is false', async () => {
-    const api = makeMockApi();
-    await api.create({ parentId: 'toolbar_____', title: 'T', url: 'https://t.test' });
-    const synced = await getNativeBookmarksAsBookmarks(api, false);
-    const toolbar = synced.find((c) => c.title === BookmarkContainer.Toolbar)!;
-    expect(toolbar.children ?? []).toHaveLength(0);
   });
 
   it('url support is case-insensitive (uppercase schemes stay intact)', () => {

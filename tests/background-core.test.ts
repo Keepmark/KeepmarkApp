@@ -295,6 +295,42 @@ describe('background core', () => {
     expect(await store.get<string>(StoreKey.InstallBackup)).toBe(first);
   });
 
+  it('one-shot migration adopts the active sync toolbar and drops the retired switch', async () => {
+    const state = baseState();
+    const { core, store, mockApi } = await linkedCore(state);
+    // Legacy install: the switch was off, so the browser toolbar drifted from
+    // the sync's copy. Upgrading must make the browser show the sync's toolbar
+    // again (otherwise the next push overwrites the server copy with it).
+    await mockApi.create({ parentId: 'toolbar_____', title: 'Stale', url: 'https://stale.test' });
+    await store.set(StoreKey.SyncBookmarksToolbar, false);
+    await store.set(StoreKey.SyncEnabled, false);
+    await core.startup();
+    expect((await mockApi.getChildren('toolbar_____')).map((n) => n.title)).toEqual([]);
+    expect(await store.get(StoreKey.SyncBookmarksToolbar)).toBeUndefined();
+    const safety = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safety.some((e) => e.operation === 'toolbar-adopt')).toBe(true);
+  });
+
+  it('a failed toolbar-adoption snapshot keeps the legacy switch for the next wake', async () => {
+    const state = baseState();
+    const { core, store, mockApi } = await linkedCore(state);
+    await mockApi.create({ parentId: 'toolbar_____', title: 'Stale', url: 'https://stale.test' });
+    await store.set(StoreKey.SyncBookmarksToolbar, false);
+    await store.set(StoreKey.SyncEnabled, false);
+    // A write failure must abort before the natives are replaced.
+    const backend = (store as unknown as { backend: { set: (k: string, v: unknown) => Promise<void> } }).backend;
+    const original = backend.set.bind(backend);
+    backend.set = async (key: string, value: unknown) => {
+      if (String(key).startsWith('safety')) throw new Error('disk full');
+      return original(key, value);
+    };
+    await core.startup();
+    expect((await mockApi.getChildren('toolbar_____')).map((n) => n.title)).toEqual(['Stale']);
+    expect(await store.get(StoreKey.SyncBookmarksToolbar)).toBe(false);
+  });
+
   it('connect-new uploads natives and links', async () => {
     const state = baseState();
     const { store, ports } = await linkedCore(state);
@@ -583,20 +619,6 @@ describe('background core', () => {
     expect(state.puts.length).toBeGreaterThan(putsBefore);
     const latest = JSON.parse(await decrypt_blob(state.puts[state.puts.length - 1].blob, derived));
     expect(JSON.stringify(latest)).not.toContain('https://a.test');
-  });
-
-  it('toolbar-sync preference round-trips through messages', async () => {
-    const state = baseState();
-    const { core } = await linkedCore(state);
-    await expect(
-      core.handleMessage({ command: MessageCommand.GetToolbarSync }),
-    ).resolves.toEqual({ enabled: true });
-    await expect(
-      core.handleMessage({ command: MessageCommand.SetToolbarSync, enabled: false }),
-    ).resolves.toEqual({ enabled: false });
-    await expect(core.handleMessage({ command: MessageCommand.GetToolbarSync })).resolves.toEqual({
-      enabled: false,
-    });
   });
 
   it('ui-language preference round-trips, invalid values fall back to system, language is applied', async () => {
@@ -1336,8 +1358,8 @@ describe('background core v1.2', () => {
   it('a massive download snapshots the local side first', async () => {
     const state = baseState();
     const { core, store, derived } = await linkedCore(state);
-    // Eight new bookmarks appear at once: something big happened elsewhere.
-    const children = Array.from({ length: 8 }, (_, i) => ({
+    // Twelve new bookmarks appear at once: something big happened elsewhere.
+    const children = Array.from({ length: 12 }, (_, i) => ({
       id: 100 + i,
       title: `N${i}`,
       url: `https://n${i}.test`,
@@ -1378,8 +1400,8 @@ describe('background core v1.2', () => {
   it('a massive upload snapshots the server copy first', async () => {
     const state = baseState();
     const { core, mockApi } = await linkedCore(state);
-    // Six native bookmarks appear in one go (an import outside the extension).
-    for (let i = 0; i < 6; i += 1) {
+    // Eleven native bookmarks appear in one go (an import outside the extension).
+    for (let i = 0; i < 11; i += 1) {
       await mockApi.create({ parentId: 'unfiled_____', title: `Bulk ${i}`, url: `https://bulk${i}.test` });
     }
     await core.pushAfterNativeChange();

@@ -55,11 +55,16 @@ export class ContainerNotFoundError extends Error {
   }
 }
 
-/** Platform-native operations injected per browser (firefox/chromium adapters). */
+/** Platform-native operations injected per browser (firefox/chromium adapters).
+ *  Every container is always part of the sync: a half-synced tree (toolbar
+ *  left out) cannot be switched atomically and would let a stale copy
+ *  overwrite the server's on the next push. */
 export interface NativeOps {
-  readAll(syncToolbar: boolean): Promise<BookmarkNode[]>;
-  clearAndPopulate(bookmarks: BookmarkNode[], syncToolbar: boolean): Promise<void>;
-  rebuildMappings(bookmarks: BookmarkNode[], syncToolbar: boolean): Promise<BookmarkIdMapping[]>;
+  readAll(): Promise<BookmarkNode[]>;
+  clearAndPopulate(bookmarks: BookmarkNode[]): Promise<void>;
+  rebuildMappings(bookmarks: BookmarkNode[]): Promise<BookmarkIdMapping[]>;
+  /** Replace ONE container's native children (toolbar adoption on upgrade). */
+  replaceContainer(container: BookmarkContainer, children: BookmarkNode[]): Promise<BookmarkIdMapping[]>;
 }
 
 /**
@@ -76,12 +81,17 @@ export function findMenuFolder(children: NativeNode[] | undefined): NativeNode |
 
 export function makeNativeOps(api: BookmarkApi, ids: ContainerIds, opts: NativeOpts): NativeOps {
   return {
-    readAll: (syncToolbar) => readAll(api, ids, opts, syncToolbar),
-    clearAndPopulate: async (bookmarks, syncToolbar) => {
-      await clearAll(api, ids, syncToolbar);
-      await populate(api, ids, bookmarks, opts, syncToolbar);
+    readAll: () => readAll(api, ids, opts),
+    clearAndPopulate: async (bookmarks) => {
+      await clearAll(api, ids);
+      await populate(api, ids, bookmarks, opts);
     },
-    rebuildMappings: (bookmarks, syncToolbar) => buildMappings(api, ids, bookmarks, opts, syncToolbar),
+    rebuildMappings: (bookmarks) => buildMappings(api, ids, bookmarks, opts),
+    replaceContainer: async (container, children) => {
+      await clearContainer(api, ids, container);
+      await populateContainer(api, ids, opts, container, children);
+      return buildMappings(api, ids, await readAll(api, ids, opts), opts);
+    },
   };
 }
 /** Chromium separator rule: dashes-only title without children or url, or legacy titles + newtab url.
@@ -106,7 +116,6 @@ export async function readAll(
   api: BookmarkApi,
   ids: ContainerIds,
   opts: NativeOpts,
-  syncToolbar: boolean,
 ): Promise<BookmarkNode[]> {
   const flat: NativeNode[] = [];
   const collect = (nodes: NativeNode[] | undefined): void => {
@@ -137,13 +146,10 @@ export async function readAll(
   }
   const other = toSynced(otherChildren, opts);
 
-  let toolbar: BookmarkNode[] = [];
-  if (syncToolbar) {
-    const [toolbarTree] = await api.getSubTree(ids.toolbar);
-    if (!toolbarTree) throw new ContainerNotFoundError(t('err.containerToolbar'));
-    toolbar = toSynced(toolbarTree.children ?? [], opts);
-    collect(toolbarTree.children);
-  }
+  const [toolbarTree] = await api.getSubTree(ids.toolbar);
+  if (!toolbarTree) throw new ContainerNotFoundError(t('err.containerToolbar'));
+  const toolbar = toSynced(toolbarTree.children ?? [], opts);
+  collect(toolbarTree.children);
 
   const bookmarks: BookmarkNode[] = [];
   const otherContainer = getContainer(BookmarkContainer.Other, bookmarks, true)!;
@@ -205,18 +211,40 @@ export async function readAll(
   return bookmarks;
 }
 
-/** Remove every bookmark inside the native containers (toolbar only if synced). */
+/** Remove every bookmark inside the synced native containers. */
 export async function clearAll(
   api: BookmarkApi,
   ids: ContainerIds,
-  syncToolbar: boolean,
 ): Promise<void> {
-  const targets = [ids.other, ...(syncToolbar ? [ids.toolbar] : [])];
+  const targets = [ids.other, ids.toolbar];
   if (ids.menu) targets.unshift(ids.menu);
   for (const id of targets) {
     const children = await api.getChildren(id);
     for (const child of children) await api.removeTree(child.id);
   }
+}
+
+/** Empty ONE synced container (used by the one-shot toolbar adoption). */
+export async function clearContainer(
+  api: BookmarkApi,
+  ids: ContainerIds,
+  container: BookmarkContainer,
+): Promise<void> {
+  if (container !== BookmarkContainer.Toolbar) throw new ContainerNotFoundError(t('err.containerNative'));
+  const children = await api.getChildren(ids.toolbar);
+  for (const child of children) await api.removeTree(child.id);
+}
+
+/** Fill ONE synced container from synced children (toolbar adoption). */
+export async function populateContainer(
+  api: BookmarkApi,
+  ids: ContainerIds,
+  opts: NativeOpts,
+  container: BookmarkContainer,
+  children: BookmarkNode[],
+): Promise<void> {
+  if (container !== BookmarkContainer.Toolbar) throw new ContainerNotFoundError(t('err.containerNative'));
+  await createTree(api, opts, ids.toolbar, ids.toolbar, children);
 }
 
 async function createTree(
@@ -248,7 +276,6 @@ export async function populate(
   ids: ContainerIds,
   bookmarks: BookmarkNode[],
   opts: NativeOpts,
-  syncToolbar: boolean,
 ): Promise<number> {
   let total = 0;
   const other = getContainer(BookmarkContainer.Other, bookmarks);
@@ -267,7 +294,7 @@ export async function populate(
     }
     total += await createTree(api, opts, ids.other, ids.toolbar, otherNodes);
   }
-  if (toolbar?.children?.length && syncToolbar) {
+  if (toolbar?.children?.length) {
     total += await createTree(api, opts, ids.toolbar, ids.toolbar, toolbar.children);
   }
   return total;
@@ -279,7 +306,6 @@ export async function buildMappings(
   ids: ContainerIds,
   bookmarks: BookmarkNode[],
   opts: NativeOpts,
-  syncToolbar: boolean,
 ): Promise<BookmarkIdMapping[]> {
   void opts;
   const mapIds = (natives: NativeNode[], synced: BookmarkNode[]): BookmarkIdMapping[] => {
@@ -297,7 +323,6 @@ export async function buildMappings(
     if (!id) return;
     const target = getContainer(container, bookmarks);
     if (!target?.children?.length) return;
-    if (container === BookmarkContainer.Toolbar && !syncToolbar) return;
     const [tree] = await api.getSubTree(id);
     if (!tree) throw new ContainerNotFoundError(t('err.containerNative'));
     let natives = tree.children ?? [];

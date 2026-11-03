@@ -123,43 +123,41 @@ export function diffTrees(local: BookmarkNode[], remote: BookmarkNode[], sampleS
 }
 
 /**
- * Magnitude of a replace: nodes that exist on one side only (bookmarks by
- * normalized URL, folders by path below the three roots). Used to spot a
- * massive, unexpected change — a wipe, a bad import, another client gone
- * wrong — so it gets a safety snapshot even though a normal sync does not.
+ * Magnitude of a replace: how many nodes changed existence or position.
+ * Bookmarks are matched by normalized URL and folders by their path below the
+ * three roots (ids are reassigned by other clients, so they cannot be used).
+ * Counted per parent, so a MOVE is a removal plus an addition: moving a folder
+ * that holds > MaxSilentSyncChanges / 2 bookmarks is a massive change too.
  * The roots themselves are skipped: their titles are browser-localized.
  */
 export function changedNodeCount(a: BookmarkNode[], b: BookmarkNode[]): number {
-  const urls = (tree: BookmarkNode[]): Set<string> => {
-    const out = new Set<string>();
-    const walk = (nodes: BookmarkNode[]): void => {
-      for (const n of nodes) {
-        if (Array.isArray(n.children)) walk(n.children);
-        else if (n.url && n.url !== SeparatorUrl) out.add(normalizeUrl(n.url));
-      }
+  const bucket = (tree: BookmarkNode[]): Map<string, number> => {
+    const out = new Map<string, number>();
+    const add = (parent: string, key: string): void => {
+      const composite = `${parent}\u0000${key}`;
+      out.set(composite, (out.get(composite) ?? 0) + 1);
     };
-    walk(tree);
-    return out;
-  };
-  const folders = (tree: BookmarkNode[]): Set<string> => {
-    const out = new Set<string>();
     const walk = (nodes: BookmarkNode[], path: string[], depth: number): void => {
+      const parent = path.join(' / ');
       for (const n of nodes) {
-        if (!Array.isArray(n.children)) continue;
-        const next = [...path, n.title ?? ''];
-        // Depth 0 = the three roots: their titles are localized.
-        if (depth > 0) out.add(next.join(' / '));
-        walk(n.children, next, depth + 1);
+        if (Array.isArray(n.children)) {
+          const next = [...path, n.title ?? ''];
+          // Depth 0 = the three roots: their titles are localized.
+          if (depth > 0) add(parent, `f:${n.title ?? ''}`);
+          walk(n.children, next, depth + 1);
+        } else if (n.url && n.url !== SeparatorUrl) {
+          add(parent, `b:${normalizeUrl(n.url)}`);
+        }
       }
     };
     walk(tree, [], 0);
     return out;
   };
-  const count = (left: Set<string>, right: Set<string>): number => {
-    let n = 0;
-    for (const value of left) if (!right.has(value)) n += 1;
-    for (const value of right) if (!left.has(value)) n += 1;
-    return n;
-  };
-  return count(urls(a), urls(b)) + count(folders(a), folders(b));
+  const left = bucket(a);
+  const right = bucket(b);
+  let magnitude = 0;
+  for (const key of new Set([...left.keys(), ...right.keys()])) {
+    magnitude += Math.abs((left.get(key) ?? 0) - (right.get(key) ?? 0));
+  }
+  return magnitude;
 }
