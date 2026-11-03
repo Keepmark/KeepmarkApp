@@ -1924,7 +1924,7 @@ export class BackgroundCore {
   }
 
   /**
-   * Read-only proof of the sync-change password: the manager asks once, before
+   * Read-only proof of the sync lock password: the manager asks once, before
    * a flow starts, so a typo fails there instead of after the form is filled.
    * Unlocking twice is cheap (PBKDF2 once per call) and stores nothing.
    */

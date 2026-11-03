@@ -526,7 +526,7 @@ white-mark in-page chip.
   service-worker stop + persisted conflict + take remote, convergence, server
   delete, log redaction (no full sync ID / password), dark-mode screenshots,
   and the multi-sync story in both clients: two saved syncs, activation with and
-  without the sync-change password, removing a dormant row, unlink and
+  without the sync lock, removing a dormant row, unlink and
   relink from the popup, and the QR card explaining a plain-HTTP service
   instead of failing on click.
   Throwaway profiles, generated password, the QA sync is deleted at the end;

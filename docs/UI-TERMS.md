@@ -24,7 +24,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | **Upload** | Replace the server copy with the bookmarks on this device | Upload local, Upload mine, Overwrite remote, Push |
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
-| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password |
+| Sync lock | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password, sync-change password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
 | Copy of the removed sync | The local copy kept when a sync disappeared from the service; Android keeps it encrypted and restorable in Backup → Copies of removed syncs, the extension downloads it as a plain JSON file or dismisses it | orphan copy, orphan backup |
@@ -84,7 +84,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Active | Attivo | Actif | Activo | Aktiv |
 | Inactive | Inattivo | Inactif | Inactivo | Inaktiv |
 | Forget | Dimentica | Oublier | Olvidar | Vergessen |
-| Sync-change password | password di cambio sync | mot de passe de changement de sync | contraseña de cambio de sync | Sync-Wechselpasswort |
+| Sync lock | blocco sync | verrou des syncs | bloqueo de sync | Sync-Sperre |
 | Backup | Backup | Sauvegarde | Copia de seguridad | Sicherung |
 | Safety backups | Backup di sicurezza | Sauvegardes de sécurité | Copias de seguridad preventivas | Sicherheitskopien |
 | Copy of the removed sync | Copia del sync rimosso | Copie du sync supprimé | Copia del sync eliminado | Kopie des entfernten Syncs |
@@ -129,7 +129,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Active | 使用中 | Ativo | Активна | 使用中 |
 | Inactive | 未使用 | Inativo | Неактивна | 未启用 |
 | Forget | 忘れる | Esquecer | Забыть | 忘记 |
-| Sync-change password | 同期切り替えパスワード | senha de troca de sync | пароль переключения | 同步切换密码 |
+| Sync lock | 同期ロック | bloqueio de sync | блокировка синхронизации | 同步锁 |
 | Backup | バックアップ | Backup | Резервная копия | 备份 |
 | Safety backups | 安全バックアップ | Backups de segurança | Страховочные копии | 安全备份 |
 | Copy of the removed sync | 削除された同期のコピー | Cópia do sync removido | Копия удалённого sync | 已删除同步的副本 |

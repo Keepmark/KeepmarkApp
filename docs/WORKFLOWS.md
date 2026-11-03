@@ -39,10 +39,13 @@ Words come from `UI-TERMS.md`.
    line of follow-up when the user has something to do (store the sync ID, update
    other devices), and a pointer to Backup → Safety backups when one was made.
 7. **Safety backups are taken before every destructive step, not on every
-   edit.** A download, upload, import, restore, password change, sync switch,
-   duplicates cleanup or batch delete snapshots the side it replaces; a move, its
-   undo and a single-item delete rely on Undo instead. A workflow that takes a
-   snapshot says so in its confirmation or result. Forgetting a saved sync
+   edit.** A download, upload, import, restore, password change, duplicates
+   cleanup or batch delete snapshots the side it replaces; a move, its undo and
+   a single-item delete rely on Undo instead. Switching to another sync is not
+   destructive: on Android, taking the target's server copy keeps no snapshot
+   (the copy you leave is on the server), while replacing that server copy still
+   does; the extension still snapshots the side it leaves. A workflow that takes
+   a snapshot says so in its confirmation or result. Forgetting a saved sync
    affects its backups only where their key can never return: the extension
    deletes them (Restore only uses the active sync's key); Android keeps them,
    because re-linking the same sync with the same password derives the same key
@@ -67,8 +70,8 @@ Words come from `UI-TERMS.md`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync while linked (Connect → `+ Add a sync`) | yes | Sync-change password gate (only if set) → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). With a sync-change password, the wizard is gated: one field and `Continue` come first (a wrong password fails there, cleared), and only then the form opens — the password is never asked again inside it. |
-| Syncs: Activate | no | Syncs → `Activate` → device unlock when app lock is set → apply | none beyond the device unlock | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy behind a `switch-take-remote` safety backup. If that save cannot happen the switch is cancelled with the real reason (pending conflict, no connection, sync gone from the server, push failed) and nothing is replaced. The sync you leave stays in the list. The sync's own long password is never asked. |
+| Add a sync while linked (Connect → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
+| Syncs: Activate | no | Syncs → `Activate` → device unlock when app lock is set → apply | none beyond the device unlock | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy — with no safety backup when it was linked to another sync (that copy is on the server); an unlinked device keeps the usual `switch-take-remote` backup. If that save cannot happen the switch is cancelled with the real reason (pending conflict, no connection, sync gone from the server, push failed) and nothing is replaced. The sync you leave stays in the list. The sync's own long password is never asked. |
 | Syncs: Forget / Unlink | no | Syncs → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten; bookmarks, the server copy and the other rows stay. Active: this device is unlinked and the row disappears; the bookmarks stay and the sync plus its server copy stay for the other devices. Dormant rows survive an unlink. Forgetting also drops that key's safety-master wrap when no other saved sync uses it; safety backups and copies of removed syncs stay. |
 | Removed sync (401) | shown while linked | Home/Status notice → `Try again` / `Unlink and keep a copy…` / `Cancel` | always for the unlink; retry and cancel execute at once | The service no longer has this sync (expiry or another device's deletion). Nothing happens automatically and local bookmarks are untouched. Unlinking keeps a verified local copy of this device's tree, restorable from Backup → `Copies of removed syncs` and never pruned; `Cancel` keeps the notice quiet for that sync until an explicit retry. |
 | Removed-sync copy | no | Backup → `Copies of removed syncs` → `Restore` / `Delete` | always | Restore takes a `pre-restore` safety backup first and replaces the local bookmarks (pushed at the next sync while linked). While a sync is linked the restore is refused until that sync has saved its pending edits, so nothing unsaved is replaced silently. Delete removes only that copy; there is no undo. Copies are never pruned automatically; a copy list that cannot be read says so instead of looking empty. |
@@ -78,7 +81,7 @@ Words come from `UI-TERMS.md`.
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
 | Add a sync (manager → Sync → `+ Add a sync`) | no | Destination, `A new sync` / `An existing sync`, credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The previous sync stays available and other devices keep using it until moved. A new sync is created from the bookmarks currently in this browser and reports the uploaded count. Save the new sync ID and password. |
-| Activate a saved sync (popup) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → sync-change password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync-change password the dialog is a plain confirmation. |
+| Activate a saved sync (popup) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → sync lock password (only if set) → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync lock the dialog is a plain confirmation. |
 | Forget or unlink a saved sync (manager) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten and the server copy stays; safety backups only that key could open are deleted with it. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
 | Delete sync from server (service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
 | Removed sync | shown while unlinked after the service no longer has the sync | Popup: informational notice only (no actions, no backup wording); Manager → Backup: `Download copy` / `Dismiss…` | Dismiss only | Only for a sync that disappeared from the service (expiry or another device's deletion). The popup states the fact and stops there: the kept copy and its actions belong to Backup, where the user goes on their own. That copy is the only copy of the removed sync and a plain JSON file, not encrypted. A deliberate `Delete from server…` keeps no copy. |
@@ -122,20 +125,20 @@ Words come from `UI-TERMS.md`.
 - The key protection differs by platform: Android stores the rows in the
   platform's Keystore-backed secure storage and can additionally require the
   device unlock (app lock) before a switch; the extension stores the rows under
-  an optional **sync-change password** vault (plain rows when no password is
-  set).
+  an optional **sync lock** (a password that wraps them; plain rows when it is
+  not set).
 - `+ Add a sync` follows the platform's rules: Android offers only an existing
   sync while linked (a brand-new sync needs an unlink first); the extension can
   also create a new sync from the current bookmarks, which is additive and leaves
   the previous sync in the list.
 
-## Extension: sync-change password
+## Extension: sync lock
 
 - Optional and manager-owned: a short secret (a PIN of a few digits is fine —
   only "not empty" is enforced). It wraps a random vault key, which wraps every
   row's key. Changing it rewraps only the vault (rows untouched); removing it
   unwraps the rows to clear; losing it means the inactive rows' keys are gone.
-- Set/change/remove/reset it in Manager → Sync → Sync-change password. With a
+- Set/change/remove/reset it in Manager → Sync → Sync lock. With a
   password, activation, a new link and any change that demotes the active key ask
   for it. Without one, an inactive row is a plain confirmation and the rows are
   stored in clear in this browser (same exposure as the active key).
@@ -184,7 +187,7 @@ Words come from `UI-TERMS.md`.
   reports v1.2.
 - The extension says "this browser's copy"; the mobile app says "this device's
   copy".
-- The extension protects saved-sync keys with an optional sync-change password;
+- The extension protects saved-sync keys with an optional sync lock;
   Android uses platform secure storage plus the optional device unlock.
 - Android can add only an existing sync while linked; the extension can also
   create a new sync from the current bookmarks.

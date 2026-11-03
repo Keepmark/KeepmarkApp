@@ -34,7 +34,7 @@ Its defining capability is **multi-sync**: a browser keeps any number of saved
 syncs (work, home, family, a second server) side by side, each with its own
 service, derived key and bookmark copy, and exactly one of them active.
 Switching never asks again for the syncs' own long passwords: an optional short
-sync-change password gates adding and activating, and what is stored per row is
+sync lock gates adding and activating, and what is stored per row is
 the derived key, wrapped when that gate is set. Every other feature works the
 same whichever sync is active.
 
@@ -532,7 +532,7 @@ notsynced), white-mark in-page chip.
   service-worker stop + persisted conflict + take remote, convergence, server
   delete, log redaction (no full sync ID / password), dark-mode screenshots,
   and the multi-sync story in both clients: two saved syncs, activation with and
-  without the sync-change password, removing a dormant row, unlink and
+  without the sync lock, removing a dormant row, unlink and
   relink from the popup, and the QR card explaining a plain-HTTP service
   instead of failing on click.
   Throwaway profiles, generated password, the QA sync is deleted at the end;

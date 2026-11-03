@@ -178,7 +178,7 @@ h3 {
   font-weight: 700;
 }
 
-/* Section heading that carries a state badge (sync-change password: set/not set). */
+/* Section heading that carries a state badge (sync lock: set/not set). */
 #m-protection h3 { display: flex; align-items: center; gap: 8px; }
 
 p { margin: 6px 0; }
@@ -887,3 +887,33 @@ dd:last-of-type { border-bottom: 0; }
   flex: 1;
   min-width: 0;
 }
+
+/* Add-sync gate: a focused modal over the Sync section. Same surface and
+   backdrop as the QR dialog, sized for one field and two buttons. */
+#m-link-gate {
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  background: var(--surface);
+  color: var(--fg);
+  overflow-y: auto;
+  box-shadow: 0 1rem 4rem #0005;
+}
+
+#m-link-gate::backdrop { background: #080c20b8; }
+
+#m-link-gate h2 {
+  margin: 0 0 .35rem;
+  font-size: 1.2rem;
+}
+
+#m-link-gate form {
+  display: grid;
+  gap: .6rem;
+  margin-top: .9rem;
+}
+
+#m-link-gate .row { margin-top: .2rem; }
+#m-link-gate #link-gate-error { margin: 0; }

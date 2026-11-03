@@ -1,12 +1,12 @@
 // Popup: the saved-syncs list (multi-sync), read-only. The popup can switch
-// to a dormant sync (asking the short sync-change password when one is set)
+// to a dormant sync (asking the sync lock password when one is set)
 // but never renames, removes or manages rows: those live in the manager.
 // Activating a wrapped row asks for the switch password (never the sync's own
 // one); a plain row is a plain confirmation.
 
 import { $, input, send, withBusy } from './ui.js';
 import { showError } from './flow.js';
-import { t, tn } from '../shared/i18n.js';
+import { t } from '../shared/i18n.js';
 import { MessageCommand, type SavedSyncsResponse } from '../shared/messages.js';
 import {
   isActiveSavedSync,
@@ -85,7 +85,8 @@ export class SavedSyncsPanel {
       card.hidden = true;
       return;
     }
-    this.el('title').textContent = tn('popup.saved.title', this.syncs.length);
+    // No count: the list below already shows how many there are.
+    this.el('title').textContent = t('popup.saved.title');
     this.syncs.forEach((sync, index) => list.append(this.row(sync, index)));
     card.hidden = false;
   }

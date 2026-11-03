@@ -68,8 +68,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
 | `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ru/zh | new |
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
-| `saved-syncs.ts` | Multi-sync registry: rows (service, sync ID, label, last use) plus each row's derived key — wrapped under the sync-change lock when set, `plain` otherwise (never the raw password) — canonical identity, label rules + host suggestion, upsert/remove/sort/active matching | new (model A: one active sync) |
-| `switch-lock.ts` | Optional short sync-change password: PBKDF2-SHA256 (200k) wraps a random vault key, the vault key wraps row keys. Create/unlock/change (rewrap the vault only, rows untouched)/remove (rows become plain)/reset (new vault). Only "non-empty" is enforced: PINs and 1-character secrets are valid | new |
+| `saved-syncs.ts` | Multi-sync registry: rows (service, sync ID, label, last use) plus each row's derived key — wrapped under the sync lock when set, `plain` otherwise (never the raw password) — canonical identity, label rules + host suggestion, upsert/remove/sort/active matching | new (model A: one active sync) |
+| `switch-lock.ts` | Optional sync lock (short password): PBKDF2-SHA256 (200k) wraps a random vault key, the vault key wraps row keys. Create/unlock/change (rewrap the vault only, rows untouched)/remove (rows become plain)/reset (new vault). Only "non-empty" is enforced: PINs and 1-character secrets are valid | new |
 | `id-mapper.ts` | `syncedId<->nativeId` mappings, sorted, rebuilt on populate | `app/bookmark-id-mapper.service.ts` |
 | `sync.ts` | `checkService`, `createNewSync`, `pullExistingSync`, `pullWithDerivedKey`, `pushBookmarks`, `switchService` | `app/bookmark-sync-provider` + login component |
 | `sync-queue.ts` | Gated FIFO `SyncQueue` + failure policy (offline/429→front, 409→persisted conflict for user resolution, 401→sync-lost) | `app/sync.service.ts` |
@@ -114,7 +114,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   shared `ui.ts`): connect + status card + saved syncs (multi-sync) + sync now + open manager. Display
   only; mutations via messages. `saved-syncs.ts` renders the same registry in
   both views read-only (active tag, `Activate` on inactive rows only) and owns
-  the modal activation step (sync-change password only when one is set).
+  the modal activation step (sync lock password only when one is set).
   Rename/remove/add/delete live in the manager. The server-removed notice is
   informational only (the fact, no backup wording, no actions): the kept copy
   lives in the manager's Backup section, where the user goes on their own.
@@ -122,7 +122,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
   read-only `SwitchPreview` preflight before confirm; the Sync section owns the
-  saved registry (rows + `+ Add a sync` form + optional sync-change password).
+  saved registry (rows + `+ Add a sync` form + optional sync lock).
   With a password set, `+ Add a sync` asks it first (read-only
   `VerifySwitchPassword`) and only then opens the form, which has no password
   field of its own.
@@ -166,7 +166,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    background context. 409 → conflict persisted (`StoreKey.ConflictState`) + file + notify, no auto-pull while pending; unpushed native edits are never wiped by a pull. 401 → wipe creds.
    **Multi-sync (one active at a time)**: `StoreKey.SavedSyncs` holds the rows;
    `SyncInfo`/`Bookmarks`/`LastUpdated`/`ConflictState`/`UndoSlot` always
-   describe the ACTIVE sync. The sync-change password is OPTIONAL
+   describe the ACTIVE sync. The sync lock is OPTIONAL
    (`StoreKey.SwitchLock`: random vault key wrapped by its PBKDF2 key). With a
    lock, rows hold `{scheme:'switch'}` and activation/new links prove it,
    unwrap the row's key and verify the target (read-only: version gate + GET +
@@ -264,7 +264,7 @@ folder edge cases covered by tests but untested live.
 (upsert on every link, upgrade migration at startup), `GetSavedSyncs` /
 `ActivateSavedSync` / `RemoveSavedSync` / `RenameSavedSync`, popup panel in
 both views, fail-closed push before switching, conflict blocks the switch,
-unlink keeps the rows. Slice 2 adds the optional sync-change password
+unlink keeps the rows. Slice 2 adds the optional sync lock
 (`switch-lock.ts`, `StoreKey.SwitchLock`, `GetSwitchLock`/
 `SetSwitchPassword`/`ChangeSwitchPassword`/`RemoveSwitchPassword`/
 `ResetSwitchPassword`): no length or complexity policy, plain rows when unset,
@@ -279,7 +279,7 @@ the unlink also prunes the encrypted safety backups only that row's key could
 open and never keeps a copy of the server data), `Delete from server…` on the
 active row (keeps no copy: no backup is taken or kept, no `RemovedSync`,
 no notification), and a read-only popup with a modal activation dialog that
-names the sync-change password. Post-review fixes landed in 0.1.34–0.1.36
+names the sync lock password. Post-review fixes landed in 0.1.34–0.1.36
 (removed-sync copy in Backup, deliberate delete keeps nothing and prunes
 orphaned safety backups). Next slices: "Show QR" per row, then
 KeepmarkMobile (credential index + one DB per sync + Syncs page + biometry

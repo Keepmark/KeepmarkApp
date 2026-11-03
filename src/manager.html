@@ -178,7 +178,7 @@
         <div id="m-syncs-activate" class="confirm" hidden>
           <p><strong id="m-syncs-activate-text"></strong></p>
           <p id="m-syncs-activate-hint" class="hint"></p>
-          <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+          <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
             <input id="m-syncs-activate-pw" type="password" autocomplete="off" /></label>
           <div class="row">
             <button id="m-syncs-activate-go" class="primary" data-i18n="popup.saved.activate">Activate</button>
@@ -191,28 +191,28 @@
           cannot be deleted from here (Unlink only removes this device; the sync on the server stays).</p>
 
         <div id="m-protection" hidden>
-          <h3><span data-i18n="manager.switchPw.title">Sync-change password</span>
+          <h3><span data-i18n="manager.switchPw.title">Sync lock</span>
             <span id="m-link-state" class="tag"></span></h3>
           <p class="hint" data-i18n="manager.switchPw.hint">Optional: require a short password (a PIN is fine) to activate or add syncs. Without
             it the switch is one click and the saved keys are stored unencrypted in this browser.</p>
           <!-- One action at a time: the buttons below open a panel that asks
                only what that action needs (remove asks the current password). -->
           <div class="row" id="m-lock-actions">
-            <button id="m-btn-link-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set sync-change password</button>
-            <button id="m-btn-link-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change sync-change password</button>
-            <button id="m-btn-link-lock-remove" class="danger" hidden data-i18n="manager.switchPw.removeBtn">Remove sync-change password…</button>
+            <button id="m-btn-link-lock-set" class="primary" data-i18n="manager.switchPw.setBtn">Set sync lock</button>
+            <button id="m-btn-link-lock-change" class="primary" hidden data-i18n="manager.switchPw.changeBtn">Change sync lock password</button>
+            <button id="m-btn-link-lock-remove" class="danger" hidden data-i18n="manager.switchPw.removeBtn">Remove sync lock…</button>
           </div>
           <div id="m-lock-panel" class="confirm" hidden>
             <div id="m-lock-current-row">
-              <label><span data-i18n="manager.switchPw.current">Current sync-change password</span>
+              <label><span data-i18n="manager.switchPw.current">Current password</span>
                 <input id="m-link-lock-current-pw" type="password" autocomplete="off" /></label>
             </div>
             <div id="m-lock-new-row">
-              <label><span data-i18n="manager.switchPw.new">New sync-change password</span>
+              <label><span data-i18n="manager.switchPw.new">New password</span>
                 <input id="m-link-lock-new" type="password" autocomplete="off" /></label>
             </div>
             <div id="m-lock-confirm-row">
-              <label><span data-i18n="manager.switchPw.confirm">Repeat sync-change password</span>
+              <label><span data-i18n="manager.switchPw.confirm">Repeat password</span>
                 <input id="m-link-lock-confirm" type="password" autocomplete="off" /></label>
             </div>
             <p id="m-lock-panel-hint" class="hint" hidden></p>
@@ -226,19 +226,6 @@
             <button id="m-btn-link-lock-reset" class="mini" data-i18n="manager.switchPw.resetBtn">Forgot it? Reset…</button>
           </div>
           <div id="switch-pw-result" class="result" role="status" hidden></div>
-        </div>
-
-        <div id="m-link-gate" hidden>
-          <h3 data-i18n="manager.switchPw.title">Sync-change password</h3>
-          <p class="hint" data-i18n="manager.switchPw.gateIntro">It protects every saved sync, so it is asked once before the add flow
-            starts.</p>
-          <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
-            <input id="m-link-gate-pw" type="password" autocomplete="off" /></label>
-          <div class="row">
-            <button id="m-btn-link-gate-go" class="primary" data-i18n="manager.switchPw.gateBtn">Continue</button>
-            <button id="m-btn-link-gate-cancel" data-i18n="common.cancel">Cancel</button>
-          </div>
-          <div id="link-gate-error" class="error" role="alert" hidden></div>
         </div>
 
         <div id="m-link-form" hidden>
@@ -337,7 +324,7 @@
         <label><span data-i18n="manager.settings.currentPw">Current password</span> <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label><span data-i18n="manager.syncs.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label><span data-i18n="manager.settings.confirmNewPw">Confirm new password</span> <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
-        <label id="m-pw-switch-wrap" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span> <input id="m-pw-switch" type="password" autocomplete="off" /></label>
+        <label id="m-pw-switch-wrap" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span> <input id="m-pw-switch" type="password" autocomplete="off" /></label>
         <div class="row"><button id="m-btn-password" class="primary" data-needs-link data-i18n="manager.settings.changePwBtn">Change password…</button></div>
         <div id="pw-error" class="error" role="alert" hidden></div>
         <div id="pw-result" class="result" hidden></div>
@@ -398,6 +385,21 @@
         <button id="qr-close" data-i18n="qr.close">Close</button>
       </dialog>
     </div>
+    <!-- Add-sync gate: a focused modal, not a block at the bottom of the Sync
+         section. It asks the sync lock password once, then reveals the wizard. -->
+    <dialog id="m-link-gate" aria-labelledby="m-link-gate-title" aria-describedby="m-link-gate-intro" hidden>
+      <h2 id="m-link-gate-title" data-i18n="manager.switchPw.title">Sync lock</h2>
+      <p id="m-link-gate-intro" class="hint" data-i18n="manager.switchPw.gateIntro">It protects every saved sync, so it is asked once before adding starts.</p>
+      <form id="m-link-gate-form" autocomplete="off">
+        <label for="m-link-gate-pw" data-i18n="popup.saved.changePasswordLabel">Sync lock password</label>
+        <input id="m-link-gate-pw" type="password" autocomplete="off" />
+        <div class="row">
+          <button id="m-btn-link-gate-go" class="primary" type="submit" data-i18n="manager.switchPw.gateBtn">Continue</button>
+          <button id="m-btn-link-gate-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="link-gate-error" class="error" role="alert" hidden></div>
+      </form>
+    </dialog>
   <script type="module" src="./manager/manager.ts"></script>
 </body>
 </html>

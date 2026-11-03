@@ -421,18 +421,32 @@ button.mini {
 .card {
   background: var(--surface);
   border-radius: 16px;
-  padding: 14px 16px 12px;
+  padding: 12px 14px;
   box-shadow: var(--shadow);
 }
 
 .status-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  padding-bottom: 10px;
+  gap: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
+
+/* The sync's name is the heading: the popup is about this one sync. */
+.status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-row .pill { flex: none; }
 
 .pill {
   display: inline-flex;
@@ -483,56 +497,59 @@ button.mini {
 
 .badge:empty { display: none; }
 
-dl {
+/* One muted technical line: URL, service version, contract badge. */
+.status-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.status-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-ver { flex: none; white-space: nowrap; }
+.status-meta .badge { flex: none; }
+
+/* Two compact facts: sync ID (whole, two balanced 16-char lines) and space
+   used (meter + text on the same line). */
+.status-facts {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0;
-  margin: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
   font-size: 12px;
 }
 
-dt,
-dd {
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-}
+.status-label { color: var(--muted); }
 
-dt {
-  color: var(--muted);
-  padding-right: 12px;
-}
-
-dd {
-  margin: 0;
-  justify-content: flex-end;
-  text-align: right;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-dt:last-of-type,
-dd:last-of-type {
-  border-bottom: 0;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  padding-top: 6px;
-}
-
-dd:last-of-type { align-items: flex-end; }
-
-.status-grid code {
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.id-row { gap: 6px; }
 /* The 32-character sync ID is a bearer token: show it whole, split into two
    balanced 16-character lines next to Copy, so it never wraps mid-pair and
    never leaves a lone character on its own line. */
-.id-row code { min-width: 0; max-width: 16ch; }
+.status-id {
+  min-width: 0;
+  max-width: 16ch;
+  font-size: 10.5px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.status-facts .meter { margin: 0; height: 4px; }
+
+.status-space {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
 .meter {
   width: 100%;

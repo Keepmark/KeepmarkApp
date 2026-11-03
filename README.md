@@ -48,7 +48,7 @@ password and bookmarks, exactly one is active, and switching is a click.
   keep this copy, or merge). The sync you were using stays in the list.
 - **Switch** from the popup or the manager. The sync you leave is saved
   first, the new one is verified on its server copy and becomes active. An
-  optional short **sync-change password** (a PIN is fine) can gate adding and
+  optional short **sync lock password** (a PIN is fine) can gate adding and
   switching, without ever asking again for the syncs' own long passwords.
 - **Stay in control of the list**: rename a sync, unlink it (the server copy
   stays untouched), link it again later with its sync ID and password, or
@@ -85,7 +85,7 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
 | **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
-| **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync-change password; rename, unlink (link it again later with its sync ID and password), delete from the server |
+| **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
 | **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |
 | **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |

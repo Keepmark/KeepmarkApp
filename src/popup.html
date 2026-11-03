@@ -25,7 +25,7 @@
       <dialog id="c-saved-dialog" class="saved-dialog">
         <p><strong id="c-saved-confirm-text"></strong></p>
         <p id="c-saved-hint" class="hint"></p>
-        <label id="c-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+        <label id="c-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
           <input id="c-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">
@@ -63,7 +63,7 @@
       <p class="hint" data-i18n="popup.connect.passwordHint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
     </div>
     <div id="conn-switch-locked" hidden>
-      <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+      <label><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
         <input id="conn-switch-password" type="password" autocomplete="off" />
       </label>
       <p class="hint" data-i18n="popup.saved.connectSwitchHint">Required to add another sync: it unlocks the saved list.</p>
@@ -89,28 +89,28 @@
   </section>
 
   <section id="view-main" hidden>
+    <!-- The sync's name is the card's heading: it is the one thing the popup is
+         about. Everything technical is one muted line plus two compact rows, so
+         the sync list below stays in view without scrolling. Last sync lives in
+         the header pill (status only, no duplicate row). -->
     <div class="card">
       <div class="status-row">
+        <h2 id="p-sync-name" class="status-name">…</h2>
         <span id="p-pill" class="pill">…</span>
-        <span id="p-service-badge" class="badge"></span>
       </div>
-      <dl class="status-grid">
-        <dt data-i18n="common.service">Service</dt>
-        <dd id="p-server">…</dd>
-        <dt data-i18n="popup.saved.nameTitle">Sync</dt>
-        <dd id="p-sync-name">…</dd>
-        <dt data-i18n="common.serviceVersion">Service version</dt>
-        <dd id="p-swversion">…</dd>
-        <dt data-i18n="common.syncId">Sync ID</dt>
-        <dd class="id-row"><code id="p-syncid">…</code> <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID" data-i18n-aria-label="popup.copyId.label" data-i18n="common.copy">Copy</button></dd>
-        <dt data-i18n="common.lastSync">Last sync</dt>
-        <dd id="p-last">…</dd>
-        <dt data-i18n="common.spaceUsed">Space used</dt>
-        <dd>
-          <div class="meter" role="progressbar" aria-label="Service space used" data-i18n-aria-label="popup.space.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="p-space-fill"></div></div>
-          <span id="p-space">…</span>
-        </dd>
-      </dl>
+      <p class="status-meta">
+        <span id="p-server" class="status-url">…</span>
+        <span id="p-swversion" class="status-ver" data-i18n-title="common.serviceVersion">…</span>
+        <span id="p-service-badge" class="badge"></span>
+      </p>
+      <div class="status-facts">
+        <span class="status-label" data-i18n="common.syncId">Sync ID</span>
+        <code id="p-syncid" class="status-id">…</code>
+        <button id="btn-copy-id" class="mini" aria-label="Copy the sync ID" data-i18n-aria-label="popup.copyId.label" data-i18n="common.copy">Copy</button>
+        <span class="status-label" data-i18n="common.spaceUsed">Space used</span>
+        <div class="meter" role="progressbar" aria-label="Service space used" data-i18n-aria-label="popup.space.label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="p-space-fill"></div></div>
+        <span id="p-space" class="status-space">…</span>
+      </div>
     </div>
     <div id="p-saved-card" class="card saved" hidden>
       <h2 id="p-saved-title" class="saved-title" data-i18n="popup.saved.title">Syncs</h2>
@@ -118,7 +118,7 @@
       <dialog id="p-saved-dialog" class="saved-dialog">
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint" class="hint"></p>
-        <label id="p-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+        <label id="p-saved-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
           <input id="p-saved-password" type="password" autocomplete="off" />
         </label>
         <div class="row">

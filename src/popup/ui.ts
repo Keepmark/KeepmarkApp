@@ -144,15 +144,17 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const { status, ping } = view;
   const pill = $(`${prefix}-pill`);
   const badge = $(`${prefix}-service-badge`);
-  // Service version row is optional (older test mounts lack it).
+  // Optional rows: the manager has all of them, the compact popup card only
+  // the service version (last sync lives in the header pill there).
   const swversion = document.getElementById(`${prefix}-swversion`);
+  const last = document.getElementById(`${prefix}-last`);
   if (!status?.syncEnabled) {
     setPill(pill, t('ui.pill.notConnected'), 'bad');
     badge.textContent = '—';
     badge.className = 'badge';
     $(`${prefix}-server`).textContent = '—';
     $(`${prefix}-syncid`).textContent = '—';
-    $(`${prefix}-last`).textContent = '—';
+    if (last) last.textContent = '—';
     $(`${prefix}-space`).textContent = '—';
     setMeter(prefix, 0, undefined);
     if (swversion) swversion.textContent = '—';
@@ -169,7 +171,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   badge.textContent = v12 ? 'API v1.2' : '';
   badge.className = 'badge';
   $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
-  $(`${prefix}-last`).textContent = status.lastUpdated ? formatDateTime(status.lastUpdated) : '—';
+  if (last) last.textContent = status.lastUpdated ? formatDateTime(status.lastUpdated) : '—';
 
   const used = status.usedBytes ?? 0;
   const max = ping?.maxSyncSize;

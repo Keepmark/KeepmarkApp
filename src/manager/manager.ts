@@ -94,7 +94,7 @@ let ping: PingResponse | undefined;
 let preview: SyncTargetPreview | undefined;
 let linkGeneration = 0;
 /** Proved once at the gate, then reused by every send of this wizard: the
- *  sync-change password is asked before the form opens, never inside it. */
+ *  sync lock password is asked before the form opens, never inside it. */
 let linkSwitchPassword = '';
 /** Merge dry-run from the last Check target (merge direction only). */
 let mergeStats: MergePreview | undefined;
@@ -1503,17 +1503,22 @@ async function directConnect(): Promise<void> {
 function openAddSync(): void {
   clearMessages();
   nameTouched = false;
-  // With a sync-change password the proof comes first: one field, one button,
+  // With a sync lock the proof comes first: one field, one button,
   // and only then the wizard. Nothing else is on screen while it is asked.
   if (switchLockSet) {
+    // The proof is a focused modal, not a block at the bottom of the section:
+    // one field, one button, and nothing else on screen until it passes.
     linkSwitchPassword = '';
+    ++gateSeq;
+    const gate = $('m-link-gate') as HTMLDialogElement;
     input('m-link-gate-pw').value = '';
     const gateError = $('link-gate-error') as HTMLElement;
     gateError.textContent = '';
     gateError.hidden = true;
-    ($('m-link-gate') as HTMLElement).hidden = false;
     ($('m-link-form') as HTMLElement).hidden = true;
     ($('m-btn-add-sync') as HTMLElement).hidden = true;
+    gate.hidden = false;
+    gate.showModal();
     input('m-link-gate-pw').focus();
     return;
   }
@@ -1533,9 +1538,15 @@ function openAddSync(): void {
   focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
 }
 
-/** Gate submit: prove the sync-change password (read-only, nothing changes)
- *  and only then reveal the wizard. A wrong password clears the field. */
+/** One open gate at a time: cancelling while the proof is in flight must not
+ *  reveal the wizard when the answer comes back. */
+let gateSeq = 0;
+
+/** Gate submit: prove the sync lock password (read-only, nothing changes) and
+ *  only then reveal the wizard. A wrong password clears the field. */
 async function verifyAddSyncGate(): Promise<void> {
+  // Enter can submit the form while the button is disabled by withBusy.
+  if (($('m-btn-link-gate-go') as HTMLButtonElement).disabled) return;
   const password = input('m-link-gate-pw').value;
   const gateError = $('link-gate-error') as HTMLElement;
   gateError.textContent = '';
@@ -1545,18 +1556,20 @@ async function verifyAddSyncGate(): Promise<void> {
     gateError.hidden = false;
     return;
   }
+  const seq = gateSeq;
   await withBusy('m-btn-link-gate-go', t('busy.checking'), async () => {
     try {
       await send({ command: MessageCommand.VerifySwitchPassword, password });
+      if (seq !== gateSeq) return;
       linkSwitchPassword = password;
-      input('m-link-gate-pw').value = '';
-      ($('m-link-gate') as HTMLElement).hidden = true;
+      closeAddSyncGate();
       ($('m-link-form') as HTMLElement).hidden = false;
       updateLinkForm();
       prefillLinkUrl();
       suggestLinkName();
       focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
     } catch (err) {
+      if (seq !== gateSeq) return;
       input('m-link-gate-pw').value = '';
       gateError.textContent = (err as Error).message;
       gateError.hidden = false;
@@ -1565,14 +1578,22 @@ async function verifyAddSyncGate(): Promise<void> {
   });
 }
 
-function closeAddSync(): void {
-  ($('m-link-form') as HTMLElement).hidden = true;
-  ($('m-link-gate') as HTMLElement).hidden = true;
-  ($('m-btn-add-sync') as HTMLElement).hidden = false;
+/** Hides and closes the modal; the caller decides whether the wizard opens. */
+function closeAddSyncGate(): void {
+  ++gateSeq;
+  const gate = $('m-link-gate') as HTMLDialogElement;
+  gate.hidden = true;
+  if (gate.open) gate.close();
   input('m-link-gate-pw').value = '';
   const gateError = $('link-gate-error') as HTMLElement;
   gateError.textContent = '';
   gateError.hidden = true;
+}
+
+function closeAddSync(): void {
+  ($('m-link-form') as HTMLElement).hidden = true;
+  closeAddSyncGate();
+  ($('m-btn-add-sync') as HTMLElement).hidden = false;
   linkSwitchPassword = '';
   input('m-link-password').value = '';
   input('m-link-confirm').value = '';
@@ -1618,10 +1639,28 @@ function initMoveSection(): void {
   $('m-btn-link-direct').addEventListener('click', () => void directConnect());
   $('m-btn-add-sync').addEventListener('click', () => openAddSync());
   $('m-btn-add-cancel').addEventListener('click', () => closeAddSync());
-  $('m-btn-link-gate-go').addEventListener('click', () => void verifyAddSyncGate());
+  // The gate is a real modal: Enter submits, Escape and a backdrop click
+  // cancel exactly like the Cancel button (nothing is kept half-open).
+  const gate = $('m-link-gate') as HTMLDialogElement;
+  $('m-link-gate-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    void verifyAddSyncGate();
+  });
   $('m-btn-link-gate-cancel').addEventListener('click', () => closeAddSync());
-  input('m-link-gate-pw').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') void verifyAddSyncGate();
+  gate.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeAddSync();
+  });
+  let gateBackdropDown = false;
+  const outsideGate = (event: MouseEvent): boolean => {
+    const rect = gate.getBoundingClientRect();
+    return event.target === gate && (event.clientX < rect.left || event.clientX > rect.right ||
+      event.clientY < rect.top || event.clientY > rect.bottom);
+  };
+  gate.addEventListener('pointerdown', (event) => { gateBackdropDown = outsideGate(event); });
+  gate.addEventListener('click', (event) => {
+    if (gateBackdropDown && outsideGate(event)) closeAddSync();
+    gateBackdropDown = false;
   });
   updateLinkForm();
 }

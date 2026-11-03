@@ -195,7 +195,7 @@ async function connectA(core: BackgroundCore): Promise<string> {
 }
 
 describe('multi-sync (saved syncs)', () => {
-  it('verifies the sync-change password before a flow starts (read-only proof)', async () => {
+  it('verifies the sync lock password before a flow starts (read-only proof)', async () => {
     const s = state();
     const { core } = await setup(s);
     // No lock: nothing to prove, and asking is not an error.
@@ -683,7 +683,7 @@ describe('multi-sync (saved syncs)', () => {
         syncId: idA,
         switchPassword: SWITCH,
       }),
-    ).rejects.toThrow(/sync-change password/i);
+    ).rejects.toThrow(/sync lock password/i);
     await core.handleMessage({
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
@@ -758,7 +758,7 @@ describe('multi-sync (saved syncs)', () => {
         currentPassword: PASSWORD_A,
         newPassword: ROTATED,
       }),
-    ).rejects.toThrow(/sync-change password/i);
+    ).rejects.toThrow(/sync lock password/i);
     await core.handleMessage({
       command: MessageCommand.ChangePassword,
       currentPassword: PASSWORD_A,

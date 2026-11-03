@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Popup panel for the saved syncs: read-only rendering (activate only) and the
-// modal sync-change-password step. Rename/remove live in the manager only.
+// modal sync lock step. Rename/remove live in the manager only.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SavedSyncsPanel } from '../src/popup/saved-syncs';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
@@ -56,7 +56,7 @@ describe('saved syncs popup panel', () => {
   it('renders rows read-only: active tag, one activate button for the dormant one', () => {
     panel.render(data);
     expect(el('p-saved-card').hidden).toBe(false);
-    expect(el('p-saved-title').textContent).toBe('Syncs (2)');
+    expect(el('p-saved-title').textContent).toBe('Syncs');
     const [active, dormant] = rowEls();
     expect(active.classList.contains('saved-active')).toBe(true);
     expect(active.textContent).toContain('Lavoro');
@@ -84,7 +84,7 @@ describe('saved syncs popup panel', () => {
     // Unlinked registry: one dormant row is exactly what the popup is for.
     panel.render({ syncs: [rows[0]], switchLockSet: true });
     expect(el('p-saved-card').hidden).toBe(false);
-    expect(el('p-saved-title').textContent).toBe('Sync (1)');
+    expect(el('p-saved-title').textContent).toBe('Syncs');
   });
 
   it('activates a dormant row through the modal password step', async () => {

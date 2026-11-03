@@ -64,7 +64,7 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
   (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
   Rename/Activate/Unlink/Remove/Delete from server, `+ Add new sync` wizard
-  with target + merge preview, optional sync-change password), Logs, Settings
+  with target + merge preview, optional sync lock), Logs, Settings
   (toolbar toggle via background, password change), About.
 - `src/popup.html`, `src/background.html` — vite entries (land at output root).
 - `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
