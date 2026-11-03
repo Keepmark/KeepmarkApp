@@ -8,8 +8,6 @@ import { formatDate, formatTime, t } from '../shared/i18n.js';
 import {
   $,
   copyText,
-  describeUndo,
-  undoBannerRemainingMs,
   input,
   focusFirstVisible,
   validateConnect,
@@ -25,9 +23,8 @@ import {
   type PingResponse,
   type SavedSyncsResponse,
   type StatusResponse,
-  type UndoState,
 } from '../shared/messages.js';
-import { cancelConfirm, clearMessages, confirmInline, showError, showFor } from './flow.js';
+import { cancelConfirm, clearMessages, confirmInline, showError } from './flow.js';
 import { SavedSyncsPanel, type SavedSyncsChange } from './saved-syncs.js';
 import {
   isActiveSavedSync,
@@ -35,12 +32,7 @@ import {
   suggestSavedSyncName,
   type SavedSync,
 } from '../shared/saved-syncs.js';
-import {
-  type Direction,
-  directionConfirm,
-  undoConfirm,
-  undoneText,
-} from './texts.js';
+import { type Direction, directionConfirm } from './texts.js';
 
 function showView(name: 'connect' | 'main'): void {
   ($('view-connect') as HTMLElement).hidden = name !== 'connect';
@@ -117,7 +109,6 @@ async function refreshAll(pickView = false): Promise<void> {
   const conflictAction = $('p-conflict-action') as HTMLElement;
   conflictAction.hidden = !status?.conflict;
   await refreshSavedSyncs();
-  await refreshUndoBanner();
   refreshRemovedCard();
   // Nothing has focus in a freshly opened popup: a remembered service hides
   // the URL input, so typing a name would silently go to the page body and
@@ -160,26 +151,6 @@ function updateConnectName(): void {
  *  announced here. */
 function refreshRemovedCard(): void {
   ($('p-removed') as HTMLElement).hidden = !(status?.removedSync && !status.syncEnabled);
-}
-
-/** Kind of the undo slot the banner shows (its confirm names it). */
-let undoKind = '';
-
-async function refreshUndoBanner(): Promise<void> {
-  const banner = $('p-undo') as HTMLElement;
-  let undo: UndoState | null = null;
-  try {
-    undo = await send<UndoState | null>({ command: MessageCommand.GetUndoState });
-  } catch {
-    undo = null;
-  }
-  if (!undo) {
-    banner.hidden = true;
-    return;
-  }
-  undoKind = undo.kind;
-  $('p-undo-text').textContent = describeUndo(undo.kind, undo.bookmarkCount, undo.timestamp);
-  showFor('p-undo', undoBannerRemainingMs(undo.timestamp), 'btn-undo');
 }
 
 async function initConnect(): Promise<void> {
@@ -380,26 +351,6 @@ function initMain(): void {
   });
   $('btn-copy-id').addEventListener('click', () => {
     if (status?.syncId) void copyText(status.syncId, t('popup.copyIdPrompt'));
-  });
-  $('btn-undo').addEventListener('click', async () => {
-    clearMessages();
-    // Asked BEFORE withBusy (confirmInline owns the button while open).
-    if (!(await confirmInline('btn-undo', { ...undoConfirm(undoKind), danger: true }))) return;
-    await withBusy('btn-undo', t('busy.undoing'), async () => {
-      try {
-        const res = await send<{ undone: string }>({ command: MessageCommand.UndoLastLink });
-        await refreshAll();
-        const done = $('main-result');
-        done.textContent = undoneText(res.undone);
-        done.hidden = false;
-      } catch (err) {
-        showError('main-error', (err as Error).message);
-      }
-    });
-  });
-  $('btn-undo-dismiss').addEventListener('click', async () => {
-    await send({ command: MessageCommand.DismissUndo }).catch(() => undefined);
-    ($('p-undo') as HTMLElement).hidden = true;
   });
 }
 

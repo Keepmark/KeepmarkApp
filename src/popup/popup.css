@@ -550,30 +550,9 @@ dd:last-of-type { align-items: flex-end; }
   background: var(--accent);
 }
 
-/* Undo banner: navy strip with inline actions. */
 /* Server-removed sync: the last synced copy, offered from the Connect view. */
 .removed { display: grid; gap: 6px; margin-bottom: 12px; }
 .removed p { margin: 0; }
-
-.undo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 8px 8px 12px;
-  border-radius: 12px;
-  background: var(--navy);
-  color: #fff;
-  font-size: 12px;
-}
-
-.undo .row { gap: 4px; }
-
-.undo button.mini {
-  border: 0;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
 
 /* Conflict action button */
 #btn-resolve-conflict {
