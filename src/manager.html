@@ -55,24 +55,6 @@
           <button id="qr-open" class="primary qr-open"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.1"/><rect x="14" y="3" width="7" height="7" rx="1.1"/><rect x="3" y="14" width="7" height="7" rx="1.1"/><rect class="solid" x="5.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="16.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="5.4" y="16.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="14" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="14" y="18.3" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="18.3" width="2.7" height="2.7" rx=".6" opacity=".45"/></svg><span data-i18n="qr.open">Show connection QR</span></button>
           </div>
           <div class="qr-card-preview" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.1"/><rect x="14" y="3" width="7" height="7" rx="1.1"/><rect x="3" y="14" width="7" height="7" rx="1.1"/><rect class="solid" x="5.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="16.4" y="5.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="5.4" y="16.4" width="2.2" height="2.2" rx=".5"/><rect class="solid" x="14" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="14" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="14" y="18.3" width="2.7" height="2.7" rx=".6"/><rect class="solid" x="18.3" y="18.3" width="2.7" height="2.7" rx=".6" opacity=".45"/></svg></div>
-          <dialog id="qr-panel" aria-labelledby="qr-dialog-title" aria-describedby="qr-instructions" hidden>
-            <div class="qr-dialog-heading"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><h2 id="qr-dialog-title" data-i18n="qr.title">Connect Keepmark on your phone</h2></div>
-            <p id="qr-instructions" data-i18n="qr.scan">In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.</p>
-            <p id="qr-destination" class="hint"></p>
-            <form autocomplete="off">
-              <label for="qr-password" data-i18n="qr.password">Current sync password</label>
-              <div class="qr-password-entry">
-                <svg class="qr-key-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8h3v-3h-3v-3h-3"/></svg>
-                <input id="qr-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="qr-error" required>
-                <button id="qr-generate" class="primary" type="submit"><span data-i18n="qr.generate">Show QR</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
-              </div>
-              <div id="qr-error" class="error" role="alert" hidden></div>
-            </form>
-            <div id="qr-output"></div>
-            <p id="qr-countdown"></p>
-            <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and password. Anyone with a copy can reuse it. It is hidden after 60 seconds or when you leave this view.</p>
-            <button id="qr-close" data-i18n="qr.close">Close</button>
-          </dialog>
           <p id="qr-feedback" class="hint" role="status" hidden></p>
         </div>
         <!-- Conflict resolution section (shown when status.conflict === true) -->
@@ -396,6 +378,26 @@
       </section>
     </main>
   </div>
+    <div id="qr-dialog-host">
+      <dialog id="qr-panel" aria-labelledby="qr-dialog-title" aria-describedby="qr-instructions" hidden>
+        <div class="qr-dialog-heading"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg><h2 id="qr-dialog-title" data-i18n="qr.title">Connect Keepmark on your phone</h2></div>
+        <p id="qr-instructions" data-i18n="qr.scan">In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.</p>
+        <p id="qr-destination" class="hint"></p>
+        <form autocomplete="off">
+          <label for="qr-password" id="qr-password-label" data-i18n="qr.password">Current sync password</label>
+          <div class="qr-password-entry">
+            <svg class="qr-key-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8h3v-3h-3v-3h-3"/></svg>
+            <input id="qr-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="qr-error" required>
+            <button id="qr-generate" class="primary" type="submit"><span data-i18n="qr.generate">Show QR</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+          </div>
+          <div id="qr-error" class="error" role="alert" hidden></div>
+        </form>
+        <div id="qr-output"></div>
+        <p id="qr-countdown"></p>
+        <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and password. Anyone with a copy can reuse it. It is hidden after 60 seconds or when you leave this view.</p>
+        <button id="qr-close" data-i18n="qr.close">Close</button>
+      </dialog>
+    </div>
   <script type="module" src="./manager/manager.ts"></script>
 </body>
 </html>

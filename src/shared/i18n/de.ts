@@ -352,6 +352,7 @@ export const de: Record<MessageKey, string> = {
   'busy.changing': 'Ändere…',
   'common.yesChangePw': 'Ja, Passwort ändern',
   'mgr.syncs.syncPassword': 'Synchronisierungspasswort',
+  'manager.syncs.showQr': 'QR zeigen',
   'mgr.syncs.confirmTargetPassword': 'Zielpasswort bestätigen',
   'mgr.syncs.summaryNew_one': 'Erstellt eine neue Synchronisierung auf {url} und lädt {count} Lesezeichen hoch. Keine Sync-ID nötig – nach dem Wechsel wird eine neue angezeigt.',
   'mgr.syncs.summaryNew_other': 'Erstellt eine neue Synchronisierung auf {url} und lädt {count} Lesezeichen hoch. Keine Sync-ID nötig – nach dem Wechsel wird eine neue angezeigt.',

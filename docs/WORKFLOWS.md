@@ -222,12 +222,18 @@ accepts `https` and plain `http` only for `localhost` / `127.0.0.1` / `[::1]`.
 
 ## Browser → Android QR linking
 
-- Browser manager Status → Connect Keepmark on your phone (Android icon) → Show connection QR →
-  focused dialog → current password → Show QR. The launch button is hidden
-  while the dialog is open. Password errors stay next to the key-icon input
-  inside the dialog and allow retry. The QR includes a small Keepmark logo.
-  Outside click or Escape closes the dialog and erases the QR.
-  Local key verification and a read-only remote GET/decryption precede display.
+- Two entry points, one dialog: the Status card's Show connection QR (the
+  ACTIVE sync) and a `Show QR` button on EVERY row of Manager → Sync, so the
+  phone can join a sync that is not the one active in this browser. A row's
+  dialog names that row's service and ID, asks that sync's own long password
+  (never stored: the typed one is the proof) and decrypts one remote GET
+  read-only; the active sync, the rows and the server are untouched. The
+  dialog lives outside the sections, so a row still works while this browser is
+  unlinked. The launch button is hidden while the dialog is open. Password
+  errors stay next to the key-icon input inside the dialog and allow retry.
+  The QR includes a small Keepmark logo. Outside click or Escape closes the
+  dialog and erases the QR. Local key verification (active) or the remote
+  decrypt (row) and a read-only remote GET precede display.
 - The QR is compact Keepmark format-1 JSON with service, ID, sync data version
   and original password; 1800 UTF-8 bytes maximum. No password is persisted or
   sent to the service. Display ends after 60 seconds, close, Escape, navigation,

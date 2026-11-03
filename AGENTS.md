@@ -293,7 +293,11 @@ lifetime and generation guards. Status shows the Android card (“Connect Keepma
 on your phone”); its “Show connection QR” button opens the dialog and is hidden
 while it is open; the whole card is hidden while this browser is unlinked and its
 button is disabled (with the reason on the card) for a plain-HTTP service, which
-the payload refuses with the dedicated `qr.httpsRequired` message. Password
+the payload refuses with the dedicated `qr.httpsRequired` message. Every row in
+Manager → Sync also has `Show QR`: the same dialog (a page-level host, outside
+the sections) opened with a `ConnectQrTarget`, asking that row's own long
+password and decrypting one remote GET read-only — so the phone can join a
+dormant sync without activating it here. Password
 verification and QR share
 the focused dialog; backdrop click, Escape and focus loss close and clear it. `PrepareConnectQr` is manager-only (sender gate in background wiring),
 verifies the current password locally and decrypts one remote GET without

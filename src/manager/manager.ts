@@ -5,7 +5,7 @@
 import browser from 'webextension-polyfill';
 import { ServicePicker } from '../popup/service-picker.js';
 import { ConnectQrController } from './connect-qr.js';
-import type { ConnectQrPayload } from '../shared/connect-qr.js';
+import type { ConnectQrPayload, ConnectQrTarget } from '../shared/connect-qr.js';
 import { ApiVersion, ApiVersion12, MinApiVersion, PasswordTooShort, SyncClientVersion } from '../shared/constants.js';
 import {
   $,
@@ -1820,6 +1820,17 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   });
   actions.append(rename);
 
+  // Every row can produce a QR: the phone may join a sync that is not the one
+  // active in this browser. The code names that row's own service and ID.
+  const qr = document.createElement('button');
+  qr.type = 'button';
+  qr.className = 'mini';
+  qr.id = `m-syncs-qr-${index}`;
+  qr.textContent = t('manager.syncs.showQr');
+  const qrTarget: ConnectQrTarget = { serviceUrl: sync.serviceUrl, syncId: sync.syncId };
+  qr.addEventListener('click', () => connectQr?.openFor(qrTarget, qr));
+  actions.append(qr);
+
   if (isActive) {
     // The active row has one action that ends the link: Unlink this device.
     // A second "remove" button would do the same thing under another name.
@@ -2311,8 +2322,16 @@ function renderAbout(): void {
 
 async function init(): Promise<void> {
   await initI18n();
-  connectQr = new ConnectQrController($('connect-qr'), (password) =>
-    send<ConnectQrPayload>({ command: MessageCommand.PrepareConnectQr, currentPassword: password }));
+  connectQr = new ConnectQrController(
+    $('connect-qr'),
+    (password, target) => send<ConnectQrPayload>({
+      command: MessageCommand.PrepareConnectQr,
+      currentPassword: password,
+      ...(target ? { target } : {}),
+    }),
+    {},
+    $('qr-dialog-host'),
+  );
   initSidebar();
   initStatusSection();
   initUndoBanner();

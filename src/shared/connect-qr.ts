@@ -2,6 +2,12 @@ import { compareVersions, SyncClientVersion } from './constants.js';
 import { t } from './i18n.js';
 
 export const ConnectQrMaxBytes = 1800;
+
+/** One saved sync a QR can be built for: the active one or a dormant row. */
+export interface ConnectQrTarget {
+  serviceUrl: string;
+  syncId: string;
+}
 export interface ConnectQrPayload {
   app: 'Keepmark';
   format: 1;

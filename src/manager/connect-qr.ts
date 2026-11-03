@@ -1,11 +1,15 @@
 import { renderConnectQr } from './render-connect-qr.js';
 import { InvalidCredentialsException } from '../shared/errors.js';
-import { serializeConnectQrPayload, type ConnectQrPayload } from '../shared/connect-qr.js';
+import {
+  serializeConnectQrPayload,
+  type ConnectQrPayload,
+  type ConnectQrTarget,
+} from '../shared/connect-qr.js';
 import type { StatusResponse } from '../shared/messages.js';
 import { t } from '../shared/i18n.js';
 
 interface QrDependencies {
-  prepare(password: string): Promise<ConnectQrPayload>;
+  prepare(password: string, target?: ConnectQrTarget): Promise<ConnectQrPayload>;
   render(canvas: HTMLCanvasElement, json: string): Promise<unknown>;
   now(): number;
   focused(): boolean;
@@ -16,7 +20,13 @@ export class ConnectQrController {
   private generation = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
   private deadline = 0;
-  private identity = '';
+  /** Identity of the ACTIVE sync (the card's own subject). */
+  private activeIdentity = '';
+  /** Set while the dialog was opened from a registry row: the dialog then
+   *  belongs to that row, not to the active sync, and the status card may stay
+   *  hidden (rows survive an unlink). */
+  private target: ConnectQrTarget | undefined;
+  private trigger: HTMLElement | undefined;
   /** The payload only accepts an https service URL: a plain-http link (self
    *  hosted on the LAN) gets the card disabled with the reason spelled out. */
   private httpsOk = false;
@@ -24,14 +34,25 @@ export class ConnectQrController {
   private canvas: HTMLCanvasElement | undefined;
   private readonly deps: QrDependencies;
   private readonly input: HTMLInputElement;
+  private readonly label: HTMLLabelElement;
+  private readonly destination: HTMLElement;
   private readonly panel: HTMLDialogElement;
+  private readonly form: HTMLFormElement;
   private readonly output: HTMLElement;
   private readonly error: HTMLElement;
   private readonly countdown: HTMLElement;
   private readonly generate: HTMLButtonElement;
   private readonly open: HTMLButtonElement;
+  private readonly closeButton: HTMLButtonElement;
 
-  constructor(private readonly root: HTMLElement, prepare: QrDependencies['prepare'], overrides: Partial<QrDependencies> = {}) {
+  constructor(
+    private readonly root: HTMLElement,
+    prepare: QrDependencies['prepare'],
+    overrides: Partial<QrDependencies> = {},
+    /** Where the dialog lives. Outside the status card so a row can open it
+     *  while the card is hidden (an unlinked browser keeps its dormant rows). */
+    private readonly host: HTMLElement = root,
+  ) {
     this.deps = {
       prepare,
       render: renderConnectQr,
@@ -39,12 +60,16 @@ export class ConnectQrController {
       focused: () => document.visibilityState === 'visible' && document.hasFocus(),
       ...overrides,
     };
-    this.input = root.querySelector('#qr-password')!;
-    this.panel = root.querySelector('#qr-panel')!;
-    this.output = root.querySelector('#qr-output')!;
-    this.error = root.querySelector('#qr-error')!;
-    this.countdown = root.querySelector('#qr-countdown')!;
-    this.generate = root.querySelector('#qr-generate')!;
+    this.input = host.querySelector('#qr-password')!;
+    this.label = host.querySelector('#qr-password-label')!;
+    this.destination = host.querySelector('#qr-destination')!;
+    this.panel = host.querySelector('#qr-panel')!;
+    this.form = host.querySelector('form')!;
+    this.output = host.querySelector('#qr-output')!;
+    this.error = host.querySelector('#qr-error')!;
+    this.countdown = host.querySelector('#qr-countdown')!;
+    this.generate = host.querySelector('#qr-generate')!;
+    this.closeButton = host.querySelector('#qr-close')!;
     this.open = root.querySelector('#qr-open')!;
     this.input.addEventListener('input', () => {
       this.error.hidden = true;
@@ -53,14 +78,8 @@ export class ConnectQrController {
     });
     this.open.addEventListener('click', () => {
       this.close();
-      if (!this.identity || !this.deps.focused()) return;
-      this.error.hidden = true;
-      this.error.textContent = '';
-      this.panel.hidden = false;
-      this.open.hidden = true;
-      this.panel.showModal();
-      this.root.querySelector('form')!.hidden = false;
-      this.input.focus();
+      if (!this.activeIdentity || !this.deps.focused()) return;
+      this.begin(undefined, this.open);
     });
     this.panel.addEventListener('cancel', (event) => { event.preventDefault(); this.close(true); });
     this.panel.addEventListener('close', () => { if (!this.panel.hidden && !this.panel.open) this.close(true); });
@@ -74,8 +93,8 @@ export class ConnectQrController {
       if (backdropDown && outside(event)) this.close(true);
       backdropDown = false;
     });
-    root.querySelector('#qr-close')!.addEventListener('click', () => this.close(true));
-    root.querySelector('form')!.addEventListener('submit', (event) => {
+    this.closeButton.addEventListener('click', () => this.close(true));
+    this.form.addEventListener('submit', (event) => {
       event.preventDefault();
       void this.verify();
     });
@@ -90,41 +109,82 @@ export class ConnectQrController {
   updateStatus(status?: StatusResponse): void {
     const identity = status?.syncEnabled && status.serviceUrl && status.syncId
       ? `${status.serviceUrl}\n${status.syncId}` : '';
-    if (identity !== this.identity) this.close();
-    this.identity = identity;
+    const changed = identity !== this.activeIdentity;
+    this.activeIdentity = identity;
+    // The card's dialog follows the active sync; a row's dialog does not.
+    if (changed && !this.target) this.close();
     this.httpsOk = /^https:\/\//i.test(status?.serviceUrl ?? '');
     // Nothing to link while the browser is unlinked: an inert card would only
     // push the "how to connect" hint further down the status section.
     this.root.hidden = !identity;
-    const destination = this.root.querySelector('#qr-destination');
-    if (destination) {
-      destination.textContent = identity
-        ? (this.httpsOk ? `${status!.serviceUrl} · ${status!.syncId!.slice(0, 8)}…` : t('qr.httpsRequired'))
-        : '';
-    }
+    if (!this.target) this.setSubject();
     this.open.disabled = !this.canPrepare();
     this.announce(this.standingMessage());
+  }
+
+  /** Row entry point: show the QR for one saved sync, active or not. The row
+   *  carries its own service and ID, so the dialog no longer depends on the
+   *  status card (which is hidden while unlinked). */
+  openFor(target: ConnectQrTarget, trigger: HTMLElement): void {
+    this.close();
+    if (!this.deps.focused()) return;
+    this.begin(target, trigger);
   }
 
   /** The payload refuses plain HTTP (Keepmark for Android will not consume it
    *  either): the button stays disabled and the card itself says why. */
   private canPrepare(): boolean {
-    return !!this.identity && this.httpsOk && !this.busy;
+    return !!this.activeIdentity && this.httpsOk && !this.busy;
   }
 
   /** Reason spelled out on the card while the dialog is closed ('' when the
    *  card is usable), so a disabled button is never a dead end. */
   private standingMessage(): string {
-    return this.identity && !this.httpsOk ? t('qr.httpsRequired') : '';
+    return this.activeIdentity && !this.httpsOk ? t('qr.httpsRequired') : '';
+  }
+
+  /** Shared opening: the dialog is focused, one subject is named, nothing is
+   *  generated until a password is proved. */
+  private begin(target: ConnectQrTarget | undefined, trigger: HTMLElement): void {
+    this.target = target;
+    this.trigger = trigger;
+    this.error.hidden = true;
+    this.error.textContent = '';
+    this.panel.hidden = false;
+    this.open.hidden = true;
+    this.panel.showModal();
+    this.form.hidden = false;
+    this.setSubject();
+    if (target && !/^https:\/\//i.test(target.serviceUrl)) {
+      this.error.textContent = t('qr.httpsRequired');
+      this.error.hidden = false;
+    }
+    this.input.focus();
+  }
+
+  /** Names what the code will carry: the active sync, or the row that asked. */
+  private setSubject(): void {
+    if (this.target) {
+      this.label.textContent = t('mgr.syncs.syncPassword');
+      this.destination.textContent = `${this.target.serviceUrl} · ${this.target.syncId.slice(0, 8)}…`;
+      return;
+    }
+    this.label.textContent = t('qr.password');
+    this.destination.textContent = this.activeIdentity
+      ? (this.httpsOk ? `${this.activeIdentity.split('\n')[0]} · ${this.activeIdentity.split('\n')[1].slice(0, 8)}…` : t('qr.httpsRequired'))
+      : '';
   }
 
   close(restoreFocus = false): void {
     const wasOpen = !this.panel.hidden;
+    const trigger = this.trigger ?? this.open;
     ++this.generation;
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
     this.deadline = 0;
     this.busy = false;
+    this.target = undefined;
+    this.trigger = undefined;
     this.open.disabled = !this.canPrepare();
     this.generate.disabled = false;
     this.setBusy(false);
@@ -140,7 +200,7 @@ export class ConnectQrController {
     this.canvas = undefined;
     this.output.replaceChildren();
     this.announce(wasOpen ? t('qr.hidden') : this.standingMessage());
-    if (restoreFocus && !this.root.hidden && this.deps.focused()) this.open.focus();
+    if (restoreFocus && !trigger.hidden && this.deps.focused()) trigger.focus();
   }
 
   private setBusy(busy: boolean): void {
@@ -162,13 +222,14 @@ export class ConnectQrController {
   }
 
   private valid(generation: number): boolean {
-    return generation === this.generation && this.deps.focused() && !this.panel.hidden && !this.root.hidden;
+    return generation === this.generation && this.deps.focused() && !this.panel.hidden;
   }
 
   private async verify(): Promise<void> {
-    if (this.busy || !this.identity || !this.deps.focused() || this.panel.hidden) return;
+    if (this.busy || !this.deps.focused() || this.panel.hidden) return;
     if (!this.input.value) return;
     const generation = ++this.generation;
+    const target = this.target;
     this.busy = true;
     this.open.disabled = true;
     this.generate.disabled = true;
@@ -183,7 +244,7 @@ export class ConnectQrController {
     let json = '';
     let canvas: HTMLCanvasElement | undefined;
     try {
-      const pending = this.deps.prepare(password);
+      const pending = this.deps.prepare(password, target);
       password = '';
       payload = await pending;
       if (!this.valid(generation)) {
@@ -202,14 +263,15 @@ export class ConnectQrController {
       this.deadline = this.deps.now() + 60_000;
       this.canvas = canvas;
       this.output.replaceChildren(canvas);
-      this.root.querySelector('form')!.hidden = true;
-      this.root.querySelector<HTMLButtonElement>('#qr-close')!.focus();
+      this.form.hidden = true;
+      this.closeButton.focus();
       canvas = undefined;
       this.tick();
       this.timer = setInterval(() => this.tick(), 250);
     } catch (error) {
       if (this.valid(generation)) {
-        const wrongPassword = error instanceof InvalidCredentialsException && error.message === t('core.currentPwWrong');
+        const wrongPassword = error instanceof InvalidCredentialsException
+          && (error.message === t('core.currentPwWrong') || error.message === t('err.invalidCredentials'));
         this.input.value = '';
         this.input.removeAttribute('aria-invalid');
         if (wrongPassword) this.input.setAttribute('aria-invalid', 'true');

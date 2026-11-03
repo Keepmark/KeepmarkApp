@@ -354,6 +354,7 @@ export const ru: Record<MessageKey, string> = {
   'busy.changing': 'Смена…',
   'common.yesChangePw': 'Да, сменить пароль',
   'mgr.syncs.syncPassword': 'Пароль синхронизации',
+  'manager.syncs.showQr': 'Показать QR',
   'mgr.syncs.confirmTargetPassword': 'Подтвердите целевой пароль',
   'mgr.syncs.summaryNew_one': 'Будет создана новая синхронизация на {url} и отправлена {count} закладка. ID синхронизации не нужен — новый будет показан после переноса.',
   'mgr.syncs.summaryNew_other': 'Будет создана новая синхронизация на {url} и отправлены закладки ({count}). ID синхронизации не нужен — новый будет показан после переноса.',

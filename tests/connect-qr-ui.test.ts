@@ -17,7 +17,7 @@ function submit(): void {
 async function settle(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 beforeEach(() => {
   vi.useFakeTimers(); focus = true;
-  document.body.innerHTML = '<div id="root"><button id="qr-open"></button><dialog id="qr-panel"><form><input id="qr-password"><button id="qr-generate"></button><div id="qr-error"></div></form><div id="qr-output"></div><p id="qr-countdown"></p><button id="qr-close"></button></dialog><p id="qr-feedback"></p></div>';
+  document.body.innerHTML = '<div id="root"><button id="qr-open"></button><dialog id="qr-panel"><label id="qr-password-label"></label><p id="qr-destination"></p><form><input id="qr-password"><button id="qr-generate"></button><div id="qr-error"></div></form><div id="qr-output"></div><p id="qr-countdown"></p><button id="qr-close"></button></dialog><p id="qr-feedback"></p></div>';
   render = vi.fn(async (canvas: HTMLCanvasElement) => { canvas.width = 320; canvas.height = 320; });
   prepare = vi.fn(async () => payload);
   controller = new ConnectQrController(el('root'), prepare, { render, focused: () => focus, now: () => Date.now() });
@@ -158,7 +158,6 @@ it('hides the card while unlinked and explains a plain-HTTP service instead of f
   expect((el('qr-open') as HTMLButtonElement).disabled).toBe(true);
 
   // Linked, but the service is plain HTTP: card visible, door closed, reason shown.
-  el('root').insertAdjacentHTML('beforeend', '<small id="qr-destination"></small>');
   controller.updateStatus({ syncEnabled: true, serviceUrl: 'http://sync.example.test:8090/', syncId: payload.id, queueLength: 0, syncing: false });
   expect(root.hidden).toBe(false);
   expect((el('qr-open') as HTMLButtonElement).disabled).toBe(true);
@@ -172,6 +171,33 @@ it('hides the card while unlinked and explains a plain-HTTP service instead of f
   expect((el('qr-open') as HTMLButtonElement).disabled).toBe(false);
   expect(el('qr-destination').textContent).toContain(payload.serviceUrl);
   expect(el('qr-feedback').hidden).toBe(true);
+});
+
+it('a row can show its own QR while the card is hidden and names that sync', async () => {
+  // Unlinked browser, dormant row: the status card is hidden but the dialog is
+  // not its property any more.
+  controller.updateStatus();
+  expect(el('root').hidden).toBe(true);
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  controller.openFor({ serviceUrl: payload.serviceUrl, syncId: payload.id }, trigger);
+  expect((el('qr-panel') as HTMLDialogElement).open).toBe(true);
+  expect(el('qr-destination').textContent).toContain(payload.serviceUrl);
+  expect(el('qr-destination').textContent).toContain(payload.id.slice(0, 8));
+  expect(el('qr-password-label').textContent).toBe(t('mgr.syncs.syncPassword'));
+  submit(); await settle();
+  expect(prepare).toHaveBeenCalledWith(payload.password, { serviceUrl: payload.serviceUrl, syncId: payload.id });
+  expect(el('qr-output').children).toHaveLength(1);
+  el('qr-close').click();
+  expect(document.activeElement).toBe(trigger);
+});
+
+it('a row on a plain-HTTP service explains the refusal before asking', () => {
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  controller.openFor({ serviceUrl: 'http://sync.example.test:8090/', syncId: payload.id }, trigger);
+  expect(el('qr-error').textContent).toBe(t('qr.httpsRequired'));
+  expect(el('qr-error').hidden).toBe(false);
 });
 
 it('shows the HTTPS requirement when the background refuses to build the payload', async () => {

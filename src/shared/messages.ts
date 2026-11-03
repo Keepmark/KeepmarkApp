@@ -22,6 +22,7 @@ import {
   XbsException,
 } from './errors.js';
 import type { BookmarkNode, ServiceStatus } from './models.js';
+import type { ConnectQrTarget } from './connect-qr.js';
 import type { MergeStats } from './merge.js';
 import type { SafetyEntry } from './safety.js';
 import type { SavedSync, SavedSyncActive } from './saved-syncs.js';
@@ -292,7 +293,7 @@ export interface ResetSwitchPasswordResult {
 export type MessagePayload =
   | { command: MessageCommand.GetServices }
   | { command: MessageCommand.ProbeService; serviceUrl: string }
-  | { command: MessageCommand.PrepareConnectQr; currentPassword: string }
+  | { command: MessageCommand.PrepareConnectQr; currentPassword: string; target?: ConnectQrTarget }
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | {

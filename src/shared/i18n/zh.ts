@@ -353,6 +353,7 @@ export const zh: Record<MessageKey, string> = {
   'busy.changing': '正在更改…',
   'common.yesChangePw': '是，更改密码',
   'mgr.syncs.syncPassword': '同步密码',
+  'manager.syncs.showQr': '显示二维码',
   'mgr.syncs.confirmTargetPassword': '确认目标密码',
   'mgr.syncs.summaryNew_one': '将在 {url} 新建同步并上传 {count} 个书签。无需同步 ID——迁移后会显示新的 ID。',
   'mgr.syncs.summaryNew_other': '将在 {url} 新建同步并上传 {count} 个书签。无需同步 ID——迁移后会显示新的 ID。',

@@ -352,6 +352,7 @@ export const pt: Record<MessageKey, string> = {
   'busy.changing': 'Alterando…',
   'common.yesChangePw': 'Sim, alterar senha',
   'mgr.syncs.syncPassword': 'Senha da sincronização',
+  'manager.syncs.showQr': 'Mostrar QR',
   'mgr.syncs.confirmTargetPassword': 'Confirmar senha de destino',
   'mgr.syncs.summaryNew_one': 'Será criada uma nova sincronização em {url} e enviado {count} favorito. Não é preciso ID de sincronização — um novo será exibido após a mudança.',
   'mgr.syncs.summaryNew_other': 'Será criada uma nova sincronização em {url} e enviados {count} favoritos. Não é preciso ID de sincronização — um novo será exibido após a mudança.',

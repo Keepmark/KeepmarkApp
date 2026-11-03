@@ -16,6 +16,7 @@ import { InMemoryLogger, sanitizeSyncId } from '../src/shared/logging';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
 import {
   DataOutOfSyncException,
+  InvalidCredentialsException,
   InvalidSwitchPasswordException,
   SyncNotFoundException,
   UnsupportedVersionException,
@@ -264,6 +265,53 @@ describe('multi-sync (saved syncs)', () => {
     // A is dormant: its key is gone, only B's derived key is stored.
     const info = await core.handleMessage({ command: MessageCommand.GetStatus });
     expect((info as { syncId: string }).syncId).toBe('B');
+  });
+
+  it('builds a QR for a dormant row from its own long password, read-only', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await setSwitch(core);
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+      switchPassword: SWITCH,
+    });
+    const before = await saved(core);
+    // A is dormant now: its long password is the only way in (only its derived
+    // key is stored, wrapped under the switch lock).
+    const payload = (await core.handleMessage({
+      command: MessageCommand.PrepareConnectQr,
+      currentPassword: PASSWORD_A,
+      target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
+    })) as { serviceUrl: string; id: string; version: string; password: string };
+    expect(payload).toMatchObject({
+      serviceUrl: 'https://api.xbrowsersync.org/',
+      id: idA,
+      version: SyncClientVersion,
+      password: PASSWORD_A,
+    });
+    // Wrong password is its own error, and nothing about the registry moved.
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.PrepareConnectQr,
+        currentPassword: 'not the password',
+        target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
+      }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+    // A target that is not a saved row is refused (never a free-form probe).
+    await expect(
+      core.handleMessage({
+        command: MessageCommand.PrepareConnectQr,
+        currentPassword: PASSWORD_A,
+        target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: 'unknown' },
+      }),
+    ).rejects.toBeTruthy();
+    expect(await saved(core)).toEqual(before);
   });
 
   it('activates a saved sync back and forth (natives follow the active tree)', async () => {

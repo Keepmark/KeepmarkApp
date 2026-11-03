@@ -352,6 +352,7 @@ export const es: Record<MessageKey, string> = {
   'busy.changing': 'Cambiando…',
   'common.yesChangePw': 'Sí, cambiar contraseña',
   'mgr.syncs.syncPassword': 'Contraseña de la sincronización',
+  'manager.syncs.showQr': 'Mostrar QR',
   'mgr.syncs.confirmTargetPassword': 'Confirmar contraseña de destino',
   'mgr.syncs.summaryNew_one': 'Creará una nueva sincronización en {url} y subirá {count} marcador. No hace falta un ID de sincronización: se muestra uno nuevo tras el traslado.',
   'mgr.syncs.summaryNew_other': 'Creará una nueva sincronización en {url} y subirá {count} marcadores. No hace falta un ID de sincronización: se muestra uno nuevo tras el traslado.',

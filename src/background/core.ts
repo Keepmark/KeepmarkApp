@@ -14,7 +14,7 @@ import {
   type SavedSyncActive,
 } from '../shared/saved-syncs.js';
 import type { ServiceProbeResponse } from '../shared/messages.js';
-import { buildConnectQrPayload, type ConnectQrPayload } from '../shared/connect-qr.js';
+import { buildConnectQrPayload, type ConnectQrPayload, type ConnectQrTarget } from '../shared/connect-qr.js';
 import {
   changeSwitchLockPassword,
   createSwitchLock,
@@ -269,7 +269,7 @@ export class BackgroundCore {
       case MessageCommand.ProbeService:
         return this.probeService(msg.serviceUrl);
       case MessageCommand.PrepareConnectQr:
-        return this.prepareConnectQr(msg.currentPassword);
+        return this.prepareConnectQr(msg.currentPassword, msg.target);
       case MessageCommand.SyncBookmarks:
         return this.queueSync(msg.sync.type, msg.sync.bookmarks);
       case MessageCommand.RestoreBookmarks:
@@ -1425,9 +1425,43 @@ export class BackgroundCore {
     try { return await action(); } finally { this.changingCredentials = false; }
   }
 
-  private async prepareConnectQr(currentPassword: string): Promise<ConnectQrPayload> {
+  private async prepareConnectQr(currentPassword: string, target?: ConnectQrTarget): Promise<ConnectQrPayload> {
     if (!currentPassword || typeof currentPassword !== 'string') throw new IncompleteSyncInfoException(t('val.current.required'));
     if (this.connecting || this.changingCredentials || this.disabling || this.suspended > 0) throw new UnexpectedResponseException(t('core.connectBusy'));
+    // A row that is not the active sync: its long password is not stored (only
+    // the derived key is), so the typed password is the proof and one remote
+    // GET decrypts with it. Read-only, and the ACTIVE sync is untouched.
+    if (target) {
+      const wanted: SavedSyncActive = { serviceUrl: canonicalServiceUrl(target.serviceUrl), syncId: target.syncId };
+      const row = findSavedSync(await this.savedSyncList(), wanted);
+      if (!row) throw new UnexpectedResponseException(t('core.savedNotFound'));
+      const active = await this.activeSavedSync();
+      if (!active || !sameSavedSync(active, wanted)) {
+        const api = this.makeApi(wanted.serviceUrl);
+        await checkService(api, this.log);
+        const versionRes = await api.getVersion(wanted.syncId);
+        const remoteVersion = versionRes.version ?? undefined;
+        if (!remoteVersion) throw new UnsupportedSyncVersionException(t('err.legacySyncReconnect'));
+        if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
+          throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
+        }
+        const derived = await deriveKey(currentPassword, wanted.syncId, row.syncVersion ?? remoteVersion);
+        const remote = await api.getBookmarks(wanted.syncId);
+        if (!remote.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
+        try {
+          await decryptData(remote.bookmarks, derived);
+        } catch {
+          // Wrong password (or an expired sync): same wording as the active path.
+          throw new InvalidCredentialsException(t('core.currentPwWrong'));
+        }
+        return buildConnectQrPayload({
+          serviceUrl: wanted.serviceUrl,
+          id: wanted.syncId,
+          version: remote.version ?? remoteVersion,
+          password: currentPassword,
+        });
+      }
+    }
     const { info } = await this.requireCreds();
     const identity = (value: SyncInfo): string => JSON.stringify([value.serviceUrl ?? DefaultServiceUrl, value.id, value.password, value.version]);
     const captured = identity(info);
