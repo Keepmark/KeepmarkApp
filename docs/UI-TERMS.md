@@ -14,7 +14,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Connect | Link this device to a new or existing sync | |
 | New sync / Existing sync | The two connect modes | Use existing, … here |
 | Syncs | The list of saved syncs on this device (manager Sync section, popup card) | saved syncs, saved list, registry |
-| Add a sync (`+ Add a sync`) | Link this device to a new or existing sync without losing the current one (final button `Connect`, result `Sync linked`); Android offers only an existing sync while linked, the extension also creates a new sync from this browser's bookmarks | Move service, Move to another service, Switch service |
+| Add a sync (`+ Add a sync`) | Link this device to a new or existing sync without losing the current one (extension: final button `Connect`, result `Sync linked`; Android: direction review with `Continue`, then `Connect and use the server copy` / `Connect and merge` / `Connect and use this device`, restating the outcome); Android offers only an existing sync while linked, the extension also creates a new sync from this browser's bookmarks | Move service, Move to another service, Switch service |
 | Activate | Make an inactive saved sync the active one; this device then shows that sync's bookmarks | Open, Load |
 | Active | The saved sync this device is using now | in use, current, linked |
 | Inactive | A saved sync this device is not using right now | dormant, sleeping, idle, stopped |
