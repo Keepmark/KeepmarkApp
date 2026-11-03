@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Keepmark"
+  },
+  "extDescription": {
+    "message": "Sincronizare privată de marcaje, criptată end-to-end. O alternativă independentă compatibilă cu xBrowserSync."
+  },
+  "actionTitle": {
+    "message": "Keepmark"
+  }
+}

@@ -6,15 +6,16 @@ import { es } from './i18n/es.js';
 import { de } from './i18n/de.js';
 import { ja } from './i18n/ja.js';
 import { pt } from './i18n/pt.js';
+import { ro } from './i18n/ro.js';
 import { ru } from './i18n/ru.js';
 import { zh } from './i18n/zh.js';
 
 export type { MessageKey };
-export type Lang = 'en' | 'it' | 'fr' | 'es' | 'de' | 'ja' | 'pt' | 'ru' | 'zh';
+export type Lang = 'en' | 'it' | 'fr' | 'es' | 'de' | 'ja' | 'pt' | 'ro' | 'ru' | 'zh';
 export type LangSetting = 'system' | Lang;
-export const SUPPORTED_LANGS: readonly Lang[] = ['en', 'it', 'fr', 'es', 'de', 'ja', 'pt', 'ru', 'zh'];
+export const SUPPORTED_LANGS: readonly Lang[] = ['en', 'it', 'fr', 'es', 'de', 'ja', 'pt', 'ro', 'ru', 'zh'];
 
-const CATALOGS: Record<Lang, Record<MessageKey, string>> = { en, it, fr, es, de, ja, pt, ru, zh };
+const CATALOGS: Record<Lang, Record<MessageKey, string>> = { en, it, fr, es, de, ja, pt, ro, ru, zh };
 
 let current: Lang = 'en';
 

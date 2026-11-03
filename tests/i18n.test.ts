@@ -6,6 +6,7 @@ import { es } from '../src/shared/i18n/es';
 import { de } from '../src/shared/i18n/de';
 import { ja } from '../src/shared/i18n/ja';
 import { pt } from '../src/shared/i18n/pt';
+import { ro } from '../src/shared/i18n/ro';
 import { ru } from '../src/shared/i18n/ru';
 import { zh } from '../src/shared/i18n/zh';
 import { displayPath, getLang, resolveLang, setLang, t, tn } from '../src/shared/i18n';
@@ -13,7 +14,7 @@ import { displayPath, getLang, resolveLang, setLang, t, tn } from '../src/shared
 const ph = (s: string): string[] => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
 describe('catalogs', () => {
-  for (const [name, cat] of Object.entries({ it: itCat, fr, es, de, ja, pt, ru, zh })) {
+  for (const [name, cat] of Object.entries({ it: itCat, fr, es, de, ja, pt, ro, ru, zh })) {
     it(`${name}: same keys and placeholders as en, no empty values`, () => {
       expect(Object.keys(cat).sort()).toEqual(Object.keys(en).sort());
       for (const k of Object.keys(en) as (keyof typeof en)[]) {
@@ -35,6 +36,7 @@ describe('resolveLang', () => {
     ['system', 'de_DE', 'de'],
     ['system', 'pt-BR', 'pt'],
     ['system', 'ja-JP', 'ja'],
+    ['system', 'ro-RO', 'ro'],
     ['system', 'ru', 'ru'],
     ['system', 'zh-CN', 'zh'],
     ['system', 'zh-TW', 'zh'],

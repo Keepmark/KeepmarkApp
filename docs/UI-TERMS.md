@@ -51,13 +51,13 @@ Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local boo
 `Imported encrypted backup`, `Changed sync password — Settings`, `Deleted duplicates`,
 `Before safety-backup restore`, `Conflict resolved: …`, … (see code tables).
 
-## Translations (it / fr / es / de / ja / pt-BR / ru / zh)
+## Translations (it / fr / es / de / ja / pt-BR / ro / ru / zh)
 
 UI languages: English (source), Italiano, Français, Español, Deutsch, 日本語,
-Português (Brasil), Русский, 简体中文 (internal codes `ja`, `pt`, `ru`, `zh`; browser
-manifest locales `ja`, `pt_BR`, `ru`, `zh_CN`). Always use these terms, also inside
-longer sentences. Register: it "tu", fr "vous", es "tú", de "du", ja です/ます,
-pt-BR "você", ru "вы", zh "您".
+Português (Brasil), Română, Русский, 简体中文 (internal codes `ja`, `pt`, `ro`, `ru`,
+`zh`; browser manifest locales `ja`, `pt_BR`, `ro`, `ru`, `zh_CN`). Always use these
+terms, also inside longer sentences. Register: it "tu", fr "vous", es "tú", de "du",
+ja です/ます, pt-BR "você", ro "tu", ru "вы", zh "您".
 Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 
 | English | Italiano | Français | Español | Deutsch |
@@ -106,6 +106,52 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | password | password | mot de passe | contraseña | Passwort |
 | Online / Offline | Online / Offline | En ligne / Hors ligne | En línea / Sin conexión | Online / Offline |
 
+| English | Română |
+|---|---|
+| bookmarks | marcaje |
+| item(s) | element / elemente |
+| sync (noun) | sincronizare |
+| Sync ID | ID sincronizare |
+| Sync now | Sincronizează acum |
+| Service / Service URL | Serviciu / URL-ul serviciului |
+| Server copy | Copia de pe server |
+| this device / this browser | acest dispozitiv / acest browser |
+| Connect | Conectează |
+| Link / Unlink | Conectează / Deconectează |
+| linked | conectat |
+| Unlink this device | Deconectează acest dispozitiv |
+| Download | Descarcă |
+| Upload | Încarcă |
+| Merge | Îmbină |
+| Sync conflict | Conflict de sincronizare |
+| Syncs | Sincronizări |
+| Add a sync | Adaugă o sincronizare |
+| Activate | Activează |
+| Active | Activă |
+| Inactive | Inactivă |
+| Forget | Uită |
+| Sync lock | blocarea sincronizării |
+| Backup | Copie de rezervă |
+| Safety backups | Copii de siguranță |
+| Copy of the removed sync | Copia sincronizării eliminate |
+| Export / Restore | Exportă / Restaurează |
+| Undo | Anulează |
+| Duplicates | Duplicate |
+| Yes, download | Da, descarcă |
+| Yes, upload | Da, încarcă |
+| Yes, merge | Da, îmbină |
+| Yes, unlink | Da, deconectează |
+| Yes, delete | Da, șterge |
+| Cancel | Anulează |
+| Settings | Setări |
+| Status | Stare |
+| Logs | Jurnale |
+| About | Despre |
+| Language | Limbă |
+| System default | Limba sistemului |
+| password | parolă |
+| Online / Offline | Online / Offline |
+
 | English | 日本語 | Português (Brasil) | Русский | 简体中文 |
 |---|---|---|---|---|
 | bookmarks | ブックマーク | favoritos | закладки | 书签 |
@@ -145,5 +191,6 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Online / Offline | オンライン / オフライン | Online / Offline | В сети / Нет сети | 在线 / 离线 |
 
 Plural forms: the code distinguishes only `_one` / `_other`. ja and zh use the same
-text for both; ru `_other` uses a count-neutral form ("Закладок: {count}") so it reads
-right for 2–4 and 5+; pt-BR, like fr, treats 0 as `_one`.
+text for both; ro and ru `_other` carry the plain plural (`Intl.PluralRules` maps
+Romanian `few` and `other` there) so it reads right for 2+; pt-BR, like fr, treats 0
+as `_one`.

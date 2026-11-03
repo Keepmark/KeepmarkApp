@@ -66,7 +66,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `logging.ts` | Levels, ring `InMemoryLogger`, `LogSanitizer` (sync IDs truncated, secrets never logged) | Keepmark `Logging.cs` |
 | `bookmarks.ts` | Tree helpers: containers, `newBookmark/cleanBookmark`, ids, validate/repair, `nativeToSynced`, separator detection | `app/bookmark-helper.service.ts` |
 | `native.ts` | Generic read/clear/populate/mappings over injected `BookmarkApi` + `NativeOps` factory + `chromiumIsSeparator` | `app/webext-bookmark` + both platform services |
-| `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ru/zh | new |
+| `i18n.ts` + `i18n/*.ts` | UI localization: `t`, `tn`, `resolveLang`, catalogs en/it/fr/es/de/ja/pt/ro/ru/zh | new |
 | `store.ts` | `StoreKey` enum (ALL keys live here), `Store`, `MemoryBackend` (tests), `BrowserLocalBackend` (storage.local, MV2+MV3) | `app/store.enum.ts`, webext-store |
 | `saved-syncs.ts` | Multi-sync registry: rows (service, sync ID, label, last use) plus each row's derived key — wrapped under the sync lock when set, `plain` otherwise (never the raw password) — canonical identity, label rules + host suggestion, upsert/remove/sort/active matching | new (model A: one active sync) |
 | `switch-lock.ts` | Optional sync lock (short password): PBKDF2-SHA256 (200k) wraps a random vault key, the vault key wraps row keys. Create/unlock/change (rewrap the vault only, rows untouched)/remove (rows become plain)/reset (new vault). Only "non-empty" is enforced: PINs and 1-character secrets are valid | new |
@@ -181,9 +181,9 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    service's `DELETE`: truncate it in UI, never log it.
 4. **No dynamic `import()`** in shipped code: the MV3 service worker must be
    one file (`vite.chromium-sw.ts` lib build). Static imports only.
-5. **i18n** (en, it, fr, es, de, ja, pt-BR, ru, zh): every user-facing text is a key in
+5. **i18n** (en, it, fr, es, de, ja, pt-BR, ro, ru, zh): every user-facing text is a key in
    `src/shared/i18n/en.ts` (source of truth) with a translation in
-   `it/fr/es/de/ja/pt/ru/zh.ts` (`resolveLang` keeps only the base tag, so `pt-PT` → `pt`,
+   `it/fr/es/de/ja/pt/ro/ru/zh.ts` (`resolveLang` keeps only the base tag, so `pt-PT` → `pt`,
    `zh-TW` → `zh` Simplified)
    (`Record<MessageKey,string>`: a missing key fails `tsc`; `tests/i18n.test.ts`
    checks keys and `{placeholders}`). Use `t(key, params)` / `tn(base, n)` (plurals:
@@ -194,7 +194,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
    Language setting: `StoreKey.UiLanguage` (`system` = `browser.i18n.getUILanguage()`),
    loaded by the background at every wake-up (`loadLanguage`) and by pages in
    `initI18n`; changing it reloads the page. Logs stay English. Wording follows
-   `docs/UI-TERMS.md` (9-language glossary, identical in KeepmarkMobile). Manifest
+   `docs/UI-TERMS.md` (10-language glossary, identical in KeepmarkMobile). Manifest
    name/description use `res/_locales/*` (`pt_BR`, `zh_CN` folders). No telemetry; HTTPS-only services.
 
 ## 5. Testing
