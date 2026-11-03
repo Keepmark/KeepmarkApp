@@ -14,8 +14,8 @@ Both apps use the same words for the same things. Keep this file identical in
 | Connect | Link this device to a new or existing sync | |
 | New sync / Existing sync | The two connect modes | Use existing, … here |
 | Syncs | The list of saved syncs on this device (manager Sync section, popup card) | saved syncs, saved list, registry |
-| Add a sync (`+ Add a sync`) | Link this browser to a new or existing sync; while another sync is active this browser switches to it and the old one stays in the list (final button: `Connect`, result: `Sync linked`) | Move service, Move to another service, Switch service |
-| Activate | Make an inactive saved sync the active one; this browser's bookmarks become its copy | Open, Load |
+| Add a sync (`+ Add a sync`) | Link this device to a new or existing sync without losing the current one (final button `Connect`, result `Sync linked`); Android offers only an existing sync while linked, the extension also creates a new sync from this browser's bookmarks | Move service, Move to another service, Switch service |
+| Activate | Make an inactive saved sync the active one; this device then shows that sync's bookmarks | Open, Load |
 | Active | The saved sync this device is using now | in use, current, linked |
 | Inactive | A saved sync this device is not using right now | dormant, sleeping, idle, stopped |
 | Forget | Remove an inactive sync from the list; the sync and its server copy stay | Remove from the list, Remove |
@@ -24,28 +24,32 @@ Both apps use the same words for the same things. Keep this file identical in
 | **Upload** | Replace the server copy with the bookmarks on this device | Upload local, Upload mine, Overwrite remote, Push |
 | **Merge** | Keep everything from both sides; nothing is deleted | union, never deletes |
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
-| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs; it is not the sync's own password | master password, sync password, switch password |
+| Sync-change password | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
-| Copy of the removed sync | The local copy kept when a sync disappeared from the service; download or dismiss it from Backup | orphan copy, orphan backup |
+| Copy of the removed sync | The local copy kept when a sync disappeared from the service; Android keeps it encrypted and restorable in Backup → Copies of removed syncs, the extension downloads it as a plain JSON file or dismisses it | orphan copy, orphan backup |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
 `this` follows the platform: both apps say `Unlink this device` (it «Scollega questo
-dispositivo»), never `Unlink this browser`. Android uses the same words for the list
-(Syncs, Active, Inactive, Activate, Forget) once the Syncs page replaces the
-single-sync screens.
+dispositivo»), never `Unlink this browser`. Android uses the same words for the
+Syncs page (Syncs, Active, Inactive, Activate, Forget); the extension uses them
+in its manager Sync section and popup card.
 
-Android `Move service` is legacy from the single-sync app: the nav item, the
-`Move to another service` page and the `— Move service` safety origins become
-`Add a sync` when the Syncs page lands. Never copy that wording into new text.
+Android `Move service` is retired: the Syncs list plus `+ Add a sync` in Connect
+replace the old nav item and `Move to another service` page, and old
+`/switch-service` or `/migrate` links land on Connect. Its `— Move service`
+safety origins are gone too: those backups now read `— Sync switch`. Never copy
+that wording into new text.
 
-Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, change password` · `Yes, restore` · `Yes, delete` (second step of a server delete: `Yes, delete for good`), always with `Cancel`.
-The two connect modes are `New sync` / `Existing sync`: where the question above them already carries the noun (`Into which sync?`, it «In quale sincronizzazione?»), the two segmented labels are shortened to `New` / `Existing` (`Nuova` / `Esistente`) so they fit one row.
+Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, forget` · `Yes, create empty` · `Yes, unlink and keep a copy` · `Yes, change password` · `Yes, restore` · `Yes, delete` · `Yes, clear` (extension server delete: `Yes, delete for good`), always with `Cancel`.
+The two connect modes are `New sync` / `Existing sync`, shown as two cards in Android Connect; the extension's Add a sync form uses `A new sync` / `An existing sync`. While a sync is linked, Android `+ Add a sync` offers only `Existing sync`.
 Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in both repos).
-Busy labels: `Downloading…` · `Uploading…` · `Merging…`.
+Busy labels: `Checking…` · `Connecting…` · `Downloading…` · `Uploading…` · `Merging…` · `Changing…` · `Exporting…` · `Importing…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
-`Downloaded server copy — Sync switch`, `Merged both sides — Sync switch`, … (see code tables).
+`Merged both sides — Connect`, `Created empty sync — Connect`, `Downloaded server copy — Sync switch`,
+`Imported encrypted backup`, `Changed sync password — Settings`, `Deleted duplicates`,
+`Before safety-backup restore`, `Conflict resolved: …`, … (see code tables).
 
 ## Translations (it / fr / es / de / ja / pt-BR / ru / zh)
 
