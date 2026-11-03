@@ -33,10 +33,16 @@ export interface SavedSync {
 /**
  * A row key. `plain` = the derived key in clear, used when the user did not
  * opt into the switch password; `switch` = AES-GCM under the vault key.
+ * `rotated` = the long sync password changed while the switch lock was
+ * locked: `previous` still holds the key before the rotation and `sealed`
+ * holds the current one encrypted with it. The next activation already
+ * unlocks the vault, so it unwraps the chain and rewraps the row — a password
+ * change never asks for the switch password.
  */
 export type SavedSyncCredential =
   | { scheme: 'plain'; key: string }
-  | ({ scheme: 'switch' } & WrappedSecret);
+  | ({ scheme: 'switch' } & WrappedSecret)
+  | { scheme: 'rotated'; previous: SavedSyncCredential; sealed: string };
 
 /** Longest accepted label (the UI shows it in a narrow row). */
 export const MaxSavedSyncLabelLength = 40;
@@ -164,6 +170,12 @@ export function normalizeCredential(value: unknown): SavedSyncCredential | undef
   const blob = value as Partial<SavedSyncCredential> & Partial<WrappedSecret>;
   if (blob.scheme === 'plain') {
     return typeof blob.key === 'string' && !!blob.key ? { scheme: 'plain', key: blob.key } : undefined;
+  }
+  if (blob.scheme === 'rotated') {
+    const previous = normalizeCredential((blob as { previous?: unknown }).previous);
+    const sealed = (blob as { sealed?: unknown }).sealed;
+    if (!previous || typeof sealed !== 'string' || !sealed) return undefined;
+    return { scheme: 'rotated', previous, sealed };
   }
   if (typeof blob.iv === 'string' && !!blob.iv && typeof blob.ct === 'string' && !!blob.ct) {
     return { scheme: 'switch', iv: blob.iv, ct: blob.ct };

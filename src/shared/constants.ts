@@ -42,6 +42,10 @@ export const SyncPollIntervalMs = 15 * 60 * 1000;
 /** HTTP timeout for /info probes (mirrors checkServiceStatus 3000ms). */
 export const ServiceProbeTimeoutMs = 3000;
 
+/** A sync that adds or removes more nodes than this is treated as a massive
+ *  change and gets a safety snapshot of the side it replaces. */
+export const MaxSilentSyncChanges = 5;
+
 /** Default HTTP timeout for bookmark up/downloads. */
 export const DefaultHttpTimeoutMs = 12000;
 

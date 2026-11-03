@@ -746,33 +746,39 @@ describe('multi-sync (saved syncs)', () => {
     expect(list.switchLockSet).toBe(true);
   });
 
-  it('a password rotation while locked rewraps the row (no dead key)', async () => {
+  it('a password rotation while locked never asks the switch password', async () => {
     const s = state();
     const { core } = await setup(s);
     const idA = await connectA(core);
     await setSwitch(core);
     const ROTATED = 'rotated sync password';
-    await expect(
-      core.handleMessage({
-        command: MessageCommand.ChangePassword,
-        currentPassword: PASSWORD_A,
-        newPassword: ROTATED,
-      }),
-    ).rejects.toThrow(/sync lock password/i);
+    // The rotation belongs to the active sync: no lock proof here. The row
+    // keeps the previous key and seals the current one under it.
     await core.handleMessage({
       command: MessageCommand.ChangePassword,
       currentPassword: PASSWORD_A,
       newPassword: ROTATED,
-      switchPassword: SWITCH,
     });
-    // Unlink, then reactivate with the short password only: the row was
-    // rewrapped with the rotated key, so the remote copy still decrypts.
+    // Unlink, then reactivate with the short password only: the chain is
+    // unwrapped, the row rewrapped with the rotated key, and the remote copy
+    // still decrypts.
     await core.handleMessage({ command: MessageCommand.DisableSync });
     await core.handleMessage({
       command: MessageCommand.ActivateSavedSync,
       serviceUrl: 'https://api.xbrowsersync.org/',
       syncId: idA,
       switchPassword: SWITCH,
+    });
+    expect((await saved(core)).active?.syncId).toBe(idA);
+    // The chain is gone once the row was rewrapped: the stored credential is
+    // the rotated key itself, wrapped under the vault.
+    const row = (await saved(core)).syncs.find((r) => r.syncId === idA);
+    expect(row?.credential?.scheme).toBe('switch');
+    // …and a second rotation (still locked) keeps working the same way.
+    await core.handleMessage({
+      command: MessageCommand.ChangePassword,
+      currentPassword: ROTATED,
+      newPassword: 'third sync password',
     });
     expect((await saved(core)).active?.syncId).toBe(idA);
   });

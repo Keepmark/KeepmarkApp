@@ -3,6 +3,8 @@ import { decryptData, deriveKey, encryptData } from '../src/shared/crypto';
 import { SyncClientVersion } from '../src/shared/constants';
 import { BookmarkContainer } from '../src/shared/bookmarks';
 import {
+  backupFileName,
+  backupSlug,
   countNodes,
   exportBackup,
   importBackup,
@@ -202,5 +204,26 @@ describe('switchService', () => {
     const derived = await deriveKey('new-password', 'moved-id', SyncClientVersion);
     expect(JSON.parse(await decryptData(seen.blob, derived))).toEqual(tree);
     expect(await encryptData(JSON.stringify(tree), derived)).not.toBe('');
+  });
+});
+
+describe('backup file name', () => {
+  const day = new Date('2026-11-06T10:20:30Z');
+
+  it('slugs the sync name: spaces become underscores, accents fold', () => {
+    expect(backupSlug('Lavoro')).toBe('lavoro');
+    expect(backupSlug('Casa e ufficio')).toBe('casa_e_ufficio');
+    expect(backupSlug('  Però — Città  ')).toBe('pero_citta');
+    expect(backupSlug('api.xbrowsersync.org')).toBe('api_xbrowsersync_org');
+    // Nothing usable left: no stray separators in the file name.
+    expect(backupSlug('···')).toBe('');
+    expect(backupSlug(undefined)).toBe('');
+    expect(backupSlug('x'.repeat(80)).length).toBeLessThanOrEqual(40);
+  });
+
+  it('puts the slugged sync name before the date', () => {
+    expect(backupFileName('Casa e ufficio', day)).toBe('keepmark-backup-casa_e_ufficio-2026-11-06.xbs.json');
+    expect(backupFileName(undefined, day)).toBe('keepmark-backup-2026-11-06.xbs.json');
+    expect(backupFileName('···', day)).toBe('keepmark-backup-2026-11-06.xbs.json');
   });
 });

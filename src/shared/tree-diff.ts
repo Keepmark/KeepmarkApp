@@ -121,3 +121,45 @@ export function diffTrees(local: BookmarkNode[], remote: BookmarkNode[], sampleS
     !identical && sameUrlSets && titlesEqual && moved === 0 && metadataChanged === 0 && !foldersDiffer;
   return { identical, moved, movedSample, metadataChanged, metadataSample, foldersDiffer, orderOnly };
 }
+
+/**
+ * Magnitude of a replace: nodes that exist on one side only (bookmarks by
+ * normalized URL, folders by path below the three roots). Used to spot a
+ * massive, unexpected change — a wipe, a bad import, another client gone
+ * wrong — so it gets a safety snapshot even though a normal sync does not.
+ * The roots themselves are skipped: their titles are browser-localized.
+ */
+export function changedNodeCount(a: BookmarkNode[], b: BookmarkNode[]): number {
+  const urls = (tree: BookmarkNode[]): Set<string> => {
+    const out = new Set<string>();
+    const walk = (nodes: BookmarkNode[]): void => {
+      for (const n of nodes) {
+        if (Array.isArray(n.children)) walk(n.children);
+        else if (n.url && n.url !== SeparatorUrl) out.add(normalizeUrl(n.url));
+      }
+    };
+    walk(tree);
+    return out;
+  };
+  const folders = (tree: BookmarkNode[]): Set<string> => {
+    const out = new Set<string>();
+    const walk = (nodes: BookmarkNode[], path: string[], depth: number): void => {
+      for (const n of nodes) {
+        if (!Array.isArray(n.children)) continue;
+        const next = [...path, n.title ?? ''];
+        // Depth 0 = the three roots: their titles are localized.
+        if (depth > 0) out.add(next.join(' / '));
+        walk(n.children, next, depth + 1);
+      }
+    };
+    walk(tree, [], 0);
+    return out;
+  };
+  const count = (left: Set<string>, right: Set<string>): number => {
+    let n = 0;
+    for (const value of left) if (!right.has(value)) n += 1;
+    for (const value of right) if (!left.has(value)) n += 1;
+    return n;
+  };
+  return count(urls(a), urls(b)) + count(folders(a), folders(b));
+}

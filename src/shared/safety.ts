@@ -41,7 +41,12 @@ export type SafetyOperation =
   | 'merge-remote'
   | 'conflict-pull'
   | 'conflict-push'
-  | 'conflict-merge';
+  | 'conflict-merge'
+  /** A sync whose magnitude exceeded `MaxSilentSyncChanges`: the local side
+   *  was snapshotted before the download replaced it. */
+  | 'sync-pull'
+  /** Same, upload side: the server copy was snapshotted before the replace. */
+  | 'sync-push';
 
 /** One manifest row (mirrors Keepmark safety-index.json). */
 export interface SafetyEntry {

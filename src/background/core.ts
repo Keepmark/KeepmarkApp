@@ -23,6 +23,7 @@ import {
   unwrapCredential,
   wrapCredential,
   type SwitchLock,
+  type WrappedSecret,
 } from '../shared/switch-lock.js';
 // Background core: owns the sync queue, alarms, native listeners and all
 // popup message handling. Platform-agnostic (works in a MV2 background page
@@ -34,7 +35,7 @@ import {
 import { XSyncApiClient } from '../shared/api.js';
 import { isLang, resolveLang, setLang, t, type LangSetting } from '../shared/i18n.js';
 import { decryptData, deriveKey, derivedKeyId, encryptData } from '../shared/crypto.js';
-import { compareVersions, DefaultServiceUrl, MinApiVersion, MinNewPasswordLength, PasswordTooShort, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
+import { compareVersions, DefaultServiceUrl, MaxSilentSyncChanges, MinApiVersion, MinNewPasswordLength, PasswordTooShort, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
   IncompleteSyncInfoException,
@@ -53,6 +54,7 @@ import type { BookmarkNode } from '../shared/models.js';
 import { validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer } from '../shared/bookmarks.js';
+import { changedNodeCount } from '../shared/tree-diff.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
 import { deleteByIds, getDuplicateGroups } from '../shared/duplicates.js';
 import { mergeTrees, type MergeStats } from '../shared/merge.js';
@@ -343,9 +345,7 @@ export class BackgroundCore {
         await this.store.remove(StoreKey.RemovedSync);
         return { cleared: true };
       case MessageCommand.ChangePassword:
-        return this.withCredentialChange(() =>
-          this.changePassword(msg.currentPassword, msg.newPassword, msg.switchPassword),
-        );
+        return this.withCredentialChange(() => this.changePassword(msg.currentPassword, msg.newPassword));
       case MessageCommand.GetToolbarSync:
         return { enabled: (await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar)) ?? true };
       case MessageCommand.SetToolbarSync:
@@ -506,6 +506,7 @@ export class BackgroundCore {
             remoteVersion: full.version ?? undefined,
             meta: full.meta,
             supportsV12: true,
+            beforeReplace: (remote, natives) => this.guardMassivePull(info, syncToolbar, remote, natives),
           }, info.serviceUrl),
         );
         if (pulled.updateRemote) {
@@ -533,6 +534,7 @@ export class BackgroundCore {
         remoteVersion: res.version ?? undefined,
         meta: res.meta,
         supportsV12: false,
+        beforeReplace: (remote, natives) => this.guardMassivePull(info, syncToolbar, remote, natives),
       }, info.serviceUrl),
     );
     if (pulled.updateRemote) {
@@ -622,6 +624,9 @@ export class BackgroundCore {
     const next = ensureContainersExist(reconciled);
     const api = this.makeApi(info.serviceUrl ?? DefaultServiceUrl);
     try {
+      // A change this big is not an ordinary edit: snapshot the server copy
+      // before replacing it (a failed snapshot aborts the push).
+      await this.guardMassivePush(api, info, next);
       await this.pushCurrent(api, info, next);
       // Mappings follow the pushed tree only once the server accepted it: on a
       // 409 the cached tree stays the reconcile base, with matching mappings.
@@ -642,6 +647,70 @@ export class BackgroundCore {
       }
       throw err;
     }
+  }
+
+  /**
+   * A sync replaces whole trees, so an ordinary edit is tiny and takes no
+   * snapshot. When one side is about to lose more than `MaxSilentSyncChanges`
+   * nodes something massive happened (a wipe, a bad import, another client
+   * gone wrong): snapshot the side being replaced. Fail-closed — if the
+   * snapshot cannot be written, the sync aborts and retries later.
+   */
+  private async guardMassivePull(
+    info: SyncInfo,
+    syncToolbar: boolean,
+    remote: BookmarkNode[],
+    natives: BookmarkNode[],
+  ): Promise<void> {
+    const scoped = (tree: BookmarkNode[]): BookmarkNode[] =>
+      syncToolbar ? tree : tree.filter((node) => node.title !== BookmarkContainer.Toolbar);
+    const magnitude = changedNodeCount(scoped(natives), scoped(remote));
+    if (magnitude <= MaxSilentSyncChanges) return;
+    await writeSafety(this.store, {
+      operation: 'sync-pull',
+      side: 'local',
+      tree: natives,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
+    this.log.log(
+      XbsLogLevel.Warning,
+      'sync',
+      `Massive download (${magnitude} nodes): local copy snapshotted`,
+    );
+  }
+
+  /** Same guard on the upload side: the server copy is snapshotted before a
+   *  massive replace. The comparison base is the last synced tree. */
+  private async guardMassivePush(
+    api: XSyncApiClient,
+    info: SyncInfo,
+    next: BookmarkNode[],
+  ): Promise<void> {
+    const cachedBlob = await this.store.get<string>(StoreKey.Bookmarks);
+    if (!cachedBlob) return;
+    let cached: BookmarkNode[];
+    try {
+      cached = JSON.parse(await decryptData(cachedBlob, info.password!)) as BookmarkNode[];
+    } catch {
+      // Cannot compare: the regular conflict path still protects the push.
+      return;
+    }
+    const magnitude = changedNodeCount(cached, next);
+    if (magnitude <= MaxSilentSyncChanges) return;
+    const fresh = await this.fetchRemote(api, info);
+    await writeSafety(this.store, {
+      operation: 'sync-push',
+      side: 'remote',
+      tree: fresh.tree,
+      syncId: info.id,
+      derivedKey: info.password,
+    });
+    this.log.log(
+      XbsLogLevel.Warning,
+      'sync',
+      `Massive upload (${magnitude} nodes): server copy snapshotted`,
+    );
   }
 
   /**
@@ -1489,14 +1558,16 @@ export class BackgroundCore {
   private async changePassword(
     currentPassword: string,
     newPassword: string,
-    switchPassword?: string,
   ): Promise<{ lastUpdated: string }> {
     if (!currentPassword) throw new IncompleteSyncInfoException(t('val.current.required'));
     if (!newPassword) throw new IncompleteSyncInfoException(t('val.new.required'));
     if (newPassword.length < MinNewPasswordLength) throw new Error(PasswordTooShort());
-    // The rotation changes the active key: when the switch lock exists the key
-    // must be rewrapped for the list, so prove the lock first (no writes yet).
-    const lockVault = await this.unlockForActiveKeyChange(switchPassword);
+    // A password change belongs to the ACTIVE sync, never to the switch: the
+    // short switch password is not asked here. With a lock set the row's key
+    // cannot be rewrapped without the vault key, so the current key is sealed
+    // under the previous one (`rotated`) and the next activation — which
+    // unlocks the vault anyway — rewraps it.
+    const lock = await this.readSwitchLock();
     const { info } = await this.requireCreds();
     const version = info.version ?? SyncClientVersion;
     // Prove the current password BEFORE touching anything: the derived key
@@ -1550,10 +1621,11 @@ export class BackgroundCore {
     const current = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     if (current?.id !== info.id) throw new IncompleteSyncInfoException(t('core.pwRotationChanged'));
     await this.store.set(StoreKey.SyncInfo, { ...current, password: derived });
-    // Keep the row's wrapped key in step with the rotated one (best-effort:
-    // a registry hiccup must not fail a completed rotation; the next link or
-    // activation rewraps it anyway).
-    await this.wrapActiveRow(lockVault).catch((err) =>
+    // Keep the row's key in step with the rotated one (best-effort: a registry
+    // hiccup must not fail a completed rotation; the next link or activation
+    // rewraps it anyway).
+    const keepRow = lock ? this.markActiveRowRotated(info.password!, derived) : this.wrapActiveRow(undefined);
+    await keepRow.catch((err) =>
       this.log.log(XbsLogLevel.Warning, 'sync', `Saved syncs wrap failed: ${(err as Error)?.message}`),
     );
     // Migrate safety entries to the new key (best-effort: rotation never
@@ -1860,17 +1932,16 @@ export class BackgroundCore {
     }
     if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
     // The switch password is opt-in: plain rows switch without one; wrapped
-    // rows need the lock and the password that opens it.
+    // rows need the lock and the password that opens it. A rotated chain is
+    // unwrapped on the way (see `rowDerivedKey`).
     let vaultKey: CryptoKey | undefined;
-    let derived: string;
-    if (row.credential.scheme === 'plain') {
-      derived = row.credential.key;
-    } else {
+    const unlock = async (wrapped: { scheme: 'switch' } & WrappedSecret): Promise<string> => {
       if (!lock) throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'));
       if (!switchPassword) throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
-      vaultKey = await unlockSwitchLock(lock, switchPassword);
-      derived = await unwrapCredential(vaultKey, row.credential);
-    }
+      vaultKey ??= await unlockSwitchLock(lock, switchPassword);
+      return unwrapCredential(vaultKey, wrapped);
+    };
+    const derived = await this.rowDerivedKey(row.credential, unlock);
     await this.verifySavedSyncTarget(target, derived);
     if (!active) {
       // Unlinked (the row survived an unlink): plain link, there is no active
@@ -1974,12 +2045,49 @@ export class BackgroundCore {
     return unlockSwitchLock(lock, switchPassword);
   }
 
-  /** Rotation of the active key (long password change): same proof as a link. */
-  private async unlockForActiveKeyChange(switchPassword?: string): Promise<CryptoKey | undefined> {
-    const lock = await this.readSwitchLock();
-    if (!lock) return undefined;
-    if (!switchPassword) throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
-    return unlockSwitchLock(lock, switchPassword);
+  /**
+   * A row's current derived key. A `rotated` link means the long password
+   * changed while the switch lock was locked: its `sealed` blob holds the
+   * current key encrypted with the previous one, so the chain is walked from
+   * the stored credential (plain or vault-wrapped) outwards.
+   */
+  private async rowDerivedKey(
+    credential: SavedSyncCredential,
+    unlock: (wrapped: { scheme: 'switch' } & WrappedSecret) => Promise<string>,
+  ): Promise<string> {
+    if (credential.scheme === 'plain') return credential.key;
+    if (credential.scheme === 'switch') return unlock(credential);
+    const previous = await this.rowDerivedKey(credential.previous, unlock);
+    const current = await decryptData(credential.sealed, previous).catch((err: unknown) => {
+      throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'), { cause: err });
+    });
+    if (!current) throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'));
+    return current;
+  }
+
+  /**
+   * After a password rotation with the switch lock set and locked: the row
+   * keeps the key before the rotation and the current one is sealed under it,
+   * so the next activation rewraps without a second prompt.
+   */
+  private async markActiveRowRotated(previousKey: string, currentKey: string): Promise<void> {
+    const active = await this.activeSavedSync();
+    if (!active) return;
+    const sealed = await encryptData(currentKey, previousKey);
+    const keyId = await derivedKeyId(currentKey).catch(() => undefined);
+    await this.withSavedSyncs(async (list) => {
+      const row = findSavedSync(list, active);
+      if (!row?.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
+      const stored = row.credential.scheme === 'rotated' ? row.credential.previous : row.credential;
+      await this.store.set(
+        StoreKey.SavedSyncs,
+        upsertSavedSync(list, {
+          ...row,
+          ...(keyId ? { keyId } : {}),
+          credential: { scheme: 'rotated', previous: stored, sealed },
+        }),
+      );
+    });
   }
 
   /** Store one identity's key into its row: wrapped with a lock, in clear
@@ -2032,10 +2140,11 @@ export class BackgroundCore {
     await this.withSavedSyncs(async (list) => {
       const rows: SavedSync[] = [];
       for (const row of list) {
-        if (row.credential?.scheme !== 'plain') {
+        if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
+        const key = await this.rowDerivedKey(row.credential, async () => {
           throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
-        }
-        rows.push({ ...row, credential: await this.sealRowKey(vaultKey, row.credential.key) });
+        });
+        rows.push({ ...row, credential: await this.sealRowKey(vaultKey, key) });
       }
       await this.store.set(StoreKey.SavedSyncs, rows);
     });
@@ -2057,10 +2166,7 @@ export class BackgroundCore {
       const next: SavedSync[] = [];
       for (const row of list) {
         if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
-        const key =
-          row.credential.scheme === 'plain'
-            ? row.credential.key
-            : await unwrapCredential(vaultKey, row.credential);
+        const key = await this.rowDerivedKey(row.credential, (wrapped) => unwrapCredential(vaultKey, wrapped));
         next.push({ ...row, credential: { scheme: 'plain', key } });
         rows += 1;
       }

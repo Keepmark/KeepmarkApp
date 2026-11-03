@@ -136,6 +136,47 @@ it('asks the sync lock password in the activation modal', async () => {
   expect(dialog.open).toBe(false);
 });
 
+it('changes the active sync password from its row, without the switch lock', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.ChangePassword) return { lastUpdated: 'now' };
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://old.test', syncId: 'old', label: 'Lavoro' },
+          { serviceUrl: 'https://other.test', syncId: 'other' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    return null;
+  });
+  await openSyncs();
+  // The password belongs to the active sync: its row owns the trigger, a
+  // dormant row does not.
+  const trigger = el('m-syncs-pw-0') as HTMLButtonElement;
+  expect(trigger).not.toBeNull();
+  expect(document.getElementById('m-syncs-pw-1')).toBeNull();
+  trigger.click(); await settle();
+  const dialog = el('m-pw-dialog') as HTMLDialogElement;
+  expect(dialog.open).toBe(true);
+  expect(el('m-pw-target').textContent).toContain('Lavoro');
+  // No switch lock field: rotating a sync password never asks for it.
+  expect(document.getElementById('m-pw-switch')).toBeNull();
+  field('m-current-password', 'old password');
+  field('m-new-password', 'brand new password');
+  field('m-new-password-confirm', 'brand new password');
+  (el('m-btn-password-go') as HTMLButtonElement).click(); await settle();
+  const call = harness.send.mock.calls.find(([m]) => m.command === MessageCommand.ChangePassword)?.[0];
+  expect(call).toEqual({
+    command: MessageCommand.ChangePassword,
+    currentPassword: 'old password',
+    newPassword: 'brand new password',
+  });
+  expect(dialog.open).toBe(false);
+  expect(el('m-syncs-result').hidden).toBe(false);
+});
+
 it('says the bookmarks toolbar stays local when the flag excludes it', async () => {
   harness.send.mockImplementation(async (msg) => {
     if (msg.command === MessageCommand.GetToolbarSync) return { enabled: false };

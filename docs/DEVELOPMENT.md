@@ -69,10 +69,14 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
 - `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
   (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
-  Rename/Activate/Unlink/Remove/Delete from server, `+ Add new sync` wizard
-  with target + merge preview, optional sync lock — each operation is a modal
-  task dialog, never an inline panel that can overlap another one), Logs,
-  Settings (toolbar toggle via background, password change), About.
+  Rename/Activate/Unlink/Remove/Delete from server, `Change password` on the
+  active row, `+ Add new sync` wizard with target + merge preview, optional
+  sync lock — each operation is a modal task dialog, never an inline panel that
+  can overlap another one), Settings (toolbar toggle via background, the log
+  panel folded behind one "Show logs" button), About. The long password
+  belongs to a sync, so changing it is a row action, not a Settings section,
+  and it never asks the sync lock password: the background re-wraps the saved
+  key under the previous one (`scheme: 'rotated'`).
 - `src/popup.html`, `src/background.html` — vite entries (land at output root).
 - `res/manifest.{firefox,chromium}.json` — copied to output as manifest.json.
 - `vite.{firefox,chromium,chromium-sw}.ts` + `vite.shared.ts`, `scripts/package.mjs`.
@@ -125,8 +129,17 @@ ported from the Keepmark Android safety spec): connect pull/push, change-passwor
 import, restore, server delete, bulk duplicate cleanup. **A switch between
 saved syncs is not destructive** — the copy this device leaves is already on
 its own server and activating that sync again brings it back — so it takes no
-snapshot and arms no undo; the manager shows no "last action / undo" banner. Snapshot write failure aborts the operation (fail closed); single
-bookmark add/remove is exempt (mirrors the Android single-delete exception).
+snapshot and arms no undo; the manager shows no "last action / undo" banner.
+**A sync is not destructive either, until it is massive**: a pull or a push
+that would add or remove more than `MaxSilentSyncChanges` (5) nodes is not an
+ordinary edit, so it snapshots the side it replaces first — `sync-pull` for the
+copy in this browser (right before the natives are replaced,
+`PullMeta.beforeReplace`), `sync-push` for the server copy (compared against
+the last synced tree, fetched just for the snapshot). `changedNodeCount` in
+`src/shared/tree-diff.ts` measures it: bookmarks by normalized URL, folders by
+path below the three roots. Snapshot write failure aborts the operation (fail
+closed); single bookmark add/remove is exempt (mirrors the Android
+single-delete exception).
 
 - Stored in `storage.local`: `SafetyIndex` manifest rows
   (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated
@@ -146,7 +159,12 @@ bookmark add/remove is exempt (mirrors the Android single-delete exception).
 
 Export envelope `{app, format, salt, blob}` is byte-compatible with the
 Android client: new exports are stamped `app: "xBrowserSyncNg"` (the tag
-Android requires) and legacy `"KeepmarkApp"` files still import here.
+Android requires) and legacy `"KeepmarkApp"` files still import here. The
+download name carries the sync it belongs to —
+`keepmark-backup-<sync>-YYYY-MM-DD.xbs.json`, where `<sync>` is the active
+sync's name slugged by `backupSlug` (lowercase, accents folded, anything not a
+letter or digit collapsed into one underscore, at most 40 characters); without
+a usable name the file keeps `keepmark-backup-YYYY-MM-DD.xbs.json`.
 
 ## Permissions (why each one)
 

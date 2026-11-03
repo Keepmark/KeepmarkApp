@@ -67,7 +67,7 @@ import {
   type ConflictResolutionDirection,
   type ConflictStateResponse,
 } from '../shared/messages.js';
-import { MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
+import { backupFileName, MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
 import {
   MaxSavedSyncLabelLength,
   isActiveSavedSync,
@@ -148,7 +148,7 @@ function showSection(name: string, moveFocus = false): void {
     if (active) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
-  for (const sec of ['status', 'backup', 'duplicates', 'syncs', 'logs', 'settings', 'about']) {
+  for (const sec of ['status', 'backup', 'duplicates', 'syncs', 'settings', 'about']) {
     ($(`sec-${sec}`) as HTMLElement).hidden = sec !== name;
   }
   if (moveFocus) {
@@ -168,7 +168,6 @@ function showSection(name: string, moveFocus = false): void {
     void refreshSyncs();
   }
   if (name === 'duplicates') void scanDuplicates();
-  if (name === 'logs') void refreshLogs();
   if (name === 'settings') void renderSettings();
   if (name === 'about') renderAbout();
 }
@@ -538,7 +537,13 @@ async function exportBackup(): Promise<void> {
   await withBusy('m-btn-export', t('busy.exporting'), async () => {
     try {
       const json = await send<string>({ command: MessageCommand.ExportBackup, password });
-      const filename = `keepmark-backup-${new Date().toISOString().slice(0, 10)}.xbs.json`;
+      // The file name carries the sync it belongs to (slugged: it is a human
+      // label), so two exports of different syncs never look identical.
+      const registry = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs }).catch(
+        () => null,
+      );
+      const activeRow = registry?.syncs.find((row) => isActiveSavedSync(row, registry.active));
+      const filename = backupFileName(activeRow ? savedSyncName(activeRow) : undefined, new Date());
       await send({ command: MessageCommand.DownloadFile, filename, text: json });
       input('m-backup-password').value = '';
       input('m-backup-confirm').value = '';
@@ -657,6 +662,8 @@ const SafetyOperations: Record<string, MessageKey> = {
   'delete-remote': 'mgr.safety.op.deleteRemote',
   'merge-local': 'mgr.safety.op.mergeLocal',
   'merge-remote': 'mgr.safety.op.mergeRemote',
+  'sync-pull': 'mgr.safety.op.syncPull',
+  'sync-push': 'mgr.safety.op.syncPush',
 };
 
 /** Items in a whole tree (folders included), for the kept-copy count. */
@@ -1601,6 +1608,17 @@ function initLogsSection(): void {
   $('m-btn-logs').addEventListener('click', () =>
     withBusy('m-btn-logs', t('busy.loading'), () => refreshLogs()),
   );
+  // The log is troubleshooting material, not a feature: Settings keeps it
+  // folded behind one button (verbosity included) instead of a sidebar entry.
+  $('m-btn-logs-toggle').addEventListener('click', () => {
+    const panel = $('m-logs-panel') as HTMLElement;
+    const button = $('m-btn-logs-toggle') as HTMLButtonElement;
+    const open = panel.hidden;
+    panel.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    button.textContent = t(open ? 'manager.logs.hide' : 'manager.logs.show');
+    if (open) void refreshLogs();
+  });
 }
 
 /** Bookmarks-toolbar inclusion, read once at init and kept in step by the
@@ -1671,7 +1689,6 @@ function initSettingsSection(): void {
       showError('settings-error', (err as Error).message);
     }
   });
-  $('m-btn-password').addEventListener('click', () => openPasswordChange($('m-btn-password')));
   ($('m-pw-form') as HTMLFormElement).addEventListener('submit', (event) => {
     event.preventDefault();
     void submitPasswordChange();
@@ -1779,6 +1796,15 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   actions.append(qr);
 
   if (isActive) {
+    // The long password belongs to this sync, so its change lives here, next
+    // to the row it re-encrypts — not in Settings.
+    const changePw = document.createElement('button');
+    changePw.type = 'button';
+    changePw.className = 'mini';
+    changePw.id = `m-syncs-pw-${index}`;
+    changePw.textContent = t('manager.syncs.changePw');
+    changePw.addEventListener('click', () => openPasswordChange(changePw));
+    actions.append(changePw);
     // The active row has one action that ends the link: Unlink this device.
     // A second "remove" button would do the same thing under another name.
     const removeRemote = document.createElement('button');
@@ -2075,8 +2101,6 @@ function refreshSwitchLockUi(): void {
   // they are inert while it runs and nothing has to jump around.
   ($('m-lock-actions') as HTMLElement).hidden = false;
   ($('m-lock-forgot') as HTMLElement).hidden = !switchLockSet;
-  // The proof is asked by every flow that changes or demotes the active key.
-  ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
 }
 
 /** Trigger labels keep the ellipsis ("Remove…"); the button that runs the
@@ -2272,7 +2296,6 @@ function resetPasswordFields(): void {
   input('m-current-password').value = '';
   input('m-new-password').value = '';
   input('m-new-password-confirm').value = '';
-  input('m-pw-switch').value = '';
 }
 
 /** Ends the password task; the dialog's onClose drops every field. */
@@ -2287,9 +2310,14 @@ function resetPasswordChange(): void {
 function openPasswordChange(opener: HTMLElement): void {
   connectQr?.close();
   clearMessages();
-  ($('pw-result') as HTMLElement).hidden = true;
+  ($('m-syncs-result') as HTMLElement).hidden = true;
   resetPasswordFields();
-  refreshSwitchLockUi();
+  // Name the sync being re-encrypted: the task is about that row, not about
+  // the browser or the switch.
+  const activeRow = syncsView.syncs.find((row) => isActiveSavedSync(row, syncsView.active));
+  $('m-pw-target').textContent = activeRow
+    ? t('manager.syncs.changePwTarget', { name: savedSyncName(activeRow) })
+    : '';
   pwDialog.open(opener, input('m-current-password'));
 }
 
@@ -2298,11 +2326,8 @@ async function submitPasswordChange(): Promise<void> {
   const fields = readPasswordChange();
   const invalid = validatePasswordChange(fields);
   if (invalid) return showError('pw-error', invalid);
-  // Rotating the key must rewrap the saved row: prove the switch lock.
-  const switchPassword = input('m-pw-switch').value;
-  if (switchLockSet && !switchPassword) {
-    return showError('pw-error', t('core.switchPasswordRequired'));
-  }
+  // No switch password: the rotation belongs to the active sync and the
+  // background keeps the row valid on its own (see `markActiveRowRotated`).
   const token = pwDialog.token;
   await withBusy('m-btn-password-go', t('busy.changing'), async () => {
     try {
@@ -2310,11 +2335,10 @@ async function submitPasswordChange(): Promise<void> {
         command: MessageCommand.ChangePassword,
         currentPassword: fields.current,
         newPassword: fields.next,
-        switchPassword,
       });
       if (!pwDialog.isOpen || pwDialog.token !== token) return;
       pwDialog.close();
-      showResult('pw-result', ChangePasswordDone());
+      showResult('m-syncs-result', ChangePasswordDone());
       await refreshStatus();
     } catch (err) {
       if (!pwDialog.isOpen || pwDialog.token !== token) return;

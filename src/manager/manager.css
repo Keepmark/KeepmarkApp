@@ -550,7 +550,15 @@ dd:last-of-type { border-bottom: 0; }
   color: var(--muted);
 }
 
-/* ---- Logs ---- */
+/* ---- Logs (folded inside Settings) ---- */
+.logs-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.logs-panel[hidden] { display: none; }
+
 #m-log-list {
   margin-top: 12px;
   font-size: 12px;

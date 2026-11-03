@@ -100,6 +100,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Settings | Impostazioni | Paramètres | Ajustes | Einstellungen |
 | Status | Stato | État | Estado | Status |
 | Logs | Log | Journaux | Registros | Protokolle |
+| Show logs | Mostra i log | Afficher les journaux | Mostrar registros | Protokolle anzeigen |
 | About | Informazioni | À propos | Acerca de | Info |
 | Language | Lingua | Langue | Idioma | Sprache |
 | System default | Lingua di sistema | Langue du système | Idioma del sistema | Systemsprache |
@@ -146,6 +147,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Settings | Setări |
 | Status | Stare |
 | Logs | Jurnale |
+| Show logs | Arată jurnalele |
 | About | Despre |
 | Language | Limbă |
 | System default | Limba sistemului |

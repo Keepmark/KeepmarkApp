@@ -1333,6 +1333,74 @@ describe('background core v1.2', () => {
     expect(await store.get<string>(StoreKey.SyncHash)).toBe('h-new');
   });
 
+  it('a massive download snapshots the local side first', async () => {
+    const state = baseState();
+    const { core, store, derived } = await linkedCore(state);
+    // Eight new bookmarks appear at once: something big happened elsewhere.
+    const children = Array.from({ length: 8 }, (_, i) => ({
+      id: 100 + i,
+      title: `N${i}`,
+      url: `https://n${i}.test`,
+    }));
+    state.remoteBlob = await encryptData(
+      JSON.stringify([{ id: 1, title: BookmarkContainer.Other, children }]),
+      derived,
+    );
+    state.remoteLastUpdated = 't-massive';
+    await core.checkForUpdates();
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+      side: string;
+    }[];
+    expect(safeties.some((s) => s.operation === 'sync-pull' && s.side === 'local')).toBe(true);
+    // The download still landed (the guard snapshots, it never blocks a pull);
+    // the missing containers make it re-upload once, hence the +srv stamp.
+    expect(await store.get<string>(StoreKey.LastUpdated)).toBe('t-massive+srv');
+  });
+
+  it('an ordinary download takes no snapshot', async () => {
+    const state = baseState();
+    const { core, derived } = await linkedCore(state);
+    state.remoteBlob = await encryptData(
+      JSON.stringify([
+        { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'One', url: 'https://one.test' }] },
+      ]),
+      derived,
+    );
+    state.remoteLastUpdated = 't-small';
+    await core.checkForUpdates();
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.some((s) => s.operation === 'sync-pull')).toBe(false);
+  });
+
+  it('a massive upload snapshots the server copy first', async () => {
+    const state = baseState();
+    const { core, mockApi } = await linkedCore(state);
+    // Six native bookmarks appear in one go (an import outside the extension).
+    for (let i = 0; i < 6; i += 1) {
+      await mockApi.create({ parentId: 'unfiled_____', title: `Bulk ${i}`, url: `https://bulk${i}.test` });
+    }
+    await core.pushAfterNativeChange();
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+      side: string;
+    }[];
+    expect(safeties.some((s) => s.operation === 'sync-push' && s.side === 'remote')).toBe(true);
+  });
+
+  it('an ordinary upload takes no snapshot', async () => {
+    const state = baseState();
+    const { core, mockApi } = await linkedCore(state);
+    await mockApi.create({ parentId: 'unfiled_____', title: 'Just one', url: 'https://just-one.test' });
+    await core.pushAfterNativeChange();
+    const safeties = (await core.handleMessage({ command: MessageCommand.GetSafetyList })) as {
+      operation: string;
+    }[];
+    expect(safeties.some((s) => s.operation === 'sync-push')).toBe(false);
+  });
+
   it('delete on legacy is refused before touching anything', async () => {
     const state = baseState();
     const { core, store, ports } = await linkedCore(state);

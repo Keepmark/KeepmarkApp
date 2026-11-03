@@ -301,7 +301,10 @@ safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   `{app:'KeepmarkApp', format:1, salt, blob}`; guards mirror §9 (password ≥ 8,
   fresh random salt per export, 50 MB byte limit on real bytes, 200k nodes,
   shape-typed BFS validation with index queue). UI downloads
-  `keepmark-backup-YYYY-MM-DD.xbs.json`, clears the password field.
+  `keepmark-backup-<sync>-YYYY-MM-DD.xbs.json`, where `<sync>` is the active
+  sync's name slugged (`backupSlug`: lowercase, accents folded, non-alphanumeric
+  → `_`, max 40; omitted when nothing usable is left), clears the password
+  field.
 - `ImportBackup {json, password}`: parse wrapped (invalid JSON / foreign
   `app` / bad `format` / wrong password / corrupted payload each get distinct
   errors), validate, undo `import`, overwrite natives + push. Returns
@@ -397,8 +400,10 @@ false`, `SyncBookmarksToolbar true`, `DarkModeEnabled false`,
 
 Surfaces: popup (`src/popup.html`, connect + status + sync now + manager
 link; `?fullpage=1` tab mode for vault copying) and manager
-(`src/manager.html`: Status, Backup, Duplicates, Sync, Logs, Settings,
-About). Shared renderer + validators in `src/popup/ui.ts`. Rules:
+(`src/manager.html`: Status, Backup, Duplicates, Sync, Settings, About).
+Shared renderer + validators in `src/popup/ui.ts`. The log is not a section:
+it lives in Settings, folded behind one "Show logs" button (verbosity + current
+log inside). Rules:
 
 - Each manager section owns contextual busy/error/result evidence; stale
   result boxes are hidden when a new error appears (`hideErrors`).

@@ -286,6 +286,9 @@ export async function pullExistingSync(
 export interface PullMeta {
   meta?: SyncMeta;
   supportsV12?: boolean;
+  /** Called with both sides right before the natives are replaced: a caller
+   *  may snapshot a massive change (the normal sync takes no snapshot). */
+  beforeReplace?: (remote: BookmarkNode[], natives: BookmarkNode[]) => Promise<void>;
 }
 
 /**
@@ -323,6 +326,11 @@ export async function pullWithDerivedKey(
     updateRemote = true;
   }
 
+  // The hook sees the native tree before anything is touched. Reading it is
+  // only needed when a caller guards the replace (a massive-change snapshot).
+  if (input.beforeReplace) {
+    await input.beforeReplace(bookmarks, await native.readAll(syncToolbar));
+  }
   await native.clearAndPopulate(bookmarks, syncToolbar);
   const mappings = await native.rebuildMappings(bookmarks, syncToolbar);
   await idMapper.set(mappings);

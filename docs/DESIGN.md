@@ -48,7 +48,7 @@ The popup also defines `--surface-2`, `--line`, `--tint`, `--tint-ink`,
   (24px/32px padding).
   Sidebar buttons toggle `.active` + `aria-current="page"`; section switch
   moves focus to the new `h2` (`tabindex=-1`). The sidebar sections are Status,
-  Backup, Duplicates, Sync, Logs, Settings, About.
+  Backup, Duplicates, Sync, Settings, About.
 
 ## 3. Components (class names are the contract)
 

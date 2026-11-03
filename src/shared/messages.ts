@@ -359,8 +359,6 @@ export type MessagePayload =
       command: MessageCommand.ChangePassword;
       currentPassword: string;
       newPassword: string;
-      /** Required when a switch lock exists: the rotated key is rewrapped. */
-      switchPassword?: string;
     }
   | { command: MessageCommand.GetToolbarSync }
   | { command: MessageCommand.SetToolbarSync; enabled: boolean }

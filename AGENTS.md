@@ -109,7 +109,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   armed by the destructive flows only (connect, import, restore, password
   change, duplicates, batch delete, server delete): a switch between saved
   syncs takes neither — the side this device leaves is already on its own
-  server and activating that sync again brings it back.
+  server and activating that sync again brings it back. A sync itself takes
+  none either, unless it is massive: `guardMassivePull` / `guardMassivePush`
+  snapshot the replaced side when `changedNodeCount` exceeds
+  `MaxSilentSyncChanges` (5), fail-closed.
 - `src/background/background.ts` — browser wiring: `webextension-polyfill`,
   storage/alarms/listeners/badge/notify/download ports, `onMessage` → wire
   `{ok,data}` / `{ok:false,errorName,message}`, `onInstalled/onStartup`.
@@ -123,17 +126,22 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   informational only (the fact, no backup wording, no actions): the kept copy
   lives in the manager's Backup section, where the user goes on their own.
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
-  (Status, Backup, Duplicates, Sync, Logs, Settings, About), each section with
+  (Status, Backup, Duplicates, Sync, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
   read-only `SwitchPreview` preflight before confirm; the Sync section owns the
   saved registry (rows + `+ Add a sync` form + optional sync lock).
   With a password set, `+ Add a sync` asks it first (read-only
   `VerifySwitchPassword`) and only then opens the form, which has no password
-  field of its own. Settings holds preferences only (language, the bookmarks
-  toolbar switch, log verbosity, Change password): the service, API version,
-  sync ID and saved syncs are reported by Status and Sync and are never
-  repeated there. Status has no "last action / undo" banner: recovery from a
-  destructive step goes through Backup → Safety backups. With the toolbar
+  field of its own. Settings holds preferences only (language, one card named
+  after what it holds — the bookmarks-toolbar switch — and the log panel folded
+  behind one "Show logs" button that carries the verbosity and the current
+  log). No card points at another section: the service, API version, sync ID
+  and saved syncs are reported by Status and Sync and are never mentioned
+  there. Change password is a row action on the active sync (the long password
+  belongs to the sync), never a Settings section, and it does not ask the sync
+  lock password: the background re-wraps the saved key under the previous one.
+  Status has no "last action / undo" banner: recovery from a destructive step
+  goes through Backup → Safety backups. With the toolbar
   switch off, activation shows `manager.syncs.activateToolbarLocal` (the
   toolbar keeps its own bookmarks across a switch), fed by
   `SavedSyncsResponse.toolbarSync` in the popup and `GetToolbarSync` in the
@@ -245,13 +253,13 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 - Operations that take over the screen are modal tasks, not inline panels:
   `TaskDialog` in `src/popup/modal.ts` owns `#m-link-dialog` (add + its sync
   lock gate as the first step), `#m-activate-dialog`, `#m-lock-dialog`,
-  `#m-row-dialog` (rename/forget/unlink/delete) and `#m-pw-dialog` (Settings →
-  Change password: warning above the fields, one submit, its result next to the
-  trigger in the section). The registry keeps one open at a time, Escape and a
-  backdrop click close it like Cancel, focus returns to the opener, and every
-  async branch checks `dialog.token` so an answer that lands after the task
-  ended is dropped. Never add a second panel or confirmation for the same
-  operation.
+  `#m-row-dialog` (rename/forget/unlink/delete) and `#m-pw-dialog` (Change
+  password, opened from the active sync's row: warning above the fields, one
+  submit, its result next to the row). The registry keeps one open at a time,
+  Escape and a backdrop click close it like Cancel, focus returns to the
+  opener, and every async branch checks `dialog.token` so an answer that lands
+  after the task ended is dropped. Never add a second panel or confirmation for
+  the same operation.
 - Success evidence mirrors it: multi-outcome operations restate WHAT ran
   (mode + direction + target), not just "Done". Build the message in a pure
   shared helper (e.g. `describeMoveResult` in `ui.ts`) with a unit test per

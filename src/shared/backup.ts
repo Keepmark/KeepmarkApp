@@ -91,6 +91,37 @@ export function validateTree(nodes: BookmarkNode[]): void {
   }
 }
 
+/** Longest slug kept from a sync name in a file name. */
+export const MaxBackupSlugLength = 40;
+
+/**
+ * Slug for a file name: lowercase, accents folded, anything that is not a
+ * letter or digit collapsed into one underscore (spaces included), no leading
+ * or trailing underscore. Returns '' when nothing usable is left.
+ */
+export function backupSlug(value: string | undefined): string {
+  const folded = (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return folded
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MaxBackupSlugLength)
+    .replace(/_+$/g, '');
+}
+
+/**
+ * Download name for an export: `keepmark-backup-<sync>-<date>.xbs.json`. The
+ * sync name is a human label (host fallback), so it is slugged; without one
+ * the file keeps the plain dated name.
+ */
+export function backupFileName(syncName: string | undefined, date: Date): string {
+  const slug = backupSlug(syncName);
+  const day = date.toISOString().slice(0, 10);
+  return slug ? `keepmark-backup-${slug}-${day}.xbs.json` : `keepmark-backup-${day}.xbs.json`;
+}
+
 export async function exportBackup(nodes: BookmarkNode[], password: string): Promise<string> {
   requireBackupPassword(password);
   validateTree(nodes);

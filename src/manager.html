@@ -15,7 +15,6 @@
       <button data-section="backup" data-i18n="manager.nav.backup">Backup</button>
       <button data-section="duplicates"><span data-i18n="manager.nav.duplicates">Duplicates</span> <span id="nav-dup-count"></span></button>
       <button data-section="syncs" data-i18n="manager.nav.syncs">Sync</button>
-      <button data-section="logs" data-i18n="manager.nav.logs">Logs</button>
       <button data-section="settings" data-i18n="manager.nav.settings">Settings</button>
       <button data-section="about" data-i18n="manager.nav.about">About</button>
     </nav>
@@ -195,13 +194,6 @@
 
       </section>
 
-      <section id="sec-logs" hidden>
-        <h2 data-i18n="manager.nav.logs">Logs</h2>
-        <div class="row"><button id="m-btn-logs" data-i18n="manager.logs.refresh">Refresh logs</button></div>
-        <div id="logs-error" class="error" role="alert" hidden></div>
-        <pre id="m-log-list"></pre>
-      </section>
-
       <section id="sec-settings" hidden>
         <h2 data-i18n="manager.nav.settings">Settings</h2>
         <div id="settings-error" class="error" role="alert" hidden></div>
@@ -225,29 +217,34 @@
              syncs have their own sections (Status, Sync), so they are never
              repeated here. -->
         <div class="settings-group">
-          <h3 data-i18n="manager.nav.syncs">Sync</h3>
-          <p class="hint" data-i18n="manager.settings.syncHint">The connected service and its details are in Status; the saved syncs are in Sync.</p>
+          <h3 data-i18n="manager.settings.toolbarGroup">Bookmarks toolbar</h3>
           <label class="check"><input id="m-opt-toolbar" type="checkbox" />
-            <span><b data-i18n="manager.settings.toolbar">Sync the bookmarks toolbar</b>
+            <span><b data-i18n="manager.settings.toolbar">Include the bookmarks toolbar in the sync</b>
               <small data-i18n="manager.settings.toolbarHint">Its bookmarks are uploaded and a download updates it. Off, the toolbar stays local — nothing there is uploaded or removed — and the bookmarks already on the server stay there. Applies from the next sync.</small></span></label>
-          <p class="hint" data-i18n="manager.settings.changePwShort">Re-encrypts the active sync with a new password.</p>
-          <p class="notice needs-link-notice" hidden data-i18n="manager.settings.changePwNeedsLink">Changing the password needs a linked sync. Connect from the Keepmark popup first.</p>
-          <div class="row"><button id="m-btn-password" class="primary" data-needs-link data-i18n="manager.settings.changePwBtn">Change password…</button></div>
-          <div id="pw-result" class="result" hidden></div>
         </div>
 
+        <!-- Troubleshooting only: the log is not a feature the user reads,
+             so it stays folded behind one button and keeps its own section
+             out of the sidebar. -->
         <div class="settings-group">
           <h3 data-i18n="manager.nav.logs">Logs</h3>
-          <label><span data-i18n="manager.settings.verbosity">Log verbosity</span>
-            <select id="m-opt-verbosity">
-              <option value="0" data-i18n="manager.settings.verbError">Error</option>
-              <option value="1" data-i18n="manager.settings.verbWarning">Warning</option>
-              <option value="2" data-i18n="manager.settings.verbInfo">Info</option>
-              <option value="3" data-i18n="manager.settings.verbDebug">Debug</option>
-              <option value="4" data-i18n="manager.settings.verbVerbose">Verbose (may include your bookmark titles/URLs)</option>
-            </select>
-          </label>
-          <div id="settings-result" class="result" hidden></div>
+          <p class="hint" data-i18n="manager.settings.logsHint">Only for troubleshooting: the log stays in this browser and is never uploaded.</p>
+          <button id="m-btn-logs-toggle" class="mini" type="button" aria-expanded="false" aria-controls="m-logs-panel" data-i18n="manager.logs.show">Show logs</button>
+          <div id="m-logs-panel" class="logs-panel" hidden>
+            <label><span data-i18n="manager.settings.verbosity">Log verbosity</span>
+              <select id="m-opt-verbosity">
+                <option value="0" data-i18n="manager.settings.verbError">Error</option>
+                <option value="1" data-i18n="manager.settings.verbWarning">Warning</option>
+                <option value="2" data-i18n="manager.settings.verbInfo">Info</option>
+                <option value="3" data-i18n="manager.settings.verbDebug">Debug</option>
+                <option value="4" data-i18n="manager.settings.verbVerbose">Verbose (may include your bookmark titles/URLs)</option>
+              </select>
+            </label>
+            <div id="settings-result" class="result" hidden></div>
+            <div class="row"><button id="m-btn-logs" data-i18n="manager.logs.refresh">Refresh logs</button></div>
+            <div id="logs-error" class="error" role="alert" hidden></div>
+            <pre id="m-log-list"></pre>
+          </div>
         </div>
       </section>
 
@@ -448,6 +445,7 @@
          consequence above them, and proves the sync lock when one is set. -->
     <dialog id="m-pw-dialog" class="task" aria-labelledby="m-pw-title" hidden>
       <h2 id="m-pw-title" data-i18n="manager.settings.changePw">Change password</h2>
+      <p class="hint" id="m-pw-target"></p>
       <div class="task-warning">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 21.6 20H2.4z"/><path d="M12 9.6v4.6"/><circle cx="12" cy="17.3" r=".9" fill="currentColor" stroke="none"/></svg>
         <span data-i18n="texts.changePwImplication">Your other devices stop syncing until you unlink them and link again with the new password. Edits not yet synced are uploaded now. Older backup files keep their own password.</span>
@@ -457,7 +455,6 @@
         <label><span data-i18n="manager.settings.currentPw">Current password</span> <input id="m-current-password" type="password" autocomplete="current-password" /></label>
         <label><span data-i18n="manager.syncs.newPassword">New password</span> <input id="m-new-password" type="password" autocomplete="new-password" /></label>
         <label><span data-i18n="manager.settings.confirmNewPw">Confirm new password</span> <input id="m-new-password-confirm" type="password" autocomplete="new-password" /></label>
-        <label id="m-pw-switch-wrap" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span> <input id="m-pw-switch" type="password" autocomplete="off" /></label>
         <div class="row">
           <button id="m-btn-password-go" class="primary" type="submit" data-i18n="manager.settings.changePw">Change password</button>
           <button id="m-btn-password-cancel" type="button" data-i18n="common.cancel">Cancel</button>

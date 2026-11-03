@@ -46,20 +46,25 @@ Words come from `UI-TERMS.md`.
    single-item delete rely on Undo instead. **Switching between saved syncs
    takes no snapshot on either app:** the copy this device leaves is already
    on its own server and activating that sync again brings it back, so a switch
-   is reversible without a backup. The extension shows no "last action / undo"
-   banner in Status; its visible recovery path is Backup → Safety backups. A
-   workflow that takes a snapshot says so in its confirmation or result.
+   is reversible without a backup. A sync that would replace more than five
+   nodes in one go (a wipe, an import done outside the app, another client gone
+   wrong) is not an ordinary edit either: it snapshots the side it replaces
+   first — `sync-pull` for the copy on this device, `sync-push` for the server
+   copy — and the sync then continues. The extension shows no "last action /
+   undo" banner in Status; its visible recovery path is Backup → Safety
+   backups. A workflow that takes a snapshot says so in its confirmation or
+   result.
    Forgetting a saved sync affects its backups only where their key can never
    return: the extension deletes them (Restore only uses the active sync's
    key); Android keeps them, because re-linking the same sync with the same
    password derives the same key again.
 8. **One task at a time, on its own surface.** An operation that takes over the
    screen — Add a sync, Activate a saved sync, the sync lock, rename / forget /
-   unlink / delete of a saved sync, and on the extension Change password — runs
-   as a single task. On the extension it is a modal dialog: the page behind is
-   inert, Cancel and Escape end it, and opening another task closes the first.
-   On Android the add panel replaces the Syncs list and every other row is
-   disabled while a row confirmation or the rename editor is open. Two
+   unlink / delete of a saved sync, and Change password — runs as a single
+   task. On the extension it is a modal dialog: the page behind is inert, Cancel
+   and Escape end it, and opening another task closes the first. On Android the
+   add panel replaces the Syncs list and every other row is disabled while a row
+   confirmation, the rename editor or the change-password task is open. Two
    operations, two Cancel buttons or a second confirmation are never on screen
    at once.
 
@@ -69,7 +74,7 @@ Words come from `UI-TERMS.md`.
 |---|---|---|---|---|
 | Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
-| Change password | yes | Current, New, Confirm new (extension: plus the sync lock password when one is set) → `Change password` | extension: the task's warning above the fields is the confirmation; Android: one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. |
+| Change password | yes | Syncs → `Change password` on the active sync's row → Current, New, Confirm new → `Change password` | one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. The long password belongs to the sync, so this is a row action in Syncs, never a Settings section, and the sync lock is not asked again: the saved key is re-wrapped under the previous one. |
 | Backup: export | no | Backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. |
@@ -124,10 +129,11 @@ Words come from `UI-TERMS.md`.
   restart) never resumes on its final review: it restarts at the step that asks
   the password, and the service check and merge preview run again. Android has
   no resumable wizard.
-- Undo (extension): the last overwrite offers `Undo` in the manager's Status
-  section, for its kind (named in words, not by key). Result text: `Undone: <what
-  was undone>.` The popup carries no undo, backup or restore panel: it shows
-  status and `Sync now`, and `Manage` opens the place where those live.
+- Recovery (extension): there is no "last action / undo" banner. What a
+  destructive step replaced is listed in Backup → Safety backups, with the
+  operation named in words and its date. The popup carries no backup or restore
+  panel: it shows status and `Sync now`, and `Manage` opens the place where
+  those live.
 
 ## Multi-sync model (shared principles)
 
