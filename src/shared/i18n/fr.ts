@@ -528,6 +528,8 @@ export const fr: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': 'Définissez le mot de passe de changement de sync dans le gestionnaire pour activer une synchronisation enregistrée.',
   'popup.saved.connectSwitchHint': 'Nécessaire pour ajouter ou changer de sync lorsqu\'un mot de passe de changement de sync est défini.',
   'manager.switchPw.title': 'Mot de passe de changement de sync',
+  'manager.switchPw.gateIntro': 'Il protège toutes les synchronisations enregistrées : il est demandé une fois avant de commencer.',
+  'manager.switchPw.gateBtn': 'Continuer',
   'manager.switchPw.hint': 'Facultatif : exigez un mot de passe court (un code PIN suffit) pour activer ou ajouter des syncs. Sans lui, le changement se fait en un clic et les clés enregistrées sont stockées sans chiffrement dans ce navigateur.',
   'manager.switchPw.current': 'Mot de passe de changement de sync actuel',
   'manager.switchPw.new': 'Nouveau mot de passe de changement de sync',

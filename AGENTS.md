@@ -123,6 +123,9 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   its own contextual busy/error/result evidence; the add-sync wizard has a
   read-only `SwitchPreview` preflight before confirm; the Sync section owns the
   saved registry (rows + `+ Add a sync` form + optional sync-change password).
+  With a password set, `+ Add a sync` asks it first (read-only
+  `VerifySwitchPassword`) and only then opens the form, which has no password
+  field of its own.
 
 ### Build
 

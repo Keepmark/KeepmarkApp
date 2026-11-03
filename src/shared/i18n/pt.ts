@@ -528,6 +528,8 @@ export const pt: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': 'Defina a senha de troca de sync no gestor para ativar uma sincronização salva.',
   'popup.saved.connectSwitchHint': 'Necessária para adicionar ou trocar de sync quando há uma senha de troca de sync definida.',
   'manager.switchPw.title': 'Senha de troca de sync',
+  'manager.switchPw.gateIntro': 'Protege todas as sincronizações guardadas, por isso é pedido uma vez antes de começar.',
+  'manager.switchPw.gateBtn': 'Continuar',
   'manager.switchPw.hint': 'Opcional: peça uma senha curta (um PIN serve) para ativar ou adicionar syncs. Sem ela, a troca é em um clique e as chaves salvas ficam sem criptografia neste navegador.',
   'manager.switchPw.current': 'Senha de troca de sync atual',
   'manager.switchPw.new': 'Nova senha de troca de sync',

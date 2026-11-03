@@ -528,6 +528,8 @@ export const ja: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': '保存済み同期を有効にするには、マネージャーで同期切り替えパスワードを設定してください。',
   'popup.saved.connectSwitchHint': '同期切り替えパスワードが設定されているときに、同期の追加や切り替えに必要です。',
   'manager.switchPw.title': '同期切り替えパスワード',
+  'manager.switchPw.gateIntro': '保存済みのすべての同期を保護するため、追加を始める前に一度だけ確認します。',
+  'manager.switchPw.gateBtn': '続行',
   'manager.switchPw.hint': '任意：短いパスワード（PIN で可）を設定して、同期の有効化や追加を保護します。設定しない場合、切り替えはワンクリックで、保存されたキーは暗号化されずにこのブラウザに保存されます。',
   'manager.switchPw.current': '現在の同期切り替えパスワード',
   'manager.switchPw.new': '新しい同期切り替えパスワード',

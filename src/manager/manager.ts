@@ -93,6 +93,9 @@ let status: StatusResponse | undefined;
 let ping: PingResponse | undefined;
 let preview: SyncTargetPreview | undefined;
 let linkGeneration = 0;
+/** Proved once at the gate, then reused by every send of this wizard: the
+ *  sync-change password is asked before the form opens, never inside it. */
+let linkSwitchPassword = '';
 /** Merge dry-run from the last Check target (merge direction only). */
 let mergeStats: MergePreview | undefined;
 /** Move URL prefilled once from the current link (never clobbers typing). */
@@ -1314,7 +1317,7 @@ async function submitLink(): Promise<void> {
   // A move leaves the previous sync in the list: prove the switch lock first,
   // so the background can wrap the new active key.
   const label = input('m-link-name').value.trim() || undefined;
-  const switchPassword = input('m-link-lock-pw').value;
+  const switchPassword = linkSwitchPassword;
   if (switchLockSet && !switchPassword) {
     showError('link-error-2', t('core.switchPasswordRequired'));
     return;
@@ -1355,7 +1358,6 @@ async function submitLink(): Promise<void> {
       });
       input('m-link-password').value = '';
       input('m-link-confirm').value = '';
-      input('m-link-lock-pw').value = '';
       input('m-link-name').value = '';
       nameTouched = false;
       movedId = res.id;
@@ -1450,7 +1452,7 @@ async function directConnect(): Promise<void> {
     });
     if (!ok) return;
   }
-  const switchPassword = input('m-link-lock-pw').value;
+  const switchPassword = linkSwitchPassword;
   if (switchLockSet && !switchPassword) {
     return showError('link-error', t('core.switchPasswordRequired'));
   }
@@ -1501,6 +1503,20 @@ async function directConnect(): Promise<void> {
 function openAddSync(): void {
   clearMessages();
   nameTouched = false;
+  // With a sync-change password the proof comes first: one field, one button,
+  // and only then the wizard. Nothing else is on screen while it is asked.
+  if (switchLockSet) {
+    linkSwitchPassword = '';
+    input('m-link-gate-pw').value = '';
+    const gateError = $('link-gate-error') as HTMLElement;
+    gateError.textContent = '';
+    gateError.hidden = true;
+    ($('m-link-gate') as HTMLElement).hidden = false;
+    ($('m-link-form') as HTMLElement).hidden = true;
+    ($('m-btn-add-sync') as HTMLElement).hidden = true;
+    input('m-link-gate-pw').focus();
+    return;
+  }
   // Every open starts on "a new sync": that is what the button promises.
   (document.querySelector('input[name="m-link-mode"][value="new"]') as HTMLInputElement).checked = true;
   (document.querySelector('input[name="m-link-direction"][value="pull"]') as HTMLInputElement).checked = true;
@@ -1517,12 +1533,49 @@ function openAddSync(): void {
   focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
 }
 
+/** Gate submit: prove the sync-change password (read-only, nothing changes)
+ *  and only then reveal the wizard. A wrong password clears the field. */
+async function verifyAddSyncGate(): Promise<void> {
+  const password = input('m-link-gate-pw').value;
+  const gateError = $('link-gate-error') as HTMLElement;
+  gateError.textContent = '';
+  gateError.hidden = true;
+  if (!password) {
+    gateError.textContent = t('core.switchPasswordRequired');
+    gateError.hidden = false;
+    return;
+  }
+  await withBusy('m-btn-link-gate-go', t('busy.checking'), async () => {
+    try {
+      await send({ command: MessageCommand.VerifySwitchPassword, password });
+      linkSwitchPassword = password;
+      input('m-link-gate-pw').value = '';
+      ($('m-link-gate') as HTMLElement).hidden = true;
+      ($('m-link-form') as HTMLElement).hidden = false;
+      updateLinkForm();
+      prefillLinkUrl();
+      suggestLinkName();
+      focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
+    } catch (err) {
+      input('m-link-gate-pw').value = '';
+      gateError.textContent = (err as Error).message;
+      gateError.hidden = false;
+      input('m-link-gate-pw').focus();
+    }
+  });
+}
+
 function closeAddSync(): void {
   ($('m-link-form') as HTMLElement).hidden = true;
+  ($('m-link-gate') as HTMLElement).hidden = true;
   ($('m-btn-add-sync') as HTMLElement).hidden = false;
+  input('m-link-gate-pw').value = '';
+  const gateError = $('link-gate-error') as HTMLElement;
+  gateError.textContent = '';
+  gateError.hidden = true;
+  linkSwitchPassword = '';
   input('m-link-password').value = '';
   input('m-link-confirm').value = '';
-  input('m-link-lock-pw').value = '';
   input('m-link-name').value = '';
   nameTouched = false;
   preview = undefined;
@@ -1565,6 +1618,11 @@ function initMoveSection(): void {
   $('m-btn-link-direct').addEventListener('click', () => void directConnect());
   $('m-btn-add-sync').addEventListener('click', () => openAddSync());
   $('m-btn-add-cancel').addEventListener('click', () => closeAddSync());
+  $('m-btn-link-gate-go').addEventListener('click', () => void verifyAddSyncGate());
+  $('m-btn-link-gate-cancel').addEventListener('click', () => closeAddSync());
+  input('m-link-gate-pw').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') void verifyAddSyncGate();
+  });
   updateLinkForm();
 }
 
@@ -2006,7 +2064,6 @@ function refreshSwitchLockUi(): void {
   ($('m-lock-forgot') as HTMLElement).hidden = panelOpen || !switchLockSet;
   // The proof is asked by every flow that changes or demotes the active key.
   ($('m-pw-switch-wrap') as HTMLElement).hidden = !switchLockSet;
-  ($('m-link-lock-pw-row') as HTMLElement).hidden = !switchLockSet;
 }
 
 /** Trigger labels keep the ellipsis ("Remove…"); the button that runs the

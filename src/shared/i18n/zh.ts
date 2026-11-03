@@ -529,6 +529,8 @@ export const zh: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': '请在管理器中设置同步切换密码以激活已保存的同步。',
   'popup.saved.connectSwitchHint': '设置了同步切换密码时，添加或切换同步需要它。',
   'manager.switchPw.title': '同步切换密码',
+  'manager.switchPw.gateIntro': '它保护所有已保存的同步，因此在开始添加前会询问一次。',
+  'manager.switchPw.gateBtn': '继续',
   'manager.switchPw.hint': '可选：要求输入短密码（PIN 即可）才能启用或添加同步。不设置时，切换只需一次点击，保存的密钥会以未加密形式存储在此浏览器中。',
   'manager.switchPw.current': '当前同步切换密码',
   'manager.switchPw.new': '新同步切换密码',

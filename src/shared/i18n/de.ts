@@ -528,6 +528,8 @@ export const de: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': 'Lege das Sync-Wechselpasswort im Manager fest, um einen gespeicherten Sync zu aktivieren.',
   'popup.saved.connectSwitchHint': 'Nötig, um einen Sync hinzuzufügen oder zu wechseln, wenn ein Sync-Wechselpasswort gesetzt ist.',
   'manager.switchPw.title': 'Sync-Wechselpasswort',
+  'manager.switchPw.gateIntro': 'Es schützt alle gespeicherten Synchronisierungen und wird daher einmal vor dem Hinzufügen abgefragt.',
+  'manager.switchPw.gateBtn': 'Weiter',
   'manager.switchPw.hint': 'Optional: Verlange ein kurzes Passwort (eine PIN genügt), um Syncs zu aktivieren oder hinzuzufügen. Ohne es ist der Wechsel ein Klick und die gespeicherten Schlüssel liegen unverschlüsselt in diesem Browser.',
   'manager.switchPw.current': 'Aktuelles Sync-Wechselpasswort',
   'manager.switchPw.new': 'Neues Sync-Wechselpasswort',

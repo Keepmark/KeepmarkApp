@@ -75,6 +75,7 @@ export enum MessageCommand {
   ChangeSwitchPassword = 'change-switch-password',
   ResetSwitchPassword = 'reset-switch-password',
   RemoveSwitchPassword = 'remove-switch-password',
+  VerifySwitchPassword = 'verify-switch-password',
   // Conflict resolution
   GetConflictState = 'get-conflict-state',
   GetConflictPreview = 'get-conflict-preview',
@@ -341,6 +342,7 @@ export type MessagePayload =
     }
   | { command: MessageCommand.ResetSwitchPassword; next: string; confirm: string }
   | { command: MessageCommand.RemoveSwitchPassword; current: string }
+  | { command: MessageCommand.VerifySwitchPassword; password: string }
   | { command: MessageCommand.CheckSyncTarget; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }

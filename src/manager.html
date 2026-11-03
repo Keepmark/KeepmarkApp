@@ -246,6 +246,19 @@
           <div id="switch-pw-result" class="result" role="status" hidden></div>
         </div>
 
+        <div id="m-link-gate" hidden>
+          <h3 data-i18n="manager.switchPw.title">Sync-change password</h3>
+          <p class="hint" data-i18n="manager.switchPw.gateIntro">It protects every saved sync, so it is asked once before the add flow
+            starts.</p>
+          <label><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
+            <input id="m-link-gate-pw" type="password" autocomplete="off" /></label>
+          <div class="row">
+            <button id="m-btn-link-gate-go" class="primary" data-i18n="manager.switchPw.gateBtn">Continue</button>
+            <button id="m-btn-link-gate-cancel" data-i18n="common.cancel">Cancel</button>
+          </div>
+          <div id="link-gate-error" class="error" role="alert" hidden></div>
+        </div>
+
         <div id="m-link-form" hidden>
           <h3 data-i18n="manager.syncs.addTitle">Add a sync</h3>
           <p class="hint" data-i18n="manager.syncs.addHint">Create a new sync or open one you already use on another device. Adding a sync
@@ -266,8 +279,6 @@
           <label id="m-link-password-row"><span id="m-link-password-label" data-i18n="manager.syncs.newPassword">New password</span> <input id="m-link-password" type="password" autocomplete="new-password" /></label>
           <label id="m-link-confirm-row"><span id="m-link-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-link-confirm" type="password" autocomplete="new-password" /></label>
           <p id="m-link-pw-hint" class="hint" data-i18n="manager.syncs.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
-          <label id="m-link-lock-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync-change password</span>
-            <input id="m-link-lock-pw" type="password" autocomplete="off" /></label>
           <p id="m-link-new-note" class="hint" data-i18n="manager.syncs.newNote">The new sync starts with the bookmarks currently in this browser.
             The sync you are using now stays in the list.</p>
           <p id="m-link-conflict" class="notice" hidden data-i18n="manager.syncs.newConflict">There is an unresolved conflict: the new sync will start from

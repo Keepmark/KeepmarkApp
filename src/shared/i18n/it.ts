@@ -528,6 +528,8 @@ export const it: Record<MessageKey, string> = {
   'popup.saved.switchNotSet': 'Imposta la password di cambio sync nel gestore per attivare un sync salvato.',
   'popup.saved.connectSwitchHint': 'Necessaria per aggiungere o cambiare sync quando è impostata una password di cambio sync.',
   'manager.switchPw.title': 'Password di cambio sync',
+  'manager.switchPw.gateIntro': 'Protegge tutte le sync salvate, quindi viene chiesto una volta prima di iniziare.',
+  'manager.switchPw.gateBtn': 'Continua',
   'manager.switchPw.hint': 'Facoltativa: richiedi una password corta (va bene un PIN) per attivare o aggiungere sync. Se non la imposti, il cambio è a un clic e le chiavi salvate restano non cifrate in questo browser.',
   'manager.switchPw.current': 'Password di cambio sync attuale',
   'manager.switchPw.new': 'Nuova password di cambio sync',

@@ -16,6 +16,7 @@ import { InMemoryLogger, sanitizeSyncId } from '../src/shared/logging';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
 import {
   DataOutOfSyncException,
+  InvalidSwitchPasswordException,
   SyncNotFoundException,
   UnsupportedVersionException,
 } from '../src/shared/errors';
@@ -193,6 +194,24 @@ async function connectA(core: BackgroundCore): Promise<string> {
 }
 
 describe('multi-sync (saved syncs)', () => {
+  it('verifies the sync-change password before a flow starts (read-only proof)', async () => {
+    const s = state();
+    const { core } = await setup(s);
+    // No lock: nothing to prove, and asking is not an error.
+    await expect(
+      core.handleMessage({ command: MessageCommand.VerifySwitchPassword, password: '' }),
+    ).resolves.toEqual({ ok: true });
+    await setSwitch(core);
+    await expect(
+      core.handleMessage({ command: MessageCommand.VerifySwitchPassword, password: SWITCH }),
+    ).resolves.toEqual({ ok: true });
+    // Wrong password: its own typed error, and nothing was changed by the try.
+    await expect(
+      core.handleMessage({ command: MessageCommand.VerifySwitchPassword, password: '0000' }),
+    ).rejects.toBeInstanceOf(InvalidSwitchPasswordException);
+    expect(await saved(core)).toEqual({ syncs: [], active: undefined, switchLockSet: true });
+  });
+
   it('connect-new registers the linked sync as the active row', async () => {
     const s = state();
     const { core } = await setup(s);

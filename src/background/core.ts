@@ -323,6 +323,8 @@ export class BackgroundCore {
         return this.resetSwitchPassword(msg.next, msg.confirm);
       case MessageCommand.RemoveSwitchPassword:
         return this.removeSwitchPassword(msg.current);
+      case MessageCommand.VerifySwitchPassword:
+        return this.verifySwitchPassword(msg.password);
       case MessageCommand.CheckSyncTarget:
         return this.checkSyncTarget(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.PreviewMerge:
@@ -1885,6 +1887,19 @@ export class BackgroundCore {
   private async readSwitchLock(): Promise<SwitchLock | undefined> {
     const raw = await this.store.get<unknown>(StoreKey.SwitchLock);
     return isSwitchLock(raw) ? raw : undefined;
+  }
+
+  /**
+   * Read-only proof of the sync-change password: the manager asks once, before
+   * a flow starts, so a typo fails there instead of after the form is filled.
+   * Unlocking twice is cheap (PBKDF2 once per call) and stores nothing.
+   */
+  private async verifySwitchPassword(password: string): Promise<{ ok: true }> {
+    const lock = await this.readSwitchLock();
+    if (!lock) return { ok: true };
+    this.assertSwitchPassword(password);
+    await unlockSwitchLock(lock, password);
+    return { ok: true };
   }
 
   private async getSwitchLockState(): Promise<SwitchLockState> {

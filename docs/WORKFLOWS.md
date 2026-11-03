@@ -64,7 +64,7 @@ Words come from `UI-TERMS.md`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync while linked (Connect → `+ Add a sync`) | yes | Existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict or a failed push cancels the switch and changes nothing. A brand-new sync requires unlinking first (bookmarks stay). |
+| Add a sync while linked (Connect → `+ Add a sync`) | yes | Sync-change password gate (only if set) → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict or a failed push cancels the switch and changes nothing. A brand-new sync requires unlinking first (bookmarks stay). With a sync-change password, the wizard is gated: one field and `Continue` come first (a wrong password fails there, cleared), and only then the form opens — the password is never asked again inside it. |
 | Syncs: Activate | no | Syncs → `Activate` → device unlock when app lock is set → apply | none beyond the device unlock | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy behind a `switch-take-remote` safety backup. The sync you leave stays in the list. The sync's own long password is never asked. |
 | Syncs: Forget / Unlink | no | Syncs → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten; bookmarks, the server copy and the other rows stay. Active: this device is unlinked and the row disappears; the bookmarks stay and the sync plus its server copy stay for the other devices. Dormant rows survive an unlink. Forgetting also drops that key's safety-master wrap when no other saved sync uses it; safety backups and copies of removed syncs stay. |
 | Removed sync (401) | shown while linked | Home/Status notice → `Try again` / `Unlink and keep a copy…` / `Cancel` | always for the unlink; retry and cancel execute at once | The service no longer has this sync (expiry or another device's deletion). Nothing happens automatically and local bookmarks are untouched. Unlinking keeps a verified local copy of this device's tree, restorable from Backup → `Copies of removed syncs` and never pruned; `Cancel` keeps the notice quiet for that sync until an explicit retry. |
@@ -134,6 +134,9 @@ Words come from `UI-TERMS.md`.
   password, activation, a new link and any change that demotes the active key ask
   for it. Without one, an inactive row is a plain confirmation and the rows are
   stored in clear in this browser (same exposure as the active key).
+- The add-sync wizard is gated the same way: with a password set, `+ Add a
+  sync` asks for it first (`VerifySwitchPassword`, read-only proof), then shows
+  the rest of the flow; the form has no password field of its own.
 - The section shows only the state (`Set` / `Not set`) and the actions; one
   action at a time opens a single panel with just the fields that action needs:
   `Set…` (new + repeat), `Change…` (current + new + repeat), `Remove…` (current

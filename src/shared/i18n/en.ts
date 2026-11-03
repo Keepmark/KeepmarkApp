@@ -528,6 +528,8 @@ export const en = {
   'popup.saved.switchNotSet': 'Set the sync-change password in the manager to activate a saved sync.',
   'popup.saved.connectSwitchHint': 'Needed to add or switch syncs while a sync-change password is set.',
   'manager.switchPw.title': 'Sync-change password',
+  'manager.switchPw.gateIntro': 'It protects every saved sync, so it is asked once before the add flow starts.',
+  'manager.switchPw.gateBtn': 'Continue',
   'manager.switchPw.hint': 'Optional: require a short password (a PIN is fine) to activate or add syncs. Without it the switch is one click and the saved keys are stored unencrypted in this browser.',
   'manager.switchPw.current': 'Current sync-change password',
   'manager.switchPw.new': 'New sync-change password',
