@@ -26,7 +26,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
 | Sync lock | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password, sync-change password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
-| Safety backups | Automatic snapshots taken before every overwrite or deletion (newest 5 kept) | snapshot |
+| Safety backups | Snapshots before supported destructive actions or ordinary sync changes affecting more than 10 items (newest 5 kept); no snapshot for ordinary linked-to-linked activation or deliberate browser server deletion | snapshot |
 | Copy of the removed sync | The local copy kept when a sync disappeared from the service; Android keeps it encrypted and restorable in Backup → Copies of removed syncs, the extension downloads it as a plain JSON file or dismisses it | orphan copy, orphan backup |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
@@ -37,7 +37,7 @@ in its manager Sync section and popup card.
 
 Android `Move service` is retired: the Syncs list plus `+ Add a sync` in Connect
 replace the old nav item and `Move to another service` page, and old
-`/switch-service` or `/migrate` links land on Connect. Its `— Move service`
+`/connect`, `/switch-service` or `/migrate` links land on Syncs. Its `— Move service`
 safety origins are gone too: those backups now read `— Sync switch`. Never copy
 that wording into new text.
 
@@ -48,8 +48,13 @@ Busy labels: `Checking…` · `Connecting…` · `Downloading…` · `Uploading�
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
 `Merged both sides — Connect`, `Created empty sync — Connect`, `Downloaded server copy — Sync switch`,
-`Imported encrypted backup`, `Changed sync password — Settings`, `Deleted duplicates`,
+`Imported encrypted backup`, `Changed sync password — Sync` (extension) / `Changed sync password — Syncs` (Android), `Deleted duplicates`,
 `Before safety-backup restore`, `Conflict resolved: …`, … (see code tables).
+
+Automatic sync is the only mobile setting; `Sync now` means an explicit attempt,
+not a separate Manual mode. Browser sync includes Menu, Other and Toolbar without
+an exclusion switch. Activating another sync preserves the outgoing server copy;
+Download / Upload / Merge remain choices only where a reconciliation is needed.
 
 ## Translations (it / fr / es / de / ja / pt-BR / ro / ru / zh)
 

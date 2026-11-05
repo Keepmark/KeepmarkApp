@@ -107,7 +107,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `drain()` loop; `startup()` (install snapshot + resume polling). NO DOM
   here — must stay service-worker safe. Safety snapshots + the undo slot are
   armed by the destructive flows only (connect, import, restore, password
-  change, duplicates, batch delete, server delete): a switch between saved
+  change, duplicates, batch delete): deliberate server deletion takes no copy
+  and prunes that sync’s previous safety backups. A switch between saved
   syncs takes neither — the side this device leaves is already on its own
   server and activating that sync again brings it back. A sync itself takes
   none either, unless it is massive: `guardMassivePull` / `guardMassivePush`
@@ -293,7 +294,7 @@ already lets the MV3 worker reach the service without any host grant.
 
 **Known limitations / next features (not started):** manual browser QA
 (see README "Get it"); QR connection hardware QA;
-no auto-backup schedule; toolbar toggle + Chromium Menu
+no auto-backup schedule; retired toolbar migration + Chromium Menu
 folder edge cases covered by tests but untested live.
 
 **Multi-sync — slices 1–3 DONE (merged in `master`, 0.1.36):** `SavedSyncs` registry

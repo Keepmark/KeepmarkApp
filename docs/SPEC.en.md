@@ -1,6 +1,6 @@
 # KeepmarkApp — Product & Verification Specification (English)
 
-Version: 0.1.0 · Status: working draft for outsourced code verification
+Status: maintained product and verification specification
 Companion docs: `README.md` (overview, install), `DEVELOPMENT.md` (build, contracts), `AGENTS.md` (agent resume point).
 Code under verification: `src/`, `res/`, `scripts/`, `tests/` in this repo.
 (Italian original: `docs/SPEC.md` — in case of conflict the Italian text wins
@@ -273,7 +273,10 @@ The popup never touches the queue. `drain()` executes up to 10 steps.
 
 - `xbs-sync-updates-check` every 15 min (scheduled on link + startup when
   enabled): compares remote vs stored `lastUpdated`, queues local on drift.
-- `startup()`: applies stored log verbosity; write-once `InstallBackup`
+- `startup()`: first retries the legacy toolbar migration before any sync;
+  migration failure blocks syncing and active-tree mutations while diagnostics
+  and export remain available. Toolbar replacement preserves mappings and
+  metadata in untouched containers. Applies stored log verbosity; write-once `InstallBackup`
   (first run only — no MV3 wake may overwrite it); reschedules the poll +
   immediate `checkForUpdates` when linked; sets badge.
 - `disableSync(err?)`: clears queue + v12 cache, clears both alarms, removes
@@ -281,12 +284,28 @@ The popup never touches the queue. `drain()` executes up to 10 steps.
   `SyncInfo={}`. On `SyncNotFoundException` it first stashes the `RemovedSync`
   snapshot and notifies; badge cleared; warning logged otherwise.
 
+### Saved-sync activation and destructive action identity
+
+All containers (Menu, Other, Toolbar) sync automatically; there is no toolbar
+exclusion preference. Activating a saved sync verifies its remote copy first,
+then persists outgoing native edits before replacing the tree. A conflict,
+failed save or unavailable target blocks activation. The outgoing sync remains
+on its own server; ordinary activation creates no safety snapshot. Large syncs
+changing more than 10 nodes still protect the replaced side as specified below.
+
+Duplicate scans and deletion requests carry the reviewed `{serviceUrl,syncId}`.
+Changing identity clears scan results and selection and closes stale action
+dialogs. The background validates the identity under the mutation gate and
+intersects requested IDs with current duplicate groups, preserving one copy of
+each URL; unique bookmarks and folders cannot be removed by duplicate cleanup.
+The active sync row owns Change password; Settings owns language and Show logs.
+
 ## 5. Features (normative behavior per command)
 
 Preconditions: anything needing a link calls `requireCreds()` → throws
 `IncompleteSyncInfoException('Sync is not connected.')` when unlinked.
 The `connecting` flag rejects concurrent connects. Every destructive flow
-takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
+uses safety snapshots as specified in S6 and, where listed, an undo slot.
 
 - `ConnectNew {serviceUrl, password}`: probe service (min-version gate) →
   probe v1.2 → read native tree → create+upload (v1.2 CAS upload with 412
@@ -331,11 +350,15 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   status, max size, local count, target `supportsV12` and (existing mode)
   remote existence + `lastUpdated`. Requires an existing link (tree source).
 - `SwitchService {newServiceUrl, mode, syncId?, newPassword, direction}`:
-  requires link; quiesce; plaintext safety download of the scrapped side;
-  new-mode: create+upload on target (v1.2 iff probed) → `switch-new` undo →
+  requires link; quiesce. **A switch takes no safety snapshot and arms no
+  undo slot**: the side this device leaves is already on its own server and
+  activating that sync again brings it back, so the switch is reversible
+  without a backup. New-mode: create+upload on target (v1.2 iff probed) →
   returns `{id}`. Existing-pull: version gate → password check by decrypt →
-  `switch-pull` undo → overwrite natives. Existing-push: undo only after the
-  PUT lands (`switch-push`). UI: destination and credentials are entered together; `Continue`
+  overwrite natives. Existing-push: PUT on the remote base (409 honest).
+  Every container is always synced, so the natives always end up showing the
+  target sync's tree; the link is saved only after the natives were rewritten
+  and a failed replace restores the previous bookmarks. UI: destination and credentials are entered together; `Continue`
   verifies the target and, in existing mode, decrypts its copy read-only.
   The verified review shows consequences and merge counts. `Connect`
   executes directly, without another confirmation. Changed inputs invalidate
@@ -347,22 +370,26 @@ takes a safety path (§5.8) and, where listed, an undo snapshot (§5.9).
   PUT (revision CAS iff v1.2 + stored revision, 412 fallback with downgrade)
   → `change-password` undo → rotate stored derived key (re-read first; abort
   on concurrent link change). The old password dies everywhere immediately.
-- `DeleteRemoteSync`: double v1.2 gate (stored flag, then live `delete`
+- `DeleteRemoteSync {target:{serviceUrl,syncId}}`: validates the reviewed active
+  identity under the credential-change gate; missing or stale identity refuses
+  before mutation. Double v1.2 gate (stored flag, then live `delete`
   capability; `delete !== true` refuses). DELETE, then unlink (natives
   untouched) + result text. No backup is taken or kept (a deliberate
   deletion keeps nothing), any older snapshot of the sync is pruned, and
   there is no notification or undo slot by design (no server undelete). UI:
   disabled with reason + hint on v1.1 (`Server delete needs API v1.2 …
-  Unlink only removes this device`); two inline confirms (`Yes, delete` →
-  `Yes, delete for good`, `DeleteRemoteImplication` in `texts.ts`) when
-  enabled.
+  Unlink only removes this device`); the active row opens one modal task
+  with the irreversible consequences and one destructive confirmation.
 - `DisableSync` (Unlink): single inline confirm (`Yes, unlink`,
   `UnlinkImplication`: ID + password needed, unsynced edits, Undo cleared), clears state per §4.3, result text, status redrawn cleared.
 - `UndoLastLink` / `DismissUndo` / `GetUndoState`: one encrypted slot;
-  unlink invalidates it; undo restores previous link state; the banner
-  describes kind + count + time; inline confirm `Undo the last action?`
-  naming the action in words (`undoConfirm`), result `Undone: <what>.`
-  (`undoneText`).
+  unlink invalidates it; undo restores previous link state. Armed by connect
+  (all directions), import, restore, change-password, duplicates cleanup and
+  batch delete — never by a switch. The manager no longer renders the
+  "last action / undo" banner (Status stays a report); recovery from a
+  destructive step goes through Backup → Safety backups, and the slot stays
+  reachable programmatically for the flows that still use it (`undoConfirm`,
+  `undoneText`).
 - `GetRemovedSync` / `ClearRemovedSync`: surfaces the 401 snapshot with
   Download/Dismiss.
 - `SetVerbosity {level}` / `GetLogs` / `Ping` / `GetStatus` / `DownloadFile`:
@@ -393,7 +420,7 @@ false`, `DarkModeEnabled false`, `BookmarkIdMappings []`.
 | `InstallBackup installBackup` | first-run natives + date | write-once |
 | `LogVerbosity logVerbosity` | `XbsLogLevel` number | applied at startup |
 | `TraceLog traceLog` | ring buffer (cap 1000) | via `InMemoryLogger` |
-| `SyncBookmarksToolbar` | legacy bool (<= 0.1.44) | retired toolbar switch; read once at startup for the migration, then removed |
+| `SyncBookmarksToolbar` | legacy bool (<= 0.1.44) | retired toolbar switch; migration retried on worker wake paths, removed only after success |
 | Legacy-tolerant | `alternateSearchBarPosition`, `autoFetchMetadata`, `autoBackUpSchedule`, `checkForAppUpdates`, `darkModeEnabled`, `display*`, `installationId`, `lastUpgradeVersion`, `telemetryEnabled` | accepted keys from the original-client shape; no telemetry collected |
 
 ## 7. UI specification
@@ -474,9 +501,15 @@ notsynced), white-mark in-page chip.
 - S5. Backup envelope guards: password ≥ 8 chars, 50 MB real-byte limit,
   200k node cap, typed node validation, fresh salt per export, distinct
   errors per failure class.
-- S6. Safety downloads are plaintext by design (conflict, pre-push,
-  pre-pwchange, server-backup, move): timestamped filenames, failures warn
-  but never block (the encrypted undo slot is the primary net).
+- S6. Safety snapshots (`shared/safety.ts`) are fail-closed: a failed write
+  blocks the destructive operation. Newest 5 kept in `storage.local`, encrypted
+  with the sync-derived key when linked (pre-link copies are flagged plaintext).
+  Backup → Safety backups lists/restores/deletes them. Ordinary saved-sync
+  activation takes no snapshot; deliberate server deletion keeps no copy and
+  prunes that sync’s snapshots. A sync changing more than 10 nodes snapshots
+  the replaced side (`sync-pull` local / `sync-push` remote); additions,
+  removals and moves count, a move as removal plus addition. Single bookmark
+  edits are exempt. Conflict-file downloads are separate diagnostic copies.
 - S7. Destructive operations: stable-identity resolution (synced IDs),
   validate first, confirm in UI, snapshot before mutating, persist undo only
   after the remote write lands, never swallow errors (log with context).
@@ -554,7 +587,7 @@ notsynced), white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no auto-backup schedule and no QR scanning in the browser (the browser only shows a QR for the Android app); toolbar toggle +
+Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no auto-backup schedule and no QR scanning in the browser (the browser only shows a QR for the Android app); retired toolbar migration +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — check `git status`/`log` before assuming
 state.

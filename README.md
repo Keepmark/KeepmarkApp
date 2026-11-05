@@ -47,14 +47,16 @@ password and bookmarks, exactly one is active, and switching is a click.
   browser; an existing one opens with a reviewed choice (keep the server copy,
   keep this copy, or merge). The sync you were using stays in the list.
 - **Switch** from the popup or the manager. The sync you leave is saved
-  first, the new one is verified on its server copy and becomes active. An
+  before its bookmarks are replaced; a conflict or failed save blocks the switch.
+  The target is verified on its server copy. Ordinary saved-sync activation
+  creates no extra safety backup: the outgoing sync stays on its own server. An
   optional short **sync lock password** (a PIN is fine) can gate adding and
   switching, without ever asking again for the syncs' own long passwords.
 - **Stay in control of the list**: rename a sync, unlink it (the server copy
   stays untouched), link it again later with its sync ID and password, or
   delete it from the server when the service speaks API v1.2.
-- **One phone, any sync**: the connection QR always links the Android app to
-  the sync that is active, so moving the phone between syncs is a scan.
+- **One phone, any sync**: use **Show QR** on any saved sync row to link
+  the Android app without activating that sync in the browser.
 
 ## Highlights
 
@@ -82,13 +84,13 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and password in one step |
 | **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
-| **Safety backups** | Automatic encrypted snapshot before every destructive step (newest 5 kept) |
+| **Safety backups** | Safety snapshot before destructive changes or syncs changing more than 10 items (newest 5 kept); ordinary switches create none, deliberate server deletion keeps no copy |
 | **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
 | **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |
-| **Account** | Change password, activity log, clear error messages at every step, undo for quick actions |
-| **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Русский, 简体中文; follows the browser, override in Settings |
+| **Controls** | Change password on the active sync row; activity log in Settings; recovery in Backup → Safety backups |
+| **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Română, Русский, 简体中文; follows the browser, override in Settings |
 
 With **Keepmark Server** you also get revision-based conflict detection,
 faster "nothing changed" checks and the option to delete your sync from the
@@ -109,7 +111,7 @@ hands the credentials over in one scan, without typing them anywhere:
 The QR carries the service, the sync ID and the password in readable form, so
 show it only to your own device: nothing is stored for it, it disappears after
 60 seconds or when the manager loses focus, and a captured copy stays usable —
-treat it like the password itself. Manual linking remains available, and in the manager's **Sync → + Add new sync**
+treat it like the password itself. Manual linking remains available, and in the manager's **Sync → + Add a sync**
 wizard the same QR button sits before the manual target credentials.
 
 ## Screenshots

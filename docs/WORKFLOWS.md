@@ -9,9 +9,9 @@ Words come from `UI-TERMS.md`.
 
 1. **Gating first.** A workflow that needs a linked sync (Change password,
    Unlink, and on the extension Backup import and Delete sync from server) shows,
-   when the device is not linked, one notice with a link to Connect and disables
-   its action. Android offers `+ Add a sync` only while linked; its Backup import
-   also works unlinked, on this device only. The user never learns about a
+   when the device is not linked, one notice with a link to the connection flow and disables
+   its action. Android offers an existing sync while linked; while unlinked `+ Add a sync`
+   can also create a new one. Its Backup import works unlinked, on this device only. The user never learns about a
    missing link from an error after submit.
 2. **One informed confirmation.** Show the consequences before the final action,
    whose button names what will happen. In Connect / Add a sync and in Backup
@@ -28,10 +28,11 @@ Words come from `UI-TERMS.md`.
    `Keep this device's copy` (Upload; "this browser's copy" in the extension).
    One function builds the confirmation text for a direction and is used by
    Connect, Add a sync and Sync conflict.
-4. **Password rule.** Any password the user invents is at least 8 characters and
+4. **Password rule.** A new sync or backup password is at least 8 characters and
    is typed twice. A password the user enters to open something existing is typed
    once and has no length rule. Messages: `Use a password of at least 8
-   characters.` and `Passwords do not match.`
+   characters.` and `Passwords do not match.` The extension sync lock is a
+   separate device-local secret: only non-empty is required.
 5. **Errors stay next to the button that caused them**, are announced
    (`role="alert"`), and are emptied when the step is retried. On failure only
    secrets that were consumed are cleared; fields needed to retry stay, and any
@@ -42,14 +43,15 @@ Words come from `UI-TERMS.md`.
 7. **Safety backups are taken before every destructive step, not on every
    edit.** A first link that replaces a side (Connect: existing sync, either
    direction), a backup import, a restore, a password change, a duplicates
-   cleanup or a batch delete snapshots the side it replaces; a move and a
-   single-item delete rely on Undo instead. **Switching between saved syncs
+   cleanup or a batch delete snapshots the side it replaces. Android moves and
+   single-item deletes use a short Undo; bulk delete recovers through Backup.
+   Deliberate browser server deletion takes no backup and keeps no recovery copy. **Switching between saved syncs
    takes no snapshot on either app:** the copy this device leaves is already
    on its own server and activating that sync again brings it back, so a switch
-   is reversible without a backup. A sync that would replace more than five
-   nodes in one go (a wipe, an import done outside the app, another client gone
+   is reversible without a backup. A sync that would replace more than 10
+   changed items in one go (a wipe, an import done outside the app, another client gone
    wrong) is not an ordinary edit either: it snapshots the side it replaces
-   first — `sync-pull` for the copy on this device, `sync-push` for the server
+   first (a move counts as removal plus addition) — `sync-pull` for the copy on this device, `sync-push` for the server
    copy — and the sync then continues. The extension shows no "last action /
    undo" banner in Status; its visible recovery path is Backup → Safety
    backups. A workflow that takes a snapshot says so in its confirmation or
@@ -87,8 +89,8 @@ Words come from `UI-TERMS.md`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync while linked (Connect → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
-| Syncs: Activate | no | Syncs → `Activate` → device unlock when app lock is set → apply | none beyond the device unlock | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy — with no safety backup when it was linked to another sync (that copy is on the server); an unlinked device keeps the usual `switch-take-remote` backup. If that save cannot happen the switch is cancelled with the real reason (pending conflict, no connection, sync gone from the server, push failed) and nothing is replaced. The sync you leave stays in the list. The sync's own long password is never asked. |
+| Add a sync while linked (Syncs → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
+| Syncs: Activate | no | Syncs → `Activate` → confirmation → device unlock when app lock is set → apply | once, plus device unlock when configured | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy — with no safety backup when it was linked to another sync (that copy is on the server); an unlinked device keeps the usual `switch-take-remote` backup. If that save cannot happen the switch is cancelled with the real reason (pending conflict, no connection, sync gone from the server, push failed) and nothing is replaced. The sync you leave stays in the list. The sync's own long password is never asked. |
 | Syncs: Forget / Unlink | no | Syncs → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten; bookmarks, the server copy and the other rows stay. Active: this device is unlinked and the row disappears; the bookmarks stay and the sync plus its server copy stay for the other devices. Dormant rows survive an unlink. Forgetting also drops that key's safety-master wrap when no other saved sync uses it; safety backups and copies of removed syncs stay. |
 | Removed sync (401) | shown while linked | Home/Status notice → `Try again` / `Unlink and keep a copy…` / `Cancel` | always for the unlink; retry and cancel execute at once | The service no longer has this sync (expiry or another device's deletion). Nothing happens automatically and local bookmarks are untouched. Unlinking keeps a verified local copy of this device's tree, restorable from Backup → `Copies of removed syncs` and never pruned; `Cancel` keeps the notice quiet for that sync until an explicit retry. |
 | Removed-sync copy | no | Backup → `Copies of removed syncs` → `Restore` / `Delete` | always | Restore takes a `pre-restore` safety backup first and replaces the local bookmarks (pushed at the next sync while linked). While a sync is linked the restore is refused until that sync has saved its pending edits, so nothing unsaved is replaced silently. Delete removes only that copy; there is no undo. Copies are never pruned automatically; a copy list that cannot be read says so instead of looking empty. |
@@ -111,7 +113,7 @@ Words come from `UI-TERMS.md`.
   reconciliation choices; the extension popup verifies during submission.
   Android merge previews run automatically when Merge is selected; the extension
   computes them during verification. Applying requires the current preview to be
-  ready. Technical service details in the extension are collapsed under Details;
+  ready. Service checks show endpoint details beside the chosen service;
   failures remain next to Continue.
 - The primary button of a step is disabled only while busy or when a required
   field is empty. Validation messages appear after pressing it.
@@ -157,6 +159,29 @@ Words come from `UI-TERMS.md`.
   sync while linked (a brand-new sync needs an unlink first); the extension can
   also create a new sync from the current bookmarks, which is additive and leaves
   the previous sync in the list.
+
+## Automatic sync, containers and stale confirmations
+
+- Browser sync sends native bookmark edits automatically and checks for server
+  changes every 15 minutes. Android syncs only while visible: a foreground poll
+  and coalesced edit pushes. There is no Manual setting on either client;
+  `Sync now` remains available. Legacy Android `sync_mode=Manual` is ignored.
+- Menu, Other and Toolbar all belong to the sync. There is no toolbar-exclusion
+  preference. The extension adopts the active sync's toolbar on upgrades from
+  the old option: a verified local safety backup must succeed first, and failed
+  adoption blocks sync until a retry succeeds. Untouched bookmark mappings and
+  metadata keep their identity, including edits made offline.
+- On Android, saving the outgoing sync, capturing the live tree and replacing
+  it hold the same engine gate. A failed remote adoption restores the previous
+  mirror, metadata and dirty flag, so pending edits remain pending.
+- Browser server-delete confirmations and duplicate scans belong to the sync
+  that was reviewed. If another popup or manager switches the active identity,
+  stale dialogs/selections are discarded and stale destructive requests are
+  rejected in the background. Cleanup can remove only current duplicate
+  bookmark entries, never unique bookmarks or folders.
+- Change password lives on the active sync's row; Settings contains preferences
+  and the folded log panel. A new export file includes the active sync's name
+  when available; its backup password remains independent of the sync password.
 
 ## Extension: sync lock
 
@@ -217,10 +242,10 @@ Words come from `UI-TERMS.md`.
   Android uses platform secure storage plus the optional device unlock.
 - Android can add only an existing sync while linked; the extension can also
   create a new sync from the current bookmarks.
-- Undo of the last overwrite exists only in the extension manager (Status); the
-  popup never shows it, and the mobile app's way back is Backup → Safety backups
-  (Home keeps a short undo for a single delete).
-- Change password result: the extension adds `Undo is in Status`.
+- The extension exposes no overwrite Undo banner in Status or the popup:
+  recover supported destructive replacements through Backup → Safety backups.
+  Android also uses those backups, with short Home Undo for a single delete
+  or a move. Ordinary linked-to-linked activation takes no switch backup.
 - Backup restore: the extension needs a linked sync (the restored tree is
   uploaded right away). The mobile app also restores while unlinked, on this
   device only; its implication line says which case applies.

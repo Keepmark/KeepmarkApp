@@ -72,7 +72,7 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
   Rename/Activate/Unlink/Remove/Delete from server, `Change password` on the
   active row, `+ Add new sync` wizard with target + merge preview, optional
   sync lock — each operation is a modal task dialog, never an inline panel that
-  can overlap another one), Settings (toolbar toggle via background, the log
+  can overlap another one), Settings (language, the log
   panel folded behind one "Show logs" button), About. The long password
   belongs to a sync, so changing it is a row action, not a Settings section,
   and it never asks the sync lock password: the background re-wraps the saved
@@ -100,7 +100,13 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
 - Native edits that never reached the server are checked before every pull:
   they become a conflict instead of being overwritten.
 - Sync loss (401): queue cleared, credentials wiped, notification.
-- "Sync now" = pull-if-newer then push.
+- All three containers sync automatically: native edits enqueue uploads and a
+  15-minute alarm checks changes made elsewhere. "Sync now" = pull-if-newer then push.
+- Saved-sync activation verifies the target read-only, reconciles and persists
+  pending native edits of the outgoing sync, then replaces the browser tree.
+  A pending conflict or failed save blocks activation. Target verification
+  needs the service, so activation cannot proceed offline. The credential-change
+  gate serializes the switch with mutations; ordinary activation takes no snapshot.
 
 ## Merge mode (third link direction)
 
@@ -126,7 +132,9 @@ side while offline reappear — the preview says so.
 
 Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,
 ported from the Keepmark Android safety spec): connect pull/push, change-password,
-import, restore, server delete, bulk duplicate cleanup. **A switch between
+import, restore, batch delete and bulk duplicate cleanup. Deliberate server
+deletion is the exception: it takes no snapshot, keeps no removed-sync copy
+and prunes safety backups belonging to that sync. **A switch between
 saved syncs is not destructive** — the copy this device leaves is already on
 its own server and activating that sync again brings it back — so it takes no
 snapshot and arms no undo; the manager shows no "last action / undo" banner.
@@ -149,7 +157,10 @@ next push replaced the server's toolbar with that stale copy. Installs that
 still carry the legacy key are migrated once at startup
 (`adoptToolbarOnUpgrade`): the local toolbar is snapshotted fail-closed
 (`toolbar-adopt`), replaced with the active sync's toolbar, then the key is
-dropped. The native replace itself is atomic for the link state: the link is
+dropped. Every worker wake path retries this migration before syncing or
+changing the active tree. Failure blocks those operations while diagnostics
+and backup export remain available. Only toolbar mappings are replaced;
+untouched native mappings keep their synced IDs and metadata. The native replace itself is atomic for the link state: the link is
 saved only after the natives were rewritten, and a failed replace puts the
 previous bookmarks back (best effort) so the app never claims a switch that the
 browser did not perform.
