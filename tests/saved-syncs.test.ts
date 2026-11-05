@@ -79,7 +79,8 @@ describe('saved syncs registry', () => {
   });
 
   it('shortens sync ids for lists (the full id stays copyable elsewhere)', () => {
-    expect(shortSyncId('12345678-90ab-cdef')).toBe('12345678…');
+    expect(shortSyncId('432a397288db410e9f733e5dbda9d4af')).toBe('432a39…d4af');
+    expect(shortSyncId('12345678-90ab-cdef')).toBe('123456…cdef');
     expect(shortSyncId('short')).toBe('short');
   });
 

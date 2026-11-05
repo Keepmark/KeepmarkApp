@@ -4,6 +4,7 @@
 import browser from 'webextension-polyfill';
 import { DefaultServiceUrl, MinNewPasswordLength, PasswordTooShort } from '../shared/constants.js';
 import { undoWhat } from './texts.js';
+import { shortSyncId } from '../shared/saved-syncs.js';
 import { StoreKey } from '../shared/store.js';
 import { formatDateTime, getLang, resolveLang, setLang, t, tn, type MessageKey } from '../shared/i18n.js';
 import {
@@ -154,6 +155,7 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
     badge.className = 'badge';
     $(`${prefix}-server`).textContent = '—';
     $(`${prefix}-syncid`).textContent = '—';
+    $(`${prefix}-syncid`).removeAttribute('title');
     if (last) last.textContent = '—';
     $(`${prefix}-space`).textContent = '—';
     setMeter(prefix, 0, undefined);
@@ -170,7 +172,11 @@ export function renderStatusCard(prefix: string, view: StatusView): void {
   const v12 = ping?.supportsV12 ?? status?.supportsV12 ?? false;
   badge.textContent = v12 ? 'API v1.2' : '';
   badge.className = 'badge';
-  $(`${prefix}-syncid`).textContent = status.syncId ?? '—';
+  // One line, head…tail: the Copy button next to it copies the full ID.
+  const idEl = $(`${prefix}-syncid`);
+  idEl.textContent = status.syncId ? shortSyncId(status.syncId) : '—';
+  if (status.syncId) idEl.title = status.syncId;
+  else idEl.removeAttribute('title');
   if (last) last.textContent = status.lastUpdated ? formatDateTime(status.lastUpdated) : '—';
 
   const used = status.usedBytes ?? 0;

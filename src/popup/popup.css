@@ -538,10 +538,8 @@ button.mini {
    never leaves a lone character on its own line. */
 .status-id {
   min-width: 0;
-  max-width: 16ch;
-  font-size: 10.5px;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .status-facts .meter { margin: 0; height: 4px; }

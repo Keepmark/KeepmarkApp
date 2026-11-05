@@ -66,8 +66,9 @@ describe('saved syncs popup panel', () => {
     expect(dormant.querySelector('button')!.disabled).toBe(false);
     expect(dormant.querySelectorAll('button')).toHaveLength(1);
     expect(dormant.textContent).toContain('other.example');
-    // The ID is a capability token: only a prefix is shown.
-    expect(dormant.textContent).toContain('bbbbbbbb…');
+    // The ID is a capability token: only head and tail are shown.
+    expect(dormant.textContent).toContain('bbbbbb…2222');
+    expect(dormant.textContent).not.toContain('bbbbbbbb2222');
   });
 
   it('hides the card when the list is empty and clears a stale error', () => {

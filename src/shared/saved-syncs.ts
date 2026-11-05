@@ -204,8 +204,10 @@ export function serviceHost(serviceUrl: string): string {
 
 /** Short sync ID for lists and notifications: the ID is a bearer token, so
  *  the UI shows a prefix only (full ID stays copyable in the status card). */
-export function shortSyncId(syncId: string, length = 8): string {
-  return syncId.length <= length ? syncId : `${syncId.slice(0, length)}…`;
+/** Compact sync ID for display: head and tail (`432a39…d4af`), one line.
+ *  The full ID is a bearer token: copy it from the status card, never from here. */
+export function shortSyncId(syncId: string, head = 6, tail = 4): string {
+  return syncId.length <= head + tail + 1 ? syncId : `${syncId.slice(0, head)}…${syncId.slice(-tail)}`;
 }
 
 /** Suggested name for a new row: the host, or "host 2", "host 3"… when a
