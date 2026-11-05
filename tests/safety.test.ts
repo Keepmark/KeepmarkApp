@@ -75,9 +75,9 @@ describe('safety backups', () => {
     await expect(readSafetyTree(store, entry, other)).rejects.toThrow(/locked to another/);
   });
 
-  it('prunes to the newest 5 (payload + row together)', async () => {
+  it('prunes to the newest 10 (payload + row together)', async () => {
     const { store, derived } = await linked();
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 12; i++) {
       await writeSafety(store, {
         operation: 'take-remote',
         side: 'local',
@@ -86,7 +86,7 @@ describe('safety backups', () => {
       });
     }
     const rows = await listSafety(store);
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(10);
     for (const r of rows) {
       expect(await store.get(safetyFileKey(r.fileName))).toBeDefined();
     }

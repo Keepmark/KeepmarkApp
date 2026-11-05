@@ -502,7 +502,7 @@ notsynced), white-mark in-page chip.
   200k node cap, typed node validation, fresh salt per export, distinct
   errors per failure class.
 - S6. Safety snapshots (`shared/safety.ts`) are fail-closed: a failed write
-  blocks the destructive operation. Newest 5 kept in `storage.local`, encrypted
+  blocks the destructive operation. Newest 10 kept in `storage.local`, encrypted
   with the sync-derived key when linked (pre-link copies are flagged plaintext).
   Backup → Safety backups lists/restores/deletes them. Ordinary saved-sync
   activation takes no snapshot; deliberate server deletion keeps no copy and
@@ -621,3 +621,8 @@ state.
 - 13.5 Deliverables: findings list, gate log (lint/test/build/package/qa +
   e2e if a server is provided), spec-section ↔ file(s) ↔ test(s)
   traceability matrix, and a final PASS/FAIL per §13.3.
+
+Saved-sync row layout: prominent Activate (disabled for the active sync), with
+secondary commands in an accessible ⋮ menu. Rename, Show QR and active-sync
+Change password precede a separated final group of Forget/Unlink and active-sync
+Delete from server. The popup stays activation-only.

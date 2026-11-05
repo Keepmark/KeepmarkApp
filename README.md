@@ -84,7 +84,7 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and password in one step |
 | **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
-| **Safety backups** | Safety snapshot before destructive changes or syncs changing more than 10 items (newest 5 kept); ordinary switches create none, deliberate server deletion keeps no copy |
+| **Safety backups** | Safety snapshot before destructive changes or syncs changing more than 10 items (newest 10 kept); ordinary switches create none, deliberate server deletion keeps no copy |
 | **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
@@ -265,3 +265,5 @@ implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
 from its use. See sections 15–17 of the GPL v3. Keep your own backups.
+
+Saved syncs put **Activate** first; less frequent commands live in the row’s **⋮** menu, with unlinking and destructive actions separated at the bottom.

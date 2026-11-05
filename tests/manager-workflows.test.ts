@@ -484,3 +484,29 @@ it('clears duplicate selections when another page activates a different sync', a
   el('m-btn-duplicates-delete-all').click(); await settle();
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.RemoveDuplicates)).toBe(false);
 });
+
+it('keeps activation prominent and secondary actions in a dismissible menu', async () => {
+  const row = el('m-syncs-list').querySelector('.saved-row')!;
+  const activate = el('m-syncs-act-0') as HTMLButtonElement;
+  const menu = row.querySelector('details')!;
+  expect(activate.disabled).toBe(true);
+  expect(activate.closest('details')).toBeNull();
+  expect(menu.open).toBe(false);
+  expect(menu.querySelector('summary')!.getAttribute('aria-label')).toContain('old.test');
+  const commands = [...menu.querySelectorAll('button')].map((button) => button.id);
+  expect(commands).toEqual(['m-syncs-rename-0', 'm-syncs-qr-0', 'm-syncs-pw-0', 'm-syncs-rm-0', 'm-syncs-delete-0']);
+  expect(menu.querySelector('hr')!.nextElementSibling!.id).toBe('m-syncs-rm-0');
+  menu.open = true;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(menu.open).toBe(false);
+  expect(document.activeElement).toBe(menu.querySelector('summary'));
+  menu.open = true;
+  document.body.click();
+  expect(menu.open).toBe(false);
+  menu.open = true;
+  el('m-syncs-rename-0').click();
+  expect(menu.open).toBe(false);
+  expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(true);
+  el('m-btn-row-cancel').click();
+  expect(document.activeElement).toBe(menu.querySelector('summary'));
+});

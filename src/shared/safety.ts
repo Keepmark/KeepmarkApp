@@ -68,7 +68,7 @@ export interface SafetyEntry {
 }
 
 /** Newest entries kept; older pruned automatically (payload + row together). */
-export const SafetyRetention = 5;
+export const SafetyRetention = 10;
 
 const SafetyApp = 'KeepmarkApp-safety';
 const SafetyFormat = 1;

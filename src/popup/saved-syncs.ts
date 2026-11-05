@@ -112,15 +112,16 @@ export class SavedSyncsPanel {
       tag.className = 'tag ok';
       tag.textContent = t('popup.saved.active');
       actions.append(tag);
-    } else {
-      const activate = document.createElement('button');
-      activate.type = 'button';
-      activate.className = 'mini';
-      activate.id = `${this.prefix}-act-${index}`;
-      activate.textContent = t('popup.saved.activate');
-      activate.addEventListener('click', () => this.openConfirm(sync));
-      actions.append(activate);
     }
+    // Activation is the row's main action: always visible, disabled on the active row.
+    const activate = document.createElement('button');
+    activate.type = 'button';
+    activate.className = 'mini primary';
+    activate.id = `${this.prefix}-act-${index}`;
+    activate.textContent = t('popup.saved.activate');
+    activate.disabled = isActive;
+    activate.addEventListener('click', () => this.openConfirm(sync));
+    actions.append(activate);
     li.append(meta, actions);
     return li;
   }

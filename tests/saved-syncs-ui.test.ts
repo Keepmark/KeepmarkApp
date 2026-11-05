@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 describe('saved syncs popup panel', () => {
-  it('renders rows read-only: active tag, one activate button for the dormant one', () => {
+  it('renders an activation button on every row and disables the active one', () => {
     panel.render(data);
     expect(el('p-saved-card').hidden).toBe(false);
     expect(el('p-saved-title').textContent).toBe('Syncs');
@@ -61,7 +61,9 @@ describe('saved syncs popup panel', () => {
     expect(active.classList.contains('saved-active')).toBe(true);
     expect(active.textContent).toContain('Lavoro');
     // No rename, no remove, nowhere to manage: the popup only switches.
-    expect(active.querySelectorAll('button')).toHaveLength(0);
+    expect(active.querySelectorAll('button')).toHaveLength(1);
+    expect(active.querySelector('button')!.disabled).toBe(true);
+    expect(dormant.querySelector('button')!.disabled).toBe(false);
     expect(dormant.querySelectorAll('button')).toHaveLength(1);
     expect(dormant.textContent).toContain('other.example');
     // The ID is a capability token: only a prefix is shown.

@@ -1738,8 +1738,7 @@ function renderSyncsList(): void {
   renderActivation();
 }
 
-/** One registry row, three lines: name + status (and the API badge on the
- *  active row), then host / ID prefix / last use, then the actions. Every row
+/** One registry row: identity, then a primary activation and secondary menu. Every row
  *  has one local action: on the active row it unlinks this device (the row is
  *  the link), on an inactive one it forgets the row. Both leave the server and
  *  the local bookmarks alone. */
@@ -1783,13 +1782,41 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'saved-actions';
 
+  const activate = document.createElement('button');
+  activate.type = 'button';
+  activate.className = 'mini primary';
+  activate.id = `m-syncs-act-${index}`;
+  activate.textContent = t('popup.saved.activate');
+  activate.disabled = isActive;
+  activate.addEventListener('click', () => openActivation(sync, activate));
+  actions.append(activate);
+
+  const menu = document.createElement('details');
+  menu.className = 'saved-menu';
+  const more = document.createElement('summary');
+  more.className = 'saved-menu-toggle';
+  more.textContent = '⋮';
+  more.setAttribute('aria-label', t('manager.syncs.moreActions', { name: savedSyncName(sync) }));
+  const commands = document.createElement('div');
+  commands.className = 'saved-menu-commands';
+  menu.append(more, commands);
+  actions.append(menu);
+  // Keep the opener visible for TaskDialog's focus return, even after the
+  // selected command has closed this disclosure.
+  commands.addEventListener('click', () => { menu.open = false; });
+  menu.addEventListener('toggle', () => {
+    if (menu.open) {
+      listOpenSyncMenus().forEach((other) => { if (other !== menu) other.open = false; });
+    }
+  });
+
   const rename = document.createElement('button');
   rename.type = 'button';
   rename.className = 'mini';
   rename.id = `m-syncs-rename-${index}`;
   rename.textContent = t('manager.syncs.rename');
-  rename.addEventListener('click', () => openRowTask('rename', sync, rename));
-  actions.append(rename);
+  rename.addEventListener('click', () => openRowTask('rename', sync, more));
+  commands.append(rename);
 
   // Every row can produce a QR: the phone may join a sync that is not the one
   // active in this browser. The code names that row's own service and ID.
@@ -1799,8 +1826,8 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   qr.id = `m-syncs-qr-${index}`;
   qr.textContent = t('manager.syncs.showQr');
   const qrTarget: ConnectQrTarget = { serviceUrl: sync.serviceUrl, syncId: sync.syncId };
-  qr.addEventListener('click', () => connectQr?.openFor(qrTarget, qr));
-  actions.append(qr);
+  qr.addEventListener('click', () => connectQr?.openFor(qrTarget, more));
+  commands.append(qr);
 
   if (isActive) {
     // The long password belongs to this sync, so its change lives here, next
@@ -1810,27 +1837,12 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
     changePw.className = 'mini';
     changePw.id = `m-syncs-pw-${index}`;
     changePw.textContent = t('manager.syncs.changePw');
-    changePw.addEventListener('click', () => openPasswordChange(changePw));
-    actions.append(changePw);
-    // The active row has one action that ends the link: Unlink this device.
-    // A second "remove" button would do the same thing under another name.
-    const removeRemote = document.createElement('button');
-    removeRemote.type = 'button';
-    removeRemote.className = 'mini danger';
-    removeRemote.id = `m-syncs-delete-${index}`;
-    removeRemote.dataset.action = 'delete';
-    removeRemote.textContent = t('manager.syncs.deleteRemote');
-    removeRemote.addEventListener('click', () => openRowTask('delete', sync, removeRemote));
-    actions.append(removeRemote);
-  } else {
-    const activate = document.createElement('button');
-    activate.type = 'button';
-    activate.className = 'mini primary';
-    activate.id = `m-syncs-act-${index}`;
-    activate.textContent = t('popup.saved.activate');
-    activate.addEventListener('click', () => openActivation(sync, activate));
-    actions.append(activate);
+    changePw.addEventListener('click', () => openPasswordChange(more));
+    commands.append(changePw);
   }
+
+  const separator = document.createElement('hr');
+  commands.append(separator);
 
   const remove = document.createElement('button');
   remove.type = 'button';
@@ -1839,12 +1851,43 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   remove.textContent = t(isActive ? 'manager.syncs.unlink' : 'manager.syncs.forget');
   // On the active row this unlinks this device (the row is the link) and keeps
   // the server copy: confirmed with its own wording, never disabled.
-  remove.addEventListener('click', () => openRowTask(isActive ? 'unlink' : 'forget', sync, remove));
-  actions.append(remove);
+  remove.addEventListener('click', () => openRowTask(isActive ? 'unlink' : 'forget', sync, more));
+  commands.append(remove);
+
+  if (isActive) {
+    const removeRemote = document.createElement('button');
+    removeRemote.type = 'button';
+    removeRemote.className = 'mini danger';
+    removeRemote.id = `m-syncs-delete-${index}`;
+    removeRemote.dataset.action = 'delete';
+    removeRemote.textContent = t('manager.syncs.deleteRemote');
+    removeRemote.addEventListener('click', () => {
+      if (!removeRemote.disabled) openRowTask('delete', sync, more);
+    });
+    commands.append(removeRemote);
+  }
 
   li.append(head, sub, actions);
   return li;
 }
+
+function listOpenSyncMenus(): HTMLDetailsElement[] {
+  return [...document.querySelectorAll<HTMLDetailsElement>('.saved-menu[open]')];
+}
+
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  listOpenSyncMenus().forEach((menu) => {
+    if (!(target instanceof Node) || !menu.contains(target)) menu.open = false;
+  });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  listOpenSyncMenus().forEach((menu) => {
+    menu.open = false;
+    menu.querySelector('summary')?.focus();
+  });
+});
 
 /** Duplicate check for the name field (case-insensitive, host fallback
  *  counts as a name too: two identical rows would be indistinguishable). */
@@ -1952,9 +1995,9 @@ async function activatePending(): Promise<void> {
 type RowTaskKind = 'rename' | 'forget' | 'unlink' | 'delete';
 let rowTask: { kind: RowTaskKind; sync: SavedSync } | undefined;
 
-function openRowTask(kind: RowTaskKind, sync: SavedSync, opener: HTMLButtonElement): void {
+function openRowTask(kind: RowTaskKind, sync: SavedSync, opener: HTMLElement): void {
   // Defense in depth: the v1.2 gate disables this button on legacy services.
-  if (kind === 'delete' && opener.disabled) return;
+  if (kind === 'delete' && opener instanceof HTMLButtonElement && opener.disabled) return;
   clearMessages();
   rowTask = { kind, sync };
   const name = savedSyncName(sync);

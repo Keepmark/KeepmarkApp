@@ -70,6 +70,20 @@ Words come from `UI-TERMS.md`.
    operations, two Cancel buttons or a second confirmation are never on screen
    at once.
 
+## Saved-sync list and settings layout
+
+The extension manager and Android Syncs page give every saved sync a prominent
+`Activate` button. It is disabled on the active sync, whose active badge stays
+visible. Secondary commands are in the row's accessible `⋮` menu: ordinary
+commands (rename, show QR or change password where supported) first, then a
+separate final group for forgetting, unlinking and server deletion where
+supported. A menu opens only that row's existing task; confirmations and stable
+sync identity checks still apply. Only one menu is open at a time; Escape and
+clicking outside close it. The extension popup remains a minimal activation list.
+
+On Android, Settings places the complete log block after all other preferences,
+immediately before `Save`.
+
 ## Shared workflows
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |

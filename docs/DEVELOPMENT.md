@@ -69,7 +69,8 @@ npm run qa:browser    # real Firefox + Chromium vs live KeepmarkApi (99 checks, 
 - `src/manager/` — full-tab manager: Status (incl. danger zone), Backup
   (export, import preview and direct restore, safety list/restore/delete),
   Duplicates (scan, single + bulk delete), Sync (saved-sync registry with
-  Rename/Activate/Unlink/Remove/Delete from server, `Change password` on the
+  primary Activate (disabled when active), secondary ⋮ menu with ordinary
+  commands first and separated Forget/Unlink/Delete last, `Change password` on the
   active row, `+ Add new sync` wizard with target + merge preview, optional
   sync lock — each operation is a modal task dialog, never an inline panel that
   can overlap another one), Settings (language, the log
@@ -167,7 +168,7 @@ browser did not perform.
 
 - Stored in `storage.local`: `SafetyIndex` manifest rows
   (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated
-  syncId, enc`) + one `safetyFile:` payload each. Newest 5 kept, older
+  syncId, enc`) + one `safetyFile:` payload each. Newest 10 kept, older
   pruned (payload + row together). Listed/restored/deleted from Manager →
   Backup → Safety backups.
 - Encrypted with the sync-derived key (`keyId` = SHA-256/8 recorded);
