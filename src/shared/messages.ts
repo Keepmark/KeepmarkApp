@@ -315,12 +315,12 @@ export type MessagePayload =
   | { command: MessageCommand.GetStatus }
   | { command: MessageCommand.GetLogs }
   | { command: MessageCommand.Ping }
-  | { command: MessageCommand.GetDuplicates }
+  | { command: MessageCommand.GetDuplicates; target?: SavedSyncActive }
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.LinkSync; link: SyncTarget }
-  | { command: MessageCommand.DeleteRemoteSync }
+  | { command: MessageCommand.DeleteRemoteSync; target: SavedSyncActive }
   | { command: MessageCommand.GetSavedSyncs }
   | {
       command: MessageCommand.ActivateSavedSync;
@@ -361,7 +361,7 @@ export type MessagePayload =
   | { command: MessageCommand.GetSafetyList }
   | { command: MessageCommand.RestoreSafety; fileName: string }
   | { command: MessageCommand.DeleteSafety; fileName: string }
-  | { command: MessageCommand.RemoveDuplicates; ids: number[] }
+  | { command: MessageCommand.RemoveDuplicates; ids: number[]; target: SavedSyncActive }
   | { command: MessageCommand.DownloadFile; filename: string; text: string }
   // Conflict resolution
   | { command: MessageCommand.GetConflictState }

@@ -63,7 +63,7 @@ export interface NativeOps {
   readAll(): Promise<BookmarkNode[]>;
   clearAndPopulate(bookmarks: BookmarkNode[]): Promise<void>;
   rebuildMappings(bookmarks: BookmarkNode[]): Promise<BookmarkIdMapping[]>;
-  /** Replace ONE container's native children (toolbar adoption on upgrade). */
+  /** Replace ONE container; return mappings for its children only. */
   replaceContainer(container: BookmarkContainer, children: BookmarkNode[]): Promise<BookmarkIdMapping[]>;
 }
 
@@ -90,7 +90,7 @@ export function makeNativeOps(api: BookmarkApi, ids: ContainerIds, opts: NativeO
     replaceContainer: async (container, children) => {
       await clearContainer(api, ids, container);
       await populateContainer(api, ids, opts, container, children);
-      return buildMappings(api, ids, await readAll(api, ids, opts), opts);
+      return buildMappings(api, ids, [{ title: container, children }], opts);
     },
   };
 }

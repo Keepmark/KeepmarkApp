@@ -148,7 +148,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   sync" switch (<= 0.1.44) made a switch look half-done and let a stale
   toolbar overwrite the server's on the next push. A one-shot startup
   migration (`adoptToolbarOnUpgrade`) snapshots the stale local toolbar
-  fail-closed and replaces it with the active sync's copy.
+  fail-closed and replaces it with the active sync's copy. Every worker wake
+  path retries it before syncing or changing the active tree; failures block
+  those operations while diagnostics and backup export stay available. Only
+  toolbar mappings are replaced; untouched native mappings retain their IDs.
 
 ### Build
 

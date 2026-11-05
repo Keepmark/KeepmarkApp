@@ -53,10 +53,10 @@ import { sanitizeSyncId, XbsLogLevel } from '../shared/logging.js';
 import type { BookmarkNode } from '../shared/models.js';
 import { validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
-import { BookmarkContainer } from '../shared/bookmarks.js';
+import { BookmarkContainer, type NativeNode } from '../shared/bookmarks.js';
 import { changedNodeCount } from '../shared/tree-diff.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
-import { deleteByIds, getDuplicateGroups } from '../shared/duplicates.js';
+import { deleteByIds, getDuplicateGroups, planDuplicateDeletion } from '../shared/duplicates.js';
 import { mergeTrees, type MergeStats } from '../shared/merge.js';
 import { diffTrees, sameContent } from '../shared/tree-diff.js';
 import {
@@ -213,6 +213,7 @@ export class BackgroundCore {
   private started = false;
   /** In-flight drain shared by concurrent callers (no false "did not drain"). */
   private drainFlight?: Promise<Error | undefined>;
+  private toolbarAdoptionFlight?: Promise<void>;
   /** Serialized read-modify-write on the saved-syncs registry. One worker, but
    *  awaits interleave: two upserts must never lose each other. */
   private savedWriteFlight: Promise<unknown> = Promise.resolve();
@@ -264,6 +265,25 @@ export class BackgroundCore {
 
   async handleMessage(msg: MessagePayload): Promise<unknown> {
     await this.loadLanguage();
+    // Diagnostics and backup export remain available when upgrade storage fails.
+    switch (msg.command) {
+      case MessageCommand.SyncBookmarks:
+      case MessageCommand.RestoreBookmarks:
+      case MessageCommand.ConnectNew:
+      case MessageCommand.ConnectExisting:
+      case MessageCommand.AddBookmark:
+      case MessageCommand.RemoveBookmark:
+      case MessageCommand.ImportBackup:
+      case MessageCommand.LinkSync:
+      case MessageCommand.DeleteRemoteSync:
+      case MessageCommand.ActivateSavedSync:
+      case MessageCommand.UndoLastLink:
+      case MessageCommand.ChangePassword:
+      case MessageCommand.RestoreSafety:
+      case MessageCommand.RemoveDuplicates:
+      case MessageCommand.ResolveConflict:
+        await this.ensureToolbarAdopted();
+    }
     switch (msg.command) {
       case MessageCommand.GetServices:
         return mergeServiceCatalog(await this.store.get<ServiceOption[]>(StoreKey.RememberedServices));
@@ -276,18 +296,18 @@ export class BackgroundCore {
       case MessageCommand.RestoreBookmarks:
         return this.queueSync('localAndRemote', msg.bookmarks);
       case MessageCommand.ConnectNew:
-        return this.connectNew(msg.serviceUrl, msg.password, msg.switchPassword, msg.label);
+        return this.withCredentialChange(() => this.connectNew(msg.serviceUrl, msg.password, msg.switchPassword, msg.label));
       case MessageCommand.ConnectExisting:
-        return this.connectExisting(msg.serviceUrl, msg.syncId, msg.password, msg.direction, {
+        return this.withCredentialChange(() => this.connectExisting(msg.serviceUrl, msg.syncId, msg.password, msg.direction, {
           switchPassword: msg.switchPassword,
           ...(msg.label !== undefined ? { label: msg.label } : {}),
-        });
+        }));
       case MessageCommand.AddBookmark:
         return this.addBookmark(msg);
       case MessageCommand.RemoveBookmark:
         return this.removeBookmark(msg.id);
       case MessageCommand.DisableSync:
-        return this.disableSync();
+        return this.withCredentialChange(() => this.disableSync());
       case MessageCommand.GetStatus:
         return this.getStatus();
       case MessageCommand.GetLogs:
@@ -295,7 +315,10 @@ export class BackgroundCore {
       case MessageCommand.Ping:
         return this.ping();
       case MessageCommand.GetDuplicates:
-        return this.getDuplicates();
+        return this.withCredentialChange(async () => {
+          if (msg.target) await this.requireExpectedSync(msg.target);
+          return this.getDuplicates();
+        });
       case MessageCommand.ExportBackup:
         return this.exportBackup(msg.password);
       case MessageCommand.ImportBackup:
@@ -303,7 +326,7 @@ export class BackgroundCore {
       case MessageCommand.LinkSync:
         return this.withCredentialChange(() => this.linkSync(msg.link));
       case MessageCommand.DeleteRemoteSync:
-        return this.deleteRemoteSync();
+        return this.withCredentialChange(() => this.deleteRemoteSync(msg.target));
       case MessageCommand.GetSavedSyncs:
         return this.getSavedSyncs();
       case MessageCommand.ActivateSavedSync:
@@ -311,7 +334,7 @@ export class BackgroundCore {
           this.activateSavedSync(msg.serviceUrl, msg.syncId, msg.switchPassword),
         );
       case MessageCommand.RemoveSavedSync:
-        return this.removeSavedSyncEntry(msg.serviceUrl, msg.syncId);
+        return this.withCredentialChange(() => this.removeSavedSyncEntry(msg.serviceUrl, msg.syncId));
       case MessageCommand.RenameSavedSync:
         return this.renameSavedSyncEntry(msg.serviceUrl, msg.syncId, msg.label);
       case MessageCommand.GetSwitchLock:
@@ -362,7 +385,7 @@ export class BackgroundCore {
       case MessageCommand.DeleteSafety:
         return { deleted: await deleteSafety(this.store, msg.fileName) };
       case MessageCommand.RemoveDuplicates:
-        return this.removeDuplicates(msg.ids);
+        return this.withCredentialChange(() => this.removeDuplicates(msg.ids, msg.target));
       case MessageCommand.DownloadFile:
         return this.ports.chrome.download(msg.filename, msg.text);
       // Conflict resolution
@@ -380,6 +403,7 @@ export class BackgroundCore {
   // ---------------------------------------------------------------- sync jobs
 
   private async runJob(job: SyncJob): Promise<void> {
+    await this.ensureToolbarAdopted();
     await this.setBadge(true);
     try {
       if (job.type === 'local') await this.doLocalJob();
@@ -414,6 +438,7 @@ export class BackgroundCore {
 
   /** Drain the queue; concurrent callers share one flight. Returns the last error. */
   async drain(): Promise<Error | undefined> {
+    await this.ensureToolbarAdopted();
     this.drainFlight ??= this.runDrain().finally(() => {
       this.drainFlight = undefined;
     });
@@ -596,6 +621,7 @@ export class BackgroundCore {
   /** Reconcile native -> synced and push when anything changed. `adopted` = the
    *  server already held our content (nothing to push, nothing to lose). */
   async pushAfterNativeChange(): Promise<{ pushed: boolean; conflict?: boolean; adopted?: boolean }> {
+    await this.ensureToolbarAdopted();
     const { info } = await this.requireCreds();
     if (this.suspended > 0) {
       // Lost otherwise: the debounce alarm is one-shot and already consumed.
@@ -964,6 +990,7 @@ export class BackgroundCore {
   }
 
   async checkForUpdates(): Promise<void> {
+    await this.ensureToolbarAdopted();
     const enabled = await this.store.get<boolean>(StoreKey.SyncEnabled);
     if (!enabled) return;
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
@@ -1470,6 +1497,16 @@ export class BackgroundCore {
    * Dual-stack: revision CAS on v1.2 links (timestamp fallback on 412),
    * timestamp on legacy links.
    */
+  /** A destructive request names the sync the user actually reviewed. */
+  private async requireExpectedSync(target: SavedSyncActive | undefined): Promise<SyncInfo> {
+    const { info } = await this.requireCreds();
+    if (!target || typeof target.serviceUrl !== 'string' || typeof target.syncId !== 'string' ||
+        !sameSavedSync({ serviceUrl: canonicalServiceUrl(info.serviceUrl ?? DefaultServiceUrl), syncId: info.id! }, target)) {
+      throw new UnexpectedResponseException(t('core.savedNotFound'));
+    }
+    return info;
+  }
+
   private async withCredentialChange<T>(action: () => Promise<T>): Promise<T> {
     if (this.changingCredentials || this.connecting) throw new UnexpectedResponseException(t('core.connectBusy'));
     this.changingCredentials = true;
@@ -1742,20 +1779,15 @@ export class BackgroundCore {
    * Bulk duplicate cleanup: ONE safety snapshot (fail-closed), ONE native
    * overwrite, ONE push. The result names the safety net (R7.5).
    */
-  private async removeDuplicates(ids: number[]): Promise<{ deleted: number; safety: string }> {
-    const { info } = await this.requireCreds();
+  private async removeDuplicates(ids: number[], target: SavedSyncActive): Promise<{ deleted: number; safety: string }> {
+    const info = await this.requireExpectedSync(target);
     // Prune the CURRENT natives (reconciled over the cache), so edits that
     // are not pushed yet survive the overwrite below.
     await this.quiesce();
     const tree = (await this.reconcileNatives(info)).next;
-    // Structural lock: the newest copy (max id) of each group can never be
-    // selected — a crafted/buggy caller cannot wipe a group silently.
-    const locked = new Set<number>();
-    for (const group of getDuplicateGroups(tree)) {
-      const idsInGroup = group.entries.map((e) => e.id);
-      if (idsInGroup.length > 1) locked.add(Math.max(...idsInGroup));
-    }
-    const doomed = new Set(ids.filter((id) => !locked.has(id)));
+    // Only actual duplicate bookmark entries are eligible; unique nodes and
+    // folders from a stale/crafted selection must never be removed.
+    const doomed = new Set(planDuplicateDeletion(getDuplicateGroups(tree), new Set(ids)));
     const pruned = deleteByIds(tree, doomed);
     const deleted = countNodes(tree) - countNodes(pruned);
     if (deleted === 0) return { deleted: 0, safety: '' };
@@ -2556,8 +2588,8 @@ export class BackgroundCore {
    * undo slot is kept (a PUT-back would 401). No backup is taken or kept: a
    * deliberate deletion keeps nothing, and the local bookmarks stay.
    */
-  private async deleteRemoteSync(): Promise<{ deleted: boolean }> {
-    const { info } = await this.requireCreds();
+  private async deleteRemoteSync(target: SavedSyncActive): Promise<{ deleted: boolean }> {
+    const info = await this.requireExpectedSync(target);
     await this.quiesce();
     if (!v12Usable(info)) {
       throw new UnsupportedVersionException(t('api.ErrUnsupportedVersion'));
@@ -3228,9 +3260,7 @@ export class BackgroundCore {
     await this.applyVerbosity();
     // Before any sync: a legacy install with the toolbar excluded would
     // otherwise reconcile its stale toolbar and push it over the server copy.
-    await this.adoptToolbarOnUpgrade().catch((err) =>
-      this.log.log(XbsLogLevel.Warning, 'sync', `Toolbar adoption failed: ${(err as Error)?.message}`),
-    );
+    await this.ensureToolbarAdopted();
     try {
       // Write-once: every MV3 wake would otherwise contaminate the install
       // backup with already-synced natives.
@@ -3268,6 +3298,19 @@ export class BackgroundCore {
    * toolbar is snapshotted fail-closed first; a failed snapshot keeps the
    * legacy key and retries on the next wake.
    */
+  /** Shared by every wake-up path; a failed migration blocks sync and retries. */
+  private ensureToolbarAdopted(): Promise<void> {
+    this.toolbarAdoptionFlight ??= this.adoptToolbarOnUpgrade()
+      .catch((err: unknown) => {
+        this.log.log(XbsLogLevel.Warning, 'sync', `Toolbar adoption failed: ${(err as Error)?.message}`);
+        throw err;
+      })
+      .finally(() => {
+        this.toolbarAdoptionFlight = undefined;
+      });
+    return this.toolbarAdoptionFlight;
+  }
+
   private async adoptToolbarOnUpgrade(): Promise<void> {
     const legacy = await this.store.get<boolean>(StoreKey.SyncBookmarksToolbar);
     if (legacy === undefined) return;
@@ -3282,8 +3325,32 @@ export class BackgroundCore {
         syncId: info.id,
         derivedKey: info.password,
       });
-      const mappings = await this.adapter.replaceContainer(BookmarkContainer.Toolbar, toolbar);
-      await this.idMapper.set(mappings);
+      // Preserve mappings for untouched containers, including native edits that
+      // have not reached the cache. A positional rebuild would bind their IDs
+      // to different bookmarks after an offline reorder/add/remove.
+      const oldToolbarIds = new Set<number>();
+      const visit = (nodes: BookmarkNode[]): void => {
+        for (const node of nodes) {
+          if (node.id !== undefined) oldToolbarIds.add(node.id);
+          if (node.children) visit(node.children);
+        }
+      };
+      visit(toolbar);
+      const oldNativeIds = new Set<string>();
+      const visitNative = (nodes: NativeNode[]): void => {
+        for (const node of nodes) {
+          oldNativeIds.add(node.id);
+          if (node.children) visitNative(node.children);
+        }
+      };
+      visitNative(await this.adapter.readContainer(BookmarkContainer.Toolbar));
+      const retained = (await this.idMapper.all()).filter(
+        (m) => !oldToolbarIds.has(m.syncedId) && !oldNativeIds.has(m.nativeId),
+      );
+      await this.withSuspended(async () => {
+        const mappings = await this.adapter.replaceContainer(BookmarkContainer.Toolbar, toolbar);
+        await this.idMapper.set([...retained, ...mappings]);
+      });
       this.log.log(XbsLogLevel.Info, 'sync', 'Bookmarks toolbar adopted from the active sync');
     }
     await this.store.remove(StoreKey.SyncBookmarksToolbar);

@@ -79,7 +79,7 @@ export function makeChromiumAdapter(api: BookmarkApi): NativeAdapter {
       const c = await ids();
       await clearContainer(api, c, container);
       await populateContainer(api, c, opts, container, children);
-      return buildMappings(api, c, await readAll(api, c, opts), opts);
+      return buildMappings(api, c, [{ title: container, children }], opts);
     },
 
     readContainer: async (container) => {

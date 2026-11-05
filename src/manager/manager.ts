@@ -829,6 +829,21 @@ async function deleteSafety(entry: SafetyEntry, anchorId: string): Promise<void>
 let dupSeq = 0;
 /** Groups from the last scan (drives Delete-all). */
 let lastDupGroups: DuplicateGroup[] = [];
+let dupTarget: SavedSyncActive | undefined;
+
+function invalidateSyncTasks(): void {
+  ++dupSeq;
+  dupTarget = undefined;
+  lastDupGroups = [];
+  dupMarked.clear();
+  cancelAllConfirms();
+  dupDeleteIds = [];
+  $('m-dup-list').textContent = '';
+  $('nav-dup-count').textContent = '';
+  updateDupBar();
+  rowDialog.close();
+  pwDialog.close();
+}
 
 /** Copies marked for deletion in the current scan (default: all but newest). */
 let dupMarked: Set<number> = new Set();
@@ -845,7 +860,13 @@ async function scanDuplicates(): Promise<void> {
   ($('dup-result') as HTMLElement).hidden = true;
   let groups: DuplicateGroup[] = [];
   try {
-    groups = await send<DuplicateGroup[]>({ command: MessageCommand.GetDuplicates });
+    const current = await send<StatusResponse>({ command: MessageCommand.GetStatus });
+    if (my !== dupSeq) return;
+    if (!current.syncEnabled || !current.syncId || !current.serviceUrl) return;
+    const target = { serviceUrl: current.serviceUrl, syncId: current.syncId };
+    groups = await send<DuplicateGroup[]>({ command: MessageCommand.GetDuplicates, target });
+    if (my !== dupSeq) return;
+    dupTarget = target;
   } catch (err) {
     if (my !== dupSeq) return;
     lastDupGroups = [];
@@ -964,10 +985,13 @@ function renderDuplicates(): void {
     del.disabled = markedHere.length === 0;
     del.addEventListener('click', async () => {
       clearMessages();
+      const target = dupTarget;
+      if (!target) return;
       if (!(await confirmInline(del.id, { ...dupDeleteConfirm(markedHere.length), danger: true }))) return;
       del.disabled = true;
       send<{ deleted: number; safety: string }>({
         command: MessageCommand.RemoveDuplicates,
+        target,
         ids: markedHere.map((e) => e.id),
       })
         .then((res) => {
@@ -991,6 +1015,8 @@ function initDuplicatesSection(): void {
   );
   $('m-btn-duplicates-delete-all').addEventListener('click', async () => {
     clearMessages();
+    const target = dupTarget;
+    if (!target) return;
     const ids = [...dupMarked];
     if (ids.length === 0) return;
     // Confirm before withBusy (it disables the anchor while running).
@@ -999,6 +1025,7 @@ function initDuplicatesSection(): void {
       try {
         const res = await send<{ deleted: number; safety: string }>({
           command: MessageCommand.RemoveDuplicates,
+          target,
           ids,
         });
         showResult('dup-result', dupDeleteDone(res.deleted));
@@ -2022,7 +2049,7 @@ async function submitRowTask(): Promise<void> {
   await withBusy('m-btn-row-go', t('busy.deleting'), async () => {
     try {
       if (task.kind === 'delete') {
-        await send({ command: MessageCommand.DeleteRemoteSync });
+        await send({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: task.sync.serviceUrl, syncId: task.sync.syncId } });
         if (!rowDialog.isOpen || rowDialog.token !== token) return;
         rowDialog.close();
         showResult('m-syncs-result', DeleteRemoteDone());
@@ -2384,6 +2411,11 @@ async function init(): Promise<void> {
   browser.storage.onChanged.addListener((changes) => {
     if (StoreKey.UiLanguage in changes) location.reload();
     if ('syncEnabled' in changes || 'syncInfo' in changes) {
+      const change = changes[StoreKey.SyncInfo];
+      const oldInfo = change?.oldValue as { id?: string; serviceUrl?: string } | undefined;
+      const newInfo = change?.newValue as { id?: string; serviceUrl?: string } | undefined;
+      if (oldInfo?.id !== newInfo?.id || oldInfo?.serviceUrl !== newInfo?.serviceUrl ||
+          (StoreKey.SyncEnabled in changes && changes[StoreKey.SyncEnabled].newValue !== true)) invalidateSyncTasks();
       connectQr?.close();
       void refreshStatus();
     }

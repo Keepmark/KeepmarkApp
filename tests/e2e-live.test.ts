@@ -216,7 +216,7 @@ async function coreBody(): Promise<void> {
     const newDerived = await deriveKey(next, id, SyncClientVersion);
     expect(JSON.parse(await decryptData(blob!, newDerived))).toBeTruthy();
 
-    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
+    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: URL, syncId: id } });
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);
     await expect(liveApi().getBookmarksV12(id)).rejects.toBeInstanceOf(SyncNotFoundException);
 }

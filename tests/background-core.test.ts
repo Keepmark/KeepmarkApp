@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { XSyncApiClient } from '../src/shared/api';
-import { deriveKey, encryptData } from '../src/shared/crypto';
+import { decryptData, deriveKey, encryptData } from '../src/shared/crypto';
 import { SyncClientVersion } from '../src/shared/constants';
 import { BookmarkContainer } from '../src/shared/bookmarks';
 import type { BookmarkNode } from '../src/shared/models';
@@ -326,7 +326,7 @@ describe('background core', () => {
       if (String(key).startsWith('safety')) throw new Error('disk full');
       return original(key, value);
     };
-    await core.startup();
+    await expect(core.startup()).rejects.toThrow('disk full');
     expect((await mockApi.getChildren('toolbar_____')).map((n) => n.title)).toEqual(['Stale']);
     expect(await store.get(StoreKey.SyncBookmarksToolbar)).toBe(false);
   });
@@ -696,6 +696,7 @@ describe('background core', () => {
     // The locked newest copy survives even a hostile request naming it.
     const refused = (await core.handleMessage({
       command: MessageCommand.RemoveDuplicates,
+      target: { serviceUrl: 'https://x.test/', syncId: SYNC_ID },
       ids: [victim, lockedId],
     })) as { deleted: number; safety: string };
     expect(refused.deleted).toBe(1);
@@ -1423,10 +1424,70 @@ describe('background core v1.2', () => {
     expect(safeties.some((s) => s.operation === 'sync-push')).toBe(false);
   });
 
+  it('rejects absent or stale identities before deleting a server sync', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    for (const target of [undefined, { serviceUrl: 'https://x.test/', syncId: 'previous-sync' },
+      { serviceUrl: 'https://another.test/', syncId: SYNC_ID }]) {
+      // Missing target simulates an older page or a crafted runtime message.
+      await expect(core.handleMessage({ command: MessageCommand.DeleteRemoteSync, target } as never)).rejects.toThrow();
+    }
+    expect(state.deleted).toEqual([]);
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
+  });
+
+  it('duplicate cleanup refuses stale identities and cannot remove unique bookmarks or folders', async () => {
+    const state = baseState();
+    const { core, store } = await linkedCore(state);
+    const target = { serviceUrl: 'https://x.test/', syncId: SYNC_ID };
+    await expect(core.handleMessage({ command: MessageCommand.RemoveDuplicates, ids: [1],
+      target: { ...target, syncId: 'previous-sync' } })).rejects.toThrow();
+    const info = await store.get<{ password: string }>(StoreKey.SyncInfo);
+    const before = JSON.parse(await decryptData((await store.get<string>(StoreKey.Bookmarks))!, info!.password));
+    const ids: number[] = [];
+    const collect = (nodes: BookmarkNode[]): void => {
+      for (const node of nodes) { if (node.id !== undefined) ids.push(node.id); if (node.children) collect(node.children); }
+    };
+    collect(before);
+    const res = await core.handleMessage({ command: MessageCommand.RemoveDuplicates, ids, target });
+    expect(res).toEqual({ deleted: 0, safety: '' });
+    expect(JSON.parse(await decryptData((await store.get<string>(StoreKey.Bookmarks))!, info!.password))).toEqual(before);
+  });
+
+  it('holds the credential gate while server deletion is awaiting its capability probe', async () => {
+    const state = v12State();
+    const { core, store } = await linkedV12Core(state);
+    const internal = core as unknown as { makeApi: (url: string) => XSyncApiClient };
+    const originalFactory = internal.makeApi;
+    let release!: () => void;
+    const held = new Promise<void>(r => { release = r; });
+    let probing!: () => void;
+    const started = new Promise<void>(r => { probing = r; });
+    internal.makeApi = (url) => {
+      const api = originalFactory(url);
+      const originalProbe = api.getInfoV12.bind(api);
+      api.getInfoV12 = async () => { probing(); await held; return originalProbe(); };
+      return api;
+    };
+    const deleting = core.handleMessage({ command: MessageCommand.DeleteRemoteSync,
+      target: { serviceUrl: 'https://x.test/', syncId: SYNC_ID } });
+    await started;
+    for (const message of [
+      { command: MessageCommand.ConnectNew, serviceUrl: 'https://other.test/', password: PASSWORD },
+      { command: MessageCommand.ActivateSavedSync, serviceUrl: 'https://other.test/', syncId: 'other' },
+      { command: MessageCommand.DisableSync },
+      { command: MessageCommand.RemoveSavedSync, serviceUrl: 'https://x.test/', syncId: SYNC_ID },
+    ]) await expect(core.handleMessage(message as never)).rejects.toThrow();
+    expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
+    release();
+    await deleting;
+    expect(state.deleted).toEqual([SYNC_ID]);
+  });
+
   it('delete on legacy is refused before touching anything', async () => {
     const state = baseState();
     const { core, store, ports } = await linkedCore(state);
-    await expect(core.handleMessage({ command: MessageCommand.DeleteRemoteSync })).rejects.toThrow(
+    await expect(core.handleMessage({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: 'https://x.test/', syncId: SYNC_ID } })).rejects.toThrow(
       /Not supported \(requires service v1\.2\)/,
     );
     expect(ports.downloads).toHaveLength(0);
@@ -1437,7 +1498,7 @@ describe('background core v1.2', () => {
   it('delete on v1.2 deletes, unlinks, keeps natives and leaves no copy', async () => {
     const state = v12State();
     const { core, store, ports, mockApi, derived } = await linkedV12Core(state);
-    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
+    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: 'https://x.test/', syncId: SYNC_ID } });
     // A deliberate deletion keeps nothing: no download, no safety entry, no
     // plaintext RemovedSync copy, no notification (the manager reports it).
     expect(ports.downloads).toHaveLength(0);
@@ -2024,7 +2085,7 @@ describe('saved syncs registry lifecycle', () => {
     const state = v12State();
     const { core, store } = await linkedV12Core(state);
     expect(await store.get(StoreKey.SavedSyncs)).toHaveLength(1);
-    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync });
+    await core.handleMessage({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: 'https://x.test/', syncId: SYNC_ID } });
     expect(state.deleted).toContain(SYNC_ID);
     expect(await store.get(StoreKey.SavedSyncs)).toEqual([]);
     expect(await store.get(StoreKey.SyncEnabled)).toBe(false);

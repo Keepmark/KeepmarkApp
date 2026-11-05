@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { MessageCommand } from '../src/shared/messages';
 
-const harness = vi.hoisted(() => ({ send: vi.fn() }));
+const harness = vi.hoisted(() => ({ send: vi.fn(), storageListener: vi.fn() }));
 vi.mock('webextension-polyfill', () => ({ default: {
-  storage: { onChanged: { addListener: vi.fn() } },
+  storage: { onChanged: { addListener: (listener: unknown) => harness.storageListener.mockImplementation(listener as never) } },
 } }));
 vi.mock('../src/manager/connect-qr', () => ({ ConnectQrController: class {
   close() {} updateStatus() {}
@@ -452,4 +452,35 @@ it('asks once before dismissing the kept copy, then hides the card', async () =>
   el('m-btn-removed-dismiss-yes').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.ClearRemovedSync)).toHaveLength(1);
   expect(el('m-removed-card').hidden).toBe(true);
+});
+
+it('closes a stale server-delete dialog when another page switches sync', async () => {
+  el('m-syncs-delete-0').click(); await settle();
+  expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(true);
+  harness.storageListener({ syncInfo: { oldValue: { id: 'old', serviceUrl: 'https://old.test' },
+    newValue: { id: 'other', serviceUrl: 'https://other.test' } } });
+  await settle();
+  expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(false);
+  el('m-btn-row-go').click(); await settle();
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.DeleteRemoteSync)).toBe(false);
+});
+
+it('clears duplicate selections when another page activates a different sync', async () => {
+  const previous = harness.send.getMockImplementation()!;
+  harness.send.mockImplementation(async (msg) => msg.command === MessageCommand.GetDuplicates ?
+    [{ url: 'https://duplicate.test', entries: [
+      { id: 1, title: 'First', path: '', url: 'https://duplicate.test' },
+      { id: 2, title: 'Second', path: '', url: 'https://duplicate.test' },
+    ] }] : previous(msg));
+  (document.querySelector('#sidebar button[data-section="duplicates"]') as HTMLButtonElement).click();
+  await settle();
+  expect(el('m-dup-list').querySelectorAll('.dup-group')).toHaveLength(1);
+  expect((el('m-btn-duplicates-delete-all') as HTMLButtonElement).disabled).toBe(false);
+  harness.storageListener({ syncInfo: { oldValue: { id: 'old', serviceUrl: 'https://old.test' },
+    newValue: { id: 'other', serviceUrl: 'https://other.test' } } });
+  await settle();
+  expect(el('m-dup-list').children).toHaveLength(0);
+  expect((el('m-btn-duplicates-delete-all') as HTMLButtonElement).disabled).toBe(true);
+  el('m-btn-duplicates-delete-all').click(); await settle();
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.RemoveDuplicates)).toBe(false);
 });

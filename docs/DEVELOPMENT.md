@@ -263,3 +263,13 @@ linking or writing preferences. Background connect/create/move completion alone
 remembers custom services. The UI uses a generation token and exact checked URL
 to ignore stale results; new/existing mode also gates NoNewSyncs. The normal URL
 policy remains HTTPS, with HTTP loopback for local development/QA.
+
+### Destructive actions and active sync identity
+
+Manager server deletion and duplicate cleanup send the reviewed `{serviceUrl, syncId}`
+identity. The background rejects a missing or mismatched identity before any mutation
+and holds the credential-change gate through validation and completion. Duplicate
+scans bind to that same identity; a storage identity change clears their selection,
+cancels inline confirmations, and closes row/password dialogs. Cleanup additionally
+intersects requested IDs with the current duplicate groups (preserving their newest
+copy), so unique bookmarks and folders can never be deleted through this command.
