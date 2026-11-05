@@ -139,22 +139,22 @@ wizard the same QR button sits before the manual target credentials.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/img/screens/01-sync.png" width="49%" alt="Popup and sync status" />
-  <img src="docs/img/screens/02-syncs.png" width="49%" alt="Several saved syncs: Home active, Work and Family inactive" />
+  <img src="docs/img/screens/01-syncs.png" width="49%" alt="Several saved syncs: Home active, Work and Family one click away" />
+  <img src="docs/img/screens/02-safety.png" width="49%" alt="Safety backups grouped by day, with sync name and change counts" />
 </p>
 
 <p align="center">
   <img src="docs/img/screens/03-conflict.png" width="49%" alt="Conflict choice with merge preview" />
-  <img src="docs/img/screens/04-duplicates.png" width="49%" alt="Duplicate cleanup" />
+  <img src="docs/img/screens/04-private.png" width="49%" alt="Connect a browser: the password stays on the device" />
 </p>
 
 <p align="center">
-  <img src="docs/img/screens/05-dark.png" width="49%" alt="Dark theme" />
-  <img src="docs/img/screens/06-private.png" width="49%" alt="Connect a browser: the password stays on the device" />
+  <img src="docs/img/screens/05-phone.png" width="49%" alt="Connection QR for linking the phone" />
+  <img src="docs/img/screens/06-duplicates.png" width="49%" alt="Duplicate cleanup" />
 </p>
 
 <p align="center">
-  <img src="docs/img/screens/07-phone.png" width="49%" alt="Connection QR for linking the phone" />
+  <img src="docs/img/screens/07-dark.png" width="49%" alt="Dark theme" />
 </p>
 
 ## The Keepmark family
