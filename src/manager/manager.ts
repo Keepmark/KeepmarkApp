@@ -27,7 +27,7 @@ import {
   initI18n,
 } from '../popup/ui.js';
 import { StoreKey } from '../shared/store.js';
-import { displayPath, formatDateTime, t, tn, type MessageKey } from '../shared/i18n.js';
+import { displayPath, formatDate, formatDateTime, formatTime, t, tn, type MessageKey } from '../shared/i18n.js';
 import type { LangSetting } from '../shared/i18n.js';
 import { cancelAllConfirms, cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import { TaskDialog } from '../popup/modal.js';
@@ -490,7 +490,25 @@ function showResult(id: string, text: string): void {
 }
 
 function initBackupSection(): void {
+  exportDialog = new TaskDialog($('m-export-dialog') as HTMLDialogElement, { onClose: resetExport });
+  importDialog = new TaskDialog($('m-import-dialog') as HTMLDialogElement, { onClose: resetImport });
+  // The forms only group the fields: Enter runs the step, never a page submit.
+  for (const id of ['m-export-form', 'm-import-form']) {
+    $(id).addEventListener('submit', (e) => e.preventDefault());
+  }
+  $('m-btn-export-open').addEventListener('click', () => {
+    clearMessages();
+    resetExport();
+    exportDialog.open($('m-btn-export-open'), input('m-backup-password'));
+  });
   $('m-btn-export').addEventListener('click', () => void exportBackup());
+  $('m-btn-export-cancel').addEventListener('click', () => exportDialog.close());
+  for (const id of ['m-backup-password', 'm-backup-confirm']) {
+    input(id).addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') void exportBackup();
+    });
+  }
+  $('m-btn-import-cancel').addEventListener('click', () => importDialog.close());
   // Choose file and verify its password, then apply directly from the review.
   // Choosing another file always invalidates the review.
   $('m-btn-import').addEventListener('click', () => {
@@ -503,14 +521,13 @@ function initBackupSection(): void {
     const file = (e.target as HTMLInputElement).files?.[0];
     backToPasswordStep();
     if (!file) return;
-    if (file.size > MaxBackupBytes) {
-      resetImport();
-      showError('backup-error-2', t('mgr.backup.tooLarge'));
-      return;
-    }
     $('m-import-file-name').textContent = file.name;
-    ($('m-import-step') as HTMLElement).hidden = false;
-    input('m-import-password').focus();
+    const tooLarge = file.size > MaxBackupBytes;
+    // The dialog opens either way: a refused file says why inside the task,
+    // with only Cancel left (the step stays hidden).
+    ($('m-import-step') as HTMLElement).hidden = tooLarge;
+    importDialog.open($('m-btn-import'), tooLarge ? $('m-btn-import-cancel') : input('m-import-password'));
+    if (tooLarge) showError('backup-error-2', t('mgr.backup.tooLarge'));
   });
   $('m-btn-import-check').addEventListener('click', () => void checkImport());
   input('m-import-password').addEventListener('keydown', (e) => {
@@ -545,8 +562,7 @@ async function exportBackup(): Promise<void> {
       const activeRow = registry?.syncs.find((row) => isActiveSavedSync(row, registry.active));
       const filename = backupFileName(activeRow ? savedSyncName(activeRow) : undefined, new Date());
       await send({ command: MessageCommand.DownloadFile, filename, text: json });
-      input('m-backup-password').value = '';
-      input('m-backup-confirm').value = '';
+      exportDialog.close();
       showResult('backup-result', exportDone(filename));
     } catch (err) {
       showError('backup-error', (err as Error).message);
@@ -609,7 +625,7 @@ async function confirmImport(): Promise<void> {
         json: await file.text(),
         password: pending.password,
       });
-      resetImport();
+      importDialog.close();
       showResult('backup-result-2', importDone(res.count));
       await refreshSafety();
     } catch (err) {
@@ -620,6 +636,18 @@ async function confirmImport(): Promise<void> {
     }
   });
 }
+
+/** Export task closed or reopened: never keep a typed password around. */
+function resetExport(): void {
+  input('m-backup-password').value = '';
+  input('m-backup-confirm').value = '';
+  const box = $('backup-error');
+  box.textContent = '';
+  box.hidden = true;
+}
+
+let exportDialog: TaskDialog;
+let importDialog: TaskDialog;
 
 /** Back to step 1: forget file, password and check. */
 function resetImport(): void {
@@ -664,7 +692,81 @@ const SafetyOperations: Record<string, MessageKey> = {
   'merge-remote': 'mgr.safety.op.mergeRemote',
   'sync-pull': 'mgr.safety.op.syncPull',
   'sync-push': 'mgr.safety.op.syncPush',
+  'conflict-pull': 'mgr.safety.op.conflictPull',
+  'conflict-push': 'mgr.safety.op.conflictPush',
+  'conflict-merge': 'mgr.safety.op.conflictMerge',
+  'toolbar-adopt': 'mgr.safety.op.toolbarAdopt',
 };
+
+/** Day heading for the safety list: Today / Yesterday / a localized date. */
+function safetyDayLabel(iso: string, now = new Date()): string {
+  const day = new Date(iso);
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((start(now) - start(day)) / 86_400_000);
+  if (diff === 0) return t('mgr.safety.today');
+  if (diff === 1) return t('mgr.safety.yesterday');
+  return formatDate(day, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/** One safety backup as a card: what happened, when, to which sync, what changed. */
+function safetyCard(entry: SafetyEntry, index: number): HTMLLIElement {
+  const li = el('li', 'safety-item');
+  const opKey = SafetyOperations[entry.operation];
+  const head = el('div', 'safety-head');
+  head.append(
+    el('strong', 'safety-title', opKey ? t(opKey) : entry.operation),
+    el('time', 'safety-time', formatTime(entry.createdAtUtc, { hour: '2-digit', minute: '2-digit' })),
+  );
+  head.querySelector('time')?.setAttribute('datetime', entry.createdAtUtc);
+  li.append(head);
+
+  if (entry.added || entry.removed) {
+    const changes = el('div', 'safety-changes');
+    if (entry.added) changes.append(el('span', 'tag ok', t('mgr.safety.added', { count: entry.added })));
+    if (entry.removed) changes.append(el('span', 'tag warn', t('mgr.safety.removed', { count: entry.removed })));
+    li.append(changes);
+  }
+
+  // The sync: its saved name when known, the short ID (never the full one).
+  const sync = el('div', 'safety-sync');
+  const noSync = !entry.syncId || entry.syncId === '…';
+  if (noSync) sync.append(el('span', 'safety-sync-name', t('mgr.safety.noSync')));
+  else {
+    if (entry.syncName) sync.append(el('span', 'safety-sync-name', entry.syncName));
+    sync.append(el('code', 'safety-sync-id', entry.syncId));
+  }
+  li.append(sync);
+
+  const side = entry.side === 'local' ? t('mgr.safety.sideLocal') : t('mgr.safety.sideRemote');
+  const meta = el('div', 'safety-meta');
+  meta.append(
+    el('span', '', tn('mgr.safety.meta', entry.items, { side, size: formatBytes(entry.sizeBytes) })),
+    el('span', entry.enc ? 'tag ok' : 'tag', entry.enc ? t('mgr.safety.encrypted') : t('mgr.safety.notEncrypted')),
+  );
+  li.append(meta);
+
+  const actions = el('div', 'safety-actions');
+  const restore = el('button', 'mini', t('mgr.safety.restoreBtn'));
+  restore.type = 'button';
+  restore.setAttribute('aria-label', t('mgr.safety.restoreAria', { fileName: entry.fileName }));
+  restore.id = `safety-restore-${index}`;
+  restore.addEventListener('click', () => void restoreSafety(entry, restore.id));
+  const del = el('button', 'mini danger', t('mgr.safety.deleteBtn'));
+  del.type = 'button';
+  del.setAttribute('aria-label', t('mgr.safety.deleteAria', { fileName: entry.fileName }));
+  del.id = `safety-delete-${index}`;
+  del.addEventListener('click', () => void deleteSafety(entry, del.id));
+  actions.append(restore, del);
+  li.append(actions);
+  return li;
+}
 
 /** Items in a whole tree (folders included), for the kept-copy count. */
 function countTree(nodes: BookmarkNode[]): number {
@@ -752,37 +854,19 @@ async function refreshSafety(): Promise<void> {
     box.append(p);
     return;
   }
-  const ul = document.createElement('ul');
+  // Newest first, grouped by day; ids stay the index in the backend order.
+  let group: HTMLUListElement | undefined;
+  let label = '';
   for (const [index, entry] of entries.entries()) {
-    const li = document.createElement('li');
-    const when = formatDateTime(entry.createdAtUtc);
-    const opKey = SafetyOperations[entry.operation];
-    const what = opKey ? t(opKey) : entry.operation;
-    const side = entry.side === 'local' ? t('mgr.safety.sideLocal') : t('mgr.safety.sideRemote');
-    li.textContent = tn('mgr.safety.line', entry.items, {
-      when,
-      what,
-      side,
-      size: formatBytes(entry.sizeBytes),
-      syncId: entry.syncId,
-      enc: entry.enc ? t('mgr.safety.encrypted') : t('mgr.safety.notEncrypted'),
-    });
-    const restore = document.createElement('button');
-    restore.textContent = t('mgr.safety.restoreBtn');
-    restore.className = 'mini';
-    restore.setAttribute('aria-label', t('mgr.safety.restoreAria', { fileName: entry.fileName }));
-    restore.id = `safety-restore-${index}`;
-    restore.addEventListener('click', () => void restoreSafety(entry, restore.id));
-    const del = document.createElement('button');
-    del.textContent = t('mgr.safety.deleteBtn');
-    del.className = 'mini danger';
-    del.setAttribute('aria-label', t('mgr.safety.deleteAria', { fileName: entry.fileName }));
-    del.id = `safety-delete-${index}`;
-    del.addEventListener('click', () => void deleteSafety(entry, del.id));
-    li.append(restore, ' ', del);
-    ul.append(li);
+    const day = safetyDayLabel(entry.createdAtUtc);
+    if (!group || day !== label) {
+      label = day;
+      box.append(el('h4', 'safety-day', day));
+      group = el('ul', 'safety-list');
+      box.append(group);
+    }
+    group.append(safetyCard(entry, index));
   }
-  box.append(ul);
 }
 
 async function restoreSafety(entry: SafetyEntry, anchorId: string): Promise<void> {

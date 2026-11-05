@@ -131,6 +131,15 @@ export function diffTrees(local: BookmarkNode[], remote: BookmarkNode[], sampleS
  * The roots themselves are skipped: their titles are browser-localized.
  */
 export function changedNodeCount(a: BookmarkNode[], b: BookmarkNode[]): number {
+  const { added, removed } = changeCounts(a, b);
+  return added + removed;
+}
+
+/** Same measure split by direction, from `before` to `after`: bookmarks and
+ *  folders `after` adds, and those it drops. A move counts once each way. */
+export function changeCounts(before: BookmarkNode[], after: BookmarkNode[]): { added: number; removed: number } {
+  const a = before;
+  const b = after;
   const bucket = (tree: BookmarkNode[]): Map<string, number> => {
     const out = new Map<string, number>();
     const add = (parent: string, key: string): void => {
@@ -155,9 +164,12 @@ export function changedNodeCount(a: BookmarkNode[], b: BookmarkNode[]): number {
   };
   const left = bucket(a);
   const right = bucket(b);
-  let magnitude = 0;
+  let added = 0;
+  let removed = 0;
   for (const key of new Set([...left.keys(), ...right.keys()])) {
-    magnitude += Math.abs((left.get(key) ?? 0) - (right.get(key) ?? 0));
+    const delta = (right.get(key) ?? 0) - (left.get(key) ?? 0);
+    if (delta > 0) added += delta;
+    else removed -= delta;
   }
-  return magnitude;
+  return { added, removed };
 }

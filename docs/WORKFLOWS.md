@@ -91,7 +91,7 @@ immediately before `Save`.
 | Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
 | Change password | yes | Syncs → `Change password` on the active sync's row → Current, New, Confirm new → `Change password` | one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. The long password belongs to the sync, so this is a row action in Syncs, never a Settings section, and the sync lock is not asked again: the saved key is re-wrapped under the previous one. |
-| Backup: export | no | Backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
+| Backup: export | no | Backup → `Export…` (opens a task dialog) → backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
@@ -146,8 +146,11 @@ immediately before `Save`.
   the password, and the service check and merge preview run again. Android has
   no resumable wizard.
 - Recovery (extension): there is no "last action / undo" banner. What a
-  destructive step replaced is listed in Backup → Safety backups, with the
-  operation named in words and its date. The popup carries no backup or restore
+  destructive step replaced is listed in Backup → Safety backups, grouped by
+  day, each entry with the operation named in words, its time, the sync it
+  belongs to (saved name + short ID), how many items it added/removed when the
+  writer knew the before/after trees (large syncs, conflicts, duplicates
+  cleanup), side, size and encryption. The popup carries no backup or restore
   panel: it shows status and `Sync now`, and `Manage` opens the place where
   those live.
 

@@ -101,32 +101,23 @@
 
       <section id="sec-backup" hidden>
         <h2 data-i18n="manager.nav.backup">Backup</h2>
-        <h3 data-i18n="manager.backup.export">Export</h3>
-        <p class="hint" data-i18n="manager.backup.exportHint">Save this browser's bookmarks to an encrypted file in your downloads. Choose a backup
-          password of at least 8 characters. It is not your sync password and cannot be recovered: without it the
-          file cannot be opened.</p>
-        <label><span data-i18n="manager.backup.password">Backup password</span> <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
-        <label><span data-i18n="manager.backup.confirm">Confirm backup password</span> <input id="m-backup-confirm" type="password" autocomplete="new-password" /></label>
-        <div class="row"><button id="m-btn-export" data-i18n="manager.backup.exportBtn">Export encrypted backup</button></div>
-        <div id="backup-error" class="error" role="alert" hidden></div>
+        <!-- Two compact actions: each opens its own task dialog for the
+             parameters (password, file), so the page stays a short overview. -->
+        <div class="backup-actions">
+          <div class="backup-action">
+            <h3 data-i18n="manager.backup.export">Export</h3>
+            <p class="hint" data-i18n="manager.backup.exportShort">An encrypted file protected by a password you choose.</p>
+            <button id="m-btn-export-open" data-i18n="manager.backup.exportOpen">Export…</button>
+          </div>
+          <div class="backup-action">
+            <h3 data-i18n="manager.backup.restore">Restore from a backup file</h3>
+            <p class="hint" data-i18n="manager.backup.restoreShort">Replaces the bookmarks here and on the server. The current ones go to Safety backups first.</p>
+            <p class="notice needs-link-notice" hidden data-i18n="manager.backup.restoreNeedsLink">Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
+            <button id="m-btn-import" data-needs-link data-i18n="manager.backup.chooseFile">Choose backup file…</button>
+            <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" data-i18n-aria-label="manager.backup.fileLabel" hidden />
+          </div>
+        </div>
         <div id="backup-result" class="result" hidden></div>
-
-        <h3 data-i18n="manager.backup.restore">Restore from a backup file</h3>
-        <p class="hint" data-i18n="manager.backup.restoreHint">Replaces this browser's bookmarks and the server copy; your other devices get the backup at
-          their next sync. The current bookmarks are saved to Safety backups first.</p>
-        <p class="notice needs-link-notice" hidden data-i18n="manager.backup.restoreNeedsLink">Restoring a backup needs a linked sync: it is uploaded right after. Connect from the Keepmark popup first.</p>
-        <div class="row">
-          <button id="m-btn-import" data-needs-link data-i18n="manager.backup.chooseFile">Choose backup file…</button>
-          <span id="m-import-file-name" class="hint"></span>
-          <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" data-i18n-aria-label="manager.backup.fileLabel" hidden />
-        </div>
-        <div id="m-import-step" hidden>
-          <label><span data-i18n="manager.backup.filePassword">Password of this backup</span> <input id="m-import-password" type="password" autocomplete="off" /></label>
-          <div class="row"><button id="m-btn-import-check" class="primary" data-i18n="manager.backup.check">Check backup</button></div>
-        </div>
-        <div id="m-import-preview" class="preview" hidden></div>
-        <div id="m-import-confirm-row" class="row" hidden><button id="m-btn-import-confirm" class="danger" data-i18n="manager.backup.replace">Replace with this backup…</button></div>
-        <div id="backup-error-2" class="error" role="alert" hidden></div>
         <div id="backup-result-2" class="result" hidden></div>
 
         <h3 data-i18n="manager.backup.safety">Safety backups</h3>
@@ -434,6 +425,39 @@
     </dialog>
     <!-- Change the active sync's password: the task owns the fields, states the
          consequence above them, and proves the sync lock when one is set. -->
+    <dialog id="m-export-dialog" class="task" aria-labelledby="m-export-title" hidden>
+      <h2 id="m-export-title" data-i18n="manager.backup.export">Export</h2>
+      <form id="m-export-form" autocomplete="off">
+        <p class="hint" data-i18n="manager.backup.exportHint">Save this browser's bookmarks to an encrypted file in your downloads. Choose a backup
+          password of at least 8 characters. It is not your sync password and cannot be recovered: without it the
+          file cannot be opened.</p>
+        <label><span data-i18n="manager.backup.password">Backup password</span> <input id="m-backup-password" type="password" autocomplete="new-password" /></label>
+        <label><span data-i18n="manager.backup.confirm">Confirm backup password</span> <input id="m-backup-confirm" type="password" autocomplete="new-password" /></label>
+        <div class="row">
+          <button id="m-btn-export" class="primary" type="button" data-i18n="manager.backup.exportBtn">Export encrypted backup</button>
+          <button id="m-btn-export-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="backup-error" class="error" role="alert" hidden></div>
+      </form>
+    </dialog>
+    <dialog id="m-import-dialog" class="task" aria-labelledby="m-import-title" hidden>
+      <h2 id="m-import-title" data-i18n="manager.backup.restore">Restore from a backup file</h2>
+      <p class="hint"><strong id="m-import-file-name"></strong></p>
+      <p class="hint" data-i18n="manager.backup.restoreHint">Replaces this browser's bookmarks and the server copy; your other devices get the backup at
+        their next sync. The current bookmarks are saved to Safety backups first.</p>
+      <form id="m-import-form" autocomplete="off">
+        <div id="m-import-step">
+          <label><span data-i18n="manager.backup.filePassword">Password of this backup</span> <input id="m-import-password" type="password" autocomplete="off" /></label>
+          <div class="row"><button id="m-btn-import-check" class="primary" type="button" data-i18n="manager.backup.check">Check backup</button></div>
+        </div>
+        <div id="m-import-preview" class="preview" hidden></div>
+        <div class="row">
+          <span id="m-import-confirm-row" hidden><button id="m-btn-import-confirm" class="danger" type="button" data-i18n="manager.backup.replace">Replace with this backup…</button></span>
+          <button id="m-btn-import-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <div id="backup-error-2" class="error" role="alert" hidden></div>
+      </form>
+    </dialog>
     <dialog id="m-pw-dialog" class="task" aria-labelledby="m-pw-title" hidden>
       <h2 id="m-pw-title" data-i18n="manager.settings.changePw">Change password</h2>
       <p class="hint" id="m-pw-target"></p>

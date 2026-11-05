@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedNodeCount, contentKey, diffTrees, sameContent } from '../src/shared/tree-diff';
+import { changeCounts, changedNodeCount, contentKey, diffTrees, sameContent } from '../src/shared/tree-diff';
 import type { BookmarkNode } from '../src/shared/models';
 
 const bm = (id: number, title: string, url: string, extra: Partial<BookmarkNode> = {}): BookmarkNode => ({ id, title, url, ...extra });
@@ -84,5 +84,10 @@ describe('changedNodeCount', () => {
 
   it('a wipe counts every removed node', () => {
     expect(changedNodeCount(loose(12), loose(0))).toBe(12);
+  });
+
+  it('splits the count into added and removed', () => {
+    expect(changeCounts(loose(3), loose(5))).toEqual({ added: 2, removed: 0 });
+    expect(changeCounts(loose(12), loose(0))).toEqual({ added: 0, removed: 12 });
   });
 });

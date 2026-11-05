@@ -20,6 +20,7 @@ import { sanitizeSyncId } from './logging.js';
 import type { BookmarkNode } from './models.js';
 import { safetyFileKey, Store, StoreKey } from './store.js';
 import { t } from './i18n.js';
+import { sanitizeSavedSyncs, savedSyncName, type SavedSync } from './saved-syncs.js';
 
 /** Destroyed side a snapshot was taken from. */
 export type SafetySide = 'local' | 'remote';
@@ -65,6 +66,13 @@ export interface SafetyEntry {
   enc: 'derived' | null;
   /** Key id the payload is encrypted under (enc === 'derived' only). */
   keyId?: string;
+  /** Display name of the sync (label or host) when the snapshot was taken;
+   *  the list prefers the current name of a still-saved sync. */
+  syncName?: string;
+  /** What the operation changed, when the writer measured it (massive
+   *  syncs): bookmarks/folders the new side adds and drops. */
+  added?: number;
+  removed?: number;
 }
 
 /** Newest entries kept; older pruned automatically (payload + row together). */
@@ -99,6 +107,36 @@ async function uniqueName(store: Store, base: string, taken: Set<string>): Promi
   return `${stem}-${n}.json`;
 }
 
+/** Name of the saved sync with this full ID, if the registry has it. Never
+ *  fails the snapshot: a broken registry only loses the label. */
+async function savedNameFor(store: Store, syncId: string | undefined): Promise<string | undefined> {
+  if (!syncId) return undefined;
+  try {
+    const rows = sanitizeSavedSyncs(await store.get<unknown>(StoreKey.SavedSyncs));
+    const row = rows.find((r) => r.syncId === syncId);
+    return row ? savedSyncName(row) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Rows with the current name of their sync: a saved sync whose truncated ID
+ *  matches exactly one row lends its (possibly renamed) name; otherwise the
+ *  name recorded at write time stays. */
+export async function listSafetyNamed(store: Store): Promise<SafetyEntry[]> {
+  const entries = await listSafety(store);
+  let rows: SavedSync[] = [];
+  try {
+    rows = sanitizeSavedSyncs(await store.get<unknown>(StoreKey.SavedSyncs));
+  } catch {
+    rows = [];
+  }
+  return entries.map((entry) => {
+    const matches = rows.filter((r) => sanitizeSyncId(r.syncId) === entry.syncId);
+    return matches.length === 1 ? { ...entry, syncName: savedSyncName(matches[0]!) } : entry;
+  });
+}
+
 export async function listSafety(store: Store): Promise<SafetyEntry[]> {
   const raw = await store.get<SafetyEntry[]>(StoreKey.SafetyIndex);
   if (!Array.isArray(raw)) return [];
@@ -131,6 +169,8 @@ export async function writeSafety(
     syncId?: string;
     /** Omitted pre-link → plaintext entry flagged enc:null. */
     derivedKey?: string;
+    /** Measured change, shown in the list ("+3 added · −40 removed"). */
+    changes?: { added: number; removed: number };
   },
 ): Promise<SafetyEntry> {
   validateTree(input.tree);
@@ -148,6 +188,7 @@ export async function writeSafety(
     payload = { app: SafetyApp, format: SafetyFormat, tree: input.tree };
     enc = null;
   }
+  const syncName = await savedNameFor(store, input.syncId);
   const taken = new Set((await listSafety(store)).map((e) => e.fileName));
   const fileName = await uniqueName(store, buildFileName(input.operation), taken);
   await store.set(safetyFileKey(fileName), payload);
@@ -161,6 +202,8 @@ export async function writeSafety(
     syncId: sanitizeSyncId(input.syncId),
     enc,
     ...(keyId ? { keyId } : {}),
+    ...(syncName ? { syncName } : {}),
+    ...(input.changes ? { added: input.changes.added, removed: input.changes.removed } : {}),
   };
   const next = [entry, ...(await listSafety(store))].sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
   const pruned = next.slice(0, SafetyRetention);

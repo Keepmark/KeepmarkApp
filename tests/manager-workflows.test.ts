@@ -401,6 +401,9 @@ it('restores a verified backup directly from its consequences without another pr
   const file = new File(['synthetic-backup'], 'backup.json');
   Object.defineProperty(el('m-import-file'), 'files', { value: [file], configurable: true });
   el('m-import-file').dispatchEvent(new Event('change'));
+  // Choosing the file opens the restore task with its name.
+  expect((el('m-import-dialog') as HTMLDialogElement).open).toBe(true);
+  expect(el('m-import-file-name').textContent).toBe('backup.json');
   field('m-import-password', 'backup-secret');
   harness.send.mockImplementation(async (msg) => {
     if (msg.command === MessageCommand.PreviewBackup) return { count: 12 };
@@ -415,6 +418,42 @@ it('restores a verified backup directly from its consequences without another pr
   el('m-btn-import-confirm').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.ImportBackup)).toHaveLength(1);
   expect(document.querySelector('#m-btn-import-confirm-confirm')).toBeNull();
+  expect((el('m-import-dialog') as HTMLDialogElement).open).toBe(false);
+  expect(el('backup-result-2').hidden).toBe(false);
+});
+
+it('exports from a task dialog and forgets the passwords on close', async () => {
+  el('m-btn-export-open').click();
+  expect((el('m-export-dialog') as HTMLDialogElement).open).toBe(true);
+  field('m-backup-password', 'export-secret');
+  el('m-btn-export-cancel').click();
+  expect((el('m-export-dialog') as HTMLDialogElement).open).toBe(false);
+  expect((el('m-backup-password') as HTMLInputElement).value).toBe('');
+});
+
+it('lists safety backups by day with sync name and change counts', async () => {
+  const now = new Date();
+  const earlier = new Date(now.getTime() - 3 * 86_400_000);
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSafetyList) {
+      return [
+        { fileName: 'a.json', createdAtUtc: now.toISOString(), operation: 'sync-push', side: 'remote', items: 40, sizeBytes: 2048, syncId: 'abcd…ef', enc: 'derived', syncName: 'Work', added: 14, removed: 2 },
+        { fileName: 'b.json', createdAtUtc: earlier.toISOString(), operation: 'import-backup', side: 'local', items: 1, sizeBytes: 100, syncId: '…', enc: null },
+      ];
+    }
+    return null;
+  });
+  el('m-btn-safety').click(); await settle();
+  const days = [...document.querySelectorAll('#m-safety-list .safety-day')].map((h) => h.textContent);
+  expect(days).toHaveLength(2);
+  expect(days[0]).toBe('Today');
+  const first = document.querySelector('#m-safety-list .safety-item')!;
+  expect(first.textContent).toContain('Work');
+  expect(first.textContent).toContain('abcd…ef');
+  expect(first.textContent).toContain('+14');
+  expect(first.textContent).toContain('2 removed');
+  expect(el('safety-restore-1')).toBeTruthy();
+  expect(document.querySelectorAll('.safety-item')[1]!.textContent).toContain('No sync linked');
 });
 
 const removedSnapshot = {

@@ -247,8 +247,9 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   and multi-action sections, each action cluster gets its own adjacent error
   box (`<base>-error`, `<base>-error-2`, …) instead of one top-of-section box
   the user must scroll to find. E.g. add-sync wizard step 1 → `link-error`,
-  step 2 submit → `link-error-2`; backup export → `backup-error`, restore
-  from file → `backup-error-2`, safety list actions → `backup-error-3`;
+  step 2 submit → `link-error-2`; backup export → `backup-error` (inside
+  `m-export-dialog`), restore from file → `backup-error-2` (inside
+  `m-import-dialog`), safety list actions → `backup-error-3`;
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`;
   the manager's kept copy of a removed sync (Backup) → `removed-error`.
   Every box has class `error`, `role="alert"`, starts `hidden`, and is

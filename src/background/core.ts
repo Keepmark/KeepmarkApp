@@ -54,7 +54,7 @@ import type { BookmarkNode } from '../shared/models.js';
 import { validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer, type NativeNode } from '../shared/bookmarks.js';
-import { changedNodeCount } from '../shared/tree-diff.js';
+import { changeCounts } from '../shared/tree-diff.js';
 import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
 import { deleteByIds, getDuplicateGroups, planDuplicateDeletion } from '../shared/duplicates.js';
 import { mergeTrees, type MergeStats } from '../shared/merge.js';
@@ -66,6 +66,7 @@ import {
   readSafetyTree,
   rekeySafety,
   writeSafety,
+  listSafetyNamed,
   type SafetyEntry,
 } from '../shared/safety.js';
 import { BookmarkIdMapper } from '../shared/id-mapper.js';
@@ -379,7 +380,7 @@ export class BackgroundCore {
       case MessageCommand.PreviewBackup:
         return this.previewBackup(msg.json, msg.password);
       case MessageCommand.GetSafetyList:
-        return listSafety(this.store);
+        return listSafetyNamed(this.store);
       case MessageCommand.RestoreSafety:
         return this.restoreSafety(msg.fileName);
       case MessageCommand.DeleteSafety:
@@ -681,7 +682,8 @@ export class BackgroundCore {
     remote: BookmarkNode[],
     natives: BookmarkNode[],
   ): Promise<void> {
-    const magnitude = changedNodeCount(natives, remote);
+    const changes = changeCounts(natives, remote);
+    const magnitude = changes.added + changes.removed;
     if (magnitude <= MaxSilentSyncChanges) return;
     await writeSafety(this.store, {
       operation: 'sync-pull',
@@ -689,6 +691,7 @@ export class BackgroundCore {
       tree: natives,
       syncId: info.id,
       derivedKey: info.password,
+      changes,
     });
     this.log.log(
       XbsLogLevel.Warning,
@@ -713,7 +716,8 @@ export class BackgroundCore {
       // Cannot compare: the regular conflict path still protects the push.
       return;
     }
-    const magnitude = changedNodeCount(cached, next);
+    const changes = changeCounts(cached, next);
+    const magnitude = changes.added + changes.removed;
     if (magnitude <= MaxSilentSyncChanges) return;
     const fresh = await this.fetchRemote(api, info);
     await writeSafety(this.store, {
@@ -722,6 +726,7 @@ export class BackgroundCore {
       tree: fresh.tree,
       syncId: info.id,
       derivedKey: info.password,
+      changes,
     });
     this.log.log(
       XbsLogLevel.Warning,
@@ -1798,6 +1803,7 @@ export class BackgroundCore {
       tree: natives,
       syncId: info.id,
       derivedKey: info.password,
+      changes: { added: 0, removed: deleted },
     });
     const currentBlob = await this.store.get<string>(StoreKey.Bookmarks);
     await this.saveUndo({

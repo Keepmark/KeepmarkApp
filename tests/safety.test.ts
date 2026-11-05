@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { SyncClientVersion } from '../src/shared/constants';
 import { deriveKey } from '../src/shared/crypto';
 import type { BookmarkNode } from '../src/shared/models';
-import { MemoryBackend, safetyFileKey, Store } from '../src/shared/store';
+import { MemoryBackend, safetyFileKey, Store, StoreKey } from '../src/shared/store';
 import {
   buildFileName,
   deleteSafety,
   listSafety,
+  listSafetyNamed,
   pruneSafetyForSync,
   readSafetyTree,
   rekeySafety,
@@ -177,5 +178,40 @@ describe('safety backups', () => {
     expect(res).toEqual({ rekeyed: 1, skipped: [] });
     await expect(readSafetyTree(store, entry, next)).resolves.toEqual(tree);
     await expect(readSafetyTree(store, entry, derived)).rejects.toThrow(/locked to another/);
+  });
+
+  it('names the sync and keeps change counts', async () => {
+    const { store, derived } = await linked();
+    await store.set(StoreKey.SavedSyncs, [
+      { serviceUrl: 'https://api.example', syncId: SYNC_ID, label: 'Work', lastUsedAt: '2026-11-01T00:00:00Z' },
+    ]);
+    const entry = await writeSafety(store, {
+      operation: 'sync-pull',
+      side: 'local',
+      tree: structuredClone(tree),
+      syncId: SYNC_ID,
+      derivedKey: derived,
+      changes: { added: 12, removed: 3 },
+    });
+    expect(entry).toMatchObject({ syncName: 'Work', added: 12, removed: 3 });
+    // A rename shows on the list; the full sync ID is never stored in the row.
+    await store.set(StoreKey.SavedSyncs, [
+      { serviceUrl: 'https://api.example', syncId: SYNC_ID, label: 'Office', lastUsedAt: '2026-11-01T00:00:00Z' },
+    ]);
+    const [named] = await listSafetyNamed(store);
+    expect(named).toMatchObject({ syncName: 'Office', added: 12, removed: 3 });
+    expect(JSON.stringify(await listSafety(store))).not.toContain(SYNC_ID);
+  });
+
+  it('keeps the recorded name when the saved sync is gone', async () => {
+    const { store, derived } = await linked();
+    await store.set(StoreKey.SavedSyncs, [
+      { serviceUrl: 'https://api.example', syncId: SYNC_ID, label: 'Work', lastUsedAt: '2026-11-01T00:00:00Z' },
+    ]);
+    await writeSafety(store, { operation: 'take-remote', side: 'local', tree, syncId: SYNC_ID, derivedKey: derived });
+    await store.set(StoreKey.SavedSyncs, []);
+    const [named] = await listSafetyNamed(store);
+    expect(named?.syncName).toBe('Work');
+    expect(named?.added).toBeUndefined();
   });
 });
