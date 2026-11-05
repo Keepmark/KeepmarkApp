@@ -5,9 +5,8 @@
 <h1 align="center">Keepmark for browsers</h1>
 
 <p align="center">
-  <b>Your bookmarks in every browser, synced and end-to-end encrypted.</b><br />
-  Keep several syncs side by side and switch in a click. An independent
-  extension compatible with xBrowserSync.
+  <b>All your bookmark syncs in one browser: work, home, family.</b><br />
+  Switch in a click, end-to-end encrypted, and nothing is ever lost silently.
 </p>
 
 <p align="center">
@@ -24,14 +23,26 @@
 
 ---
 
-Keepmark keeps the same bookmarks on all your browsers and your phone.
-Everything is encrypted in the browser before it leaves: the service that
-stores your data sees only ciphertext; your password is never sent to the
-server. QR linking voluntarily transfers it from the browser to Android.
+Keepmark keeps your bookmarks in sync across browsers and your phone, and
+lets one browser hold **several independent syncs**. Work, home, a shared
+family collection, a test server: each keeps its own password and its own
+bookmarks, and you move between them in a click. Everything is encrypted
+before it leaves the browser, and every risky change leaves a way back.
 
-It works with **any xBrowserSync service** (the official one, a community
-host or your own) and with the official xBrowserSync apps. A sync created in
-Keepmark opens there, and the other way round. Nothing to migrate.
+## Why Keepmark
+
+- **Multi-sync, built in.** Several syncs saved side by side, exactly one
+  active, switched from the popup or the manager. The sync you leave is saved
+  first; a conflict or failed save stops the switch instead of losing edits.
+- **Private by design.** PBKDF2-SHA256 and AES-GCM run in the browser: the
+  server stores ciphertext only and never sees your password. No telemetry,
+  HTTPS-only services, no access to the pages you visit.
+- **Fault tolerant.** Before anything replaces your bookmarks Keepmark keeps
+  an encrypted safety backup, labelled with the sync it belongs to and how
+  many items changed. Conflicts are never resolved behind your back, and a
+  sync that disappears from its server leaves you a copy.
+- **One scan to your phone.** The manager shows a connection QR; Keepmark for
+  Android reads it and links the same sync without typing anything.
 
 ## Several syncs, one active
 
@@ -52,29 +63,44 @@ password and bookmarks, exactly one is active, and switching is a click.
   creates no extra safety backup: the outgoing sync stays on its own server. An
   optional short **sync lock password** (a PIN is fine) can gate adding and
   switching, without ever asking again for the syncs' own long passwords.
-- **Stay in control of the list**: rename a sync, unlink it (the server copy
-  stays untouched), link it again later with its sync ID and password, or
-  delete it from the server when the service speaks API v1.2.
+- **A clean list.** Each saved sync shows **Activate** first; rarer commands
+  (rename, Show QR, change password) sit in the row's **⋮** menu,
+  with unlinking and server deletion kept apart at the bottom.
+- **Stay in control**: unlink a sync (the server copy stays untouched), link
+  it again later with its sync ID and password, or delete it from the server
+  when the service supports it.
 - **One phone, any sync**: use **Show QR** on any saved sync row to link
   the Android app without activating that sync in the browser.
 
-## Highlights
+## Never lose a bookmark silently
 
-- **Several syncs, side by side.** Work and home, a shared family sync, a
-  second server: saved together, one active at a time, switched in a click.
-- **Private by design.** PBKDF2-SHA256 and AES-GCM in the browser. No
-  telemetry, HTTPS-only services, and no access to the pages you visit.
-- **Never lose a bookmark silently.** Conflicts are never resolved behind
-  your back: you pick take remote, upload local or merge, and merge shows a
-  preview of the counts before anything changes. The side being replaced is
-  backed up first.
+- **Safety backups.** Before a destructive change (taking the server copy,
+  restoring a backup, cleaning duplicates, changing password) and before any
+  sync that changes more than 10 items, Keepmark stores an encrypted snapshot
+  of the side being replaced. The newest 10 are kept, listed by day with the
+  operation in plain words, the sync's name, and how many items were added or
+  removed. Restore is one click.
+- **Conflicts are a choice, not a guess.** When two devices changed the same
+  sync you pick keep the server copy, keep this copy, or merge, and merge shows
+  the counts before anything changes.
+- **Safe switching.** Pending edits are saved before another sync is
+  activated; if that save fails, nothing is replaced.
+- **Removed syncs leave a copy.** If a service no longer has your sync
+  (expired or deleted elsewhere), Keepmark says so and keeps the last copy so
+  you can restore or download it.
+- **Atomic writes on Keepmark Server.** Revision-based compare-and-swap means
+  two devices pushing at once can never silently overwrite each other.
+- **Encrypted backups you own.** Export a password-protected file at any time
+  and restore it here or on Android.
+
+## Everyday comfort
+
 - **Set and forget.** Toolbar, menu and other bookmarks sync automatically,
   with a periodic check for changes made elsewhere and a "Sync now" button.
-- **Put your phone on the same sync without typing anything.** The manager
-  shows a connection QR; Keepmark for Android scans it and reviews the service
-  before linking. It is on screen for 60 seconds and nothing is stored for it.
+- **Duplicates cleanup.** Find links saved more than once and remove them;
+  the last copy always stays.
 - **Fits your browser.** The toolbar icon follows the light or dark theme
-  and shows at a glance whether you are in sync.
+  and shows at a glance whether you are in sync. Ten languages.
 
 ## Features
 
@@ -84,17 +110,13 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and password in one step |
 | **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
-| **Safety backups** | Safety snapshot before destructive changes or syncs changing more than 10 items (newest 10 kept); ordinary switches create none, deliberate server deletion keeps no copy |
-| **Backup** | Encrypted export and import, compatible with Keepmark for Android; the verified review is the only confirmation |
+| **Safety backups** | Encrypted snapshot before destructive changes or syncs changing more than 10 items (newest 10 kept), grouped by day with sync name and added/removed counts; ordinary switches create none, deliberate server deletion keeps no copy |
+| **Backup** | Encrypted export and import in two compact actions, compatible with Keepmark for Android; the verified review is the only confirmation |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
 | **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |
 | **Controls** | Change password on the active sync row; activity log in Settings; recovery in Backup → Safety backups |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Română, Русский, 简体中文; follows the browser, override in Settings |
-
-With **Keepmark Server** you also get revision-based conflict detection,
-faster "nothing changed" checks and the option to delete your sync from the
-server. On other services Keepmark falls back automatically.
 
 ## Link Android by QR
 
@@ -141,12 +163,18 @@ wizard the same QR button sits before the manual target credentials.
 |---|---|
 | **Keepmark for browsers** | This extension (Firefox, Chrome, Edge, Brave) |
 | **Keepmark for Android** | Android 10+ app with search, share-to-Keepmark and app lock |
-| **Keepmark Server** | Drop-in xBrowserSync-compatible sync service with opt-in extended features |
+| **Keepmark Server** | Self-hostable sync service with atomic writes and revisions, compatible with existing xBrowserSync services |
 
 All three share the same encryption, the same backup format and the same
 wording, so moving between them feels the same.
 
 ## Compatibility
+
+Keepmark builds on the open xBrowserSync protocol, so it needs no new
+infrastructure: it runs on any xBrowserSync service (the official one, a
+community host or your own) and syncs open both ways with the official
+xBrowserSync apps. On **Keepmark Server** it also uses revisions, cheap change
+checks and server deletion; elsewhere it falls back automatically.
 
 - **Browsers:** Firefox (Manifest V2) and Chromium-based browsers such as
   Chrome, Edge and Brave (Manifest V3, Chrome 109 or later).
@@ -265,5 +293,3 @@ implied, including the implied warranties of merchantability and fitness for
 a particular purpose. Use it at your own risk: the authors are not liable for
 any loss of data (including bookmarks), damage or other consequences arising
 from its use. See sections 15–17 of the GPL v3. Keep your own backups.
-
-Saved syncs put **Activate** first; less frequent commands live in the row’s **⋮** menu, with unlinking and destructive actions separated at the bottom.
