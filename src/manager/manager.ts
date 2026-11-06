@@ -994,9 +994,14 @@ function invalidateSyncTasks(): void {
   $('m-dup-list').textContent = '';
   $('nav-dup-count').textContent = '';
   updateDupBar();
-  rowDialog.close();
+  // A row task that is itself unlinking/deleting causes this storage change:
+  // closing its dialog here would swallow its own result message.
+  if (!rowTaskInFlight) rowDialog.close();
   pwDialog.close();
 }
+
+/** True while the row dialog's unlink/forget/delete request is running. */
+let rowTaskInFlight = false;
 
 /** Copies marked for deletion in the current scan (default: all but newest). */
 let dupMarked: Set<number> = new Set();
@@ -2294,6 +2299,7 @@ async function submitRowTask(): Promise<void> {
     return;
   }
   await withBusy('m-btn-row-go', t('busy.deleting'), async () => {
+    rowTaskInFlight = true;
     try {
       if (task.kind === 'delete') {
         await send({ command: MessageCommand.DeleteRemoteSync, target: { serviceUrl: task.sync.serviceUrl, syncId: task.sync.syncId } });
@@ -2324,6 +2330,8 @@ async function submitRowTask(): Promise<void> {
       if (!rowDialog.isOpen || rowDialog.token !== token) return;
       error.textContent = (err as Error).message;
       error.hidden = false;
+    } finally {
+      rowTaskInFlight = false;
     }
   });
   // withBusy restores the pre-click disabled state last: re-assert the v1.2

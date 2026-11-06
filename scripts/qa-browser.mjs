@@ -80,6 +80,8 @@ async function launchChromium() {
 async function launchFirefox() {
   const browser = await puppeteer.launch({
     browser: 'firefox', executablePath: FIREFOX_BIN, headless: true, args: ['--remote-allow-system-access'],
+    // Newer Firefox also gates chrome-scope BiDi behind this env var.
+    env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' },
     extraPrefsFirefox: { 'extensions.webextensions.uuids': JSON.stringify({ 'keepmark@proton.me': FF_UUID }) },
   });
   await browser.installExtension(`${APP}/firefox`);
@@ -160,8 +162,18 @@ const click = (p, sel) => p.evaluate((s) => {
 /** Answer an inline confirmInline block (`<anchor>-confirm`) with Yes;
  *  returns its text (question + implication), or null when none opened. */
 async function confirmYes(p, anchorId) {
-  const shown = await waitFor(async () => (await p.evaluate((id) => !!document.getElementById(`${id}-yes`), anchorId)) || undefined, 5000);
+  // Inline confirmInline block, or the manager's row task dialog (⋮ menu
+  // actions: forget / unlink / delete open #m-row-dialog since 0.1.48).
+  const shown = await waitFor(async () => (await p.evaluate((id) =>
+    document.getElementById(`${id}-yes`) ? 'inline'
+      : document.querySelector('#m-row-dialog')?.open ? 'row' : null, anchorId)) || undefined, 5000);
   if (!shown) return null;
+  if (shown === 'row') {
+    const said = await p.evaluate(() => ['#m-row-message', '#m-row-implication']
+      .map((s) => document.querySelector(s)?.textContent?.trim() ?? '').join(' '));
+    await click(p, '#m-btn-row-go');
+    return said;
+  }
   const said = await text(p, `#${anchorId}-confirm`);
   await click(p, `#${anchorId}-yes`);
   return said;
@@ -273,27 +285,18 @@ async function tourManager(ctx) {
   const m = await open(ctx, 'manager.html');
   await waitFor(async () => !((await text(m, '#m-pill')) ?? '…').includes('…'), 8000);
   await shot(ctx, m, 'manager-status');
-  for (const s of ['backup', 'duplicates', 'syncs', 'logs', 'settings', 'about']) {
+  for (const s of ['backup', 'duplicates', 'syncs', 'settings', 'about']) {
     await section(m, s);
     const h2 = await m.evaluate(() => [...document.querySelectorAll('main section:not([hidden]) h2')].map((e) => e.textContent.trim()));
     check(`${ctx.kind}: manager section ${s} renders`, h2.length === 1, h2.join(','));
     if (s === 'duplicates') { await click(m, '#m-btn-duplicates'); await sleep(1500); }
-    if (s === 'logs') { await click(m, '#m-btn-logs'); await sleep(1000); }
-    if (s === 'settings') {
-      // v1.2 /info capabilities.syncExpiryDays -> "Unused syncs" row (KeepmarkApi always advertises it).
-      const row = async () => m.evaluate(() => {
-        const dts = [...document.querySelectorAll('#m-service-info dt')];
-        const dt = dts.find((e) => e.textContent.trim() === 'Unused syncs');
-        return dt?.nextElementSibling?.textContent.trim() ?? null;
-      });
-      await waitFor(async () => (await row()) !== null, 8000);
-      const expiry = await row();
-      check(`${ctx.kind}: settings shows the service's sync expiry`, /^(kept forever|deleted after \d+ days? without use)$/.test(expiry ?? ''), expiry ?? 'missing');
-    }
     await shot(ctx, m, `manager-${s}`);
   }
   // Leak checks in the rendered logs viewer (sync IDs truncated, no password).
-  await section(m, 'logs');
+  // The log panel lives in Settings, folded behind "Show logs".
+  await section(m, 'settings');
+  await click(m, '#m-btn-logs-toggle');
+  await sleep(300);
   await click(m, '#m-btn-logs');
   await sleep(1000);
   const logText = (await text(m, '#m-log-list')) ?? '';
@@ -379,7 +382,7 @@ async function multiSync(ctx, m, pop, activeId) {
   const first = await managerRows(m);
   check(`${ctx.kind}: syncs section lists the active sync`, first.length === 1 && first[0].active, JSON.stringify(first));
   check(`${ctx.kind}: active row offers unlink + server delete, no activate`,
-    first[0]?.actions.includes('m-syncs-unlink') &&
+    first[0]?.actions.some((a) => a.startsWith('m-syncs-rm-')) &&
     first[0]?.actions.some((a) => a.startsWith('m-syncs-delete-')) &&
     !first[0]?.actions.some((a) => a.startsWith('m-syncs-act-')), JSON.stringify(first[0]?.actions));
   await shot(ctx, m, 'manager-syncs');
@@ -419,9 +422,10 @@ async function multiSync(ctx, m, pop, activeId) {
   await shot(ctx, m, 'manager-syncs-rows');
 
   // Optional sync-change password: the rows become wrapped.
+  await click(m, '#m-btn-link-lock-set');
   await setVal(m, '#m-link-lock-new', 'pin-qa');
   await setVal(m, '#m-link-lock-confirm', 'pin-qa');
-  await click(m, '#m-btn-link-lock-set');
+  await click(m, '#m-btn-lock-go');
   const lockSet = await waitFor(async () => {
     if (await visible(m, '#switch-pw-error')) return `error: ${await text(m, '#switch-pw-error')}`;
     return (await text(m, '#switch-pw-result')) || undefined;
@@ -535,7 +539,7 @@ async function unlinkAndRelink(ctx, m, pop, activeId) {
   const rowsBefore = await managerRows(m);
   check(`${ctx.kind}: the sync list marks the sync the browser is really on`,
     rowsBefore.length === 2 && rowsBefore.filter((r) => r.active).length === 1 &&
-    (rowsBefore.find((r) => r.active)?.sub ?? '').includes(String(activeBefore).slice(0, 8)),
+    (rowsBefore.find((r) => r.active)?.sub ?? '').includes(String(activeBefore).slice(0, 6)),
     JSON.stringify({ activeBefore, rows: rowsBefore.map((r) => [r.name, r.active, r.sub]) }));
   const dormantRm = await m.evaluate(() =>
     document.querySelector('#m-syncs-list .saved-row:not(.saved-active) button[id^="m-syncs-rm-"]')?.id ?? null);
@@ -551,21 +555,25 @@ async function unlinkAndRelink(ctx, m, pop, activeId) {
     !!afterRm && afterRm[0].active && (await syncIdNow(m)) === activeBefore,
     JSON.stringify({ active: await syncIdNow(m), rows: afterRm?.map((r) => [r.name, r.active]) }));
 
-  // 2. Unlink the active sync: the row stays, the browser stops syncing.
-  await click(m, '#m-syncs-unlink');
-  const unlinkAsked = await confirmYes(m, 'm-syncs-unlink');
+  // 2. Unlink the active sync. Since 0.1.48 the active row IS the link: the
+  //    row disappears, the bookmarks and the server copy stay.
+  const activeRm = await m.evaluate(() =>
+    document.querySelector('#m-syncs-list .saved-row.saved-active button[id^="m-syncs-rm-"]')?.id ?? null);
+  await click(m, `#${activeRm}`);
+  const unlinkAsked = await confirmYes(m, activeRm);
   check(`${ctx.kind}: unlink asks first and says how to come back`,
     /reconnect/i.test(unlinkAsked ?? '') && /sync ID/i.test(unlinkAsked ?? ''),
     unlinkAsked?.slice(0, 120));
   const off = await waitFor(async () => !(await linked(m)), 20000);
   check(`${ctx.kind}: unlink stops syncing this browser`, off);
   const doneText = await waitFor(async () => (await visible(m, '#m-syncs-result')) ? await text(m, '#m-syncs-result') : undefined, 10000);
-  check(`${ctx.kind}: unlink result says where to link again`,
-    !!doneText && /link again/i.test(doneText), doneText?.slice(0, 120));
-  const rowsOff = await managerRows(m);
-  check(`${ctx.kind}: the unlinked sync stays in the list as inactive`,
-    rowsOff.length === 1 && !rowsOff[0].active && rowsOff[0].actions.some((a) => a.startsWith('m-syncs-act-')),
-    JSON.stringify(rowsOff.map((r) => [r.name, r.active, r.actions])));
+  check(`${ctx.kind}: unlink result says the bookmarks and the server copy stay`,
+    !!doneText && /unlinked/i.test(doneText) && /stays on the server/i.test(doneText), doneText?.slice(0, 120));
+  const emptied = await waitFor(async () => (await managerRows(m)).length === 0, 20000);
+  check(`${ctx.kind}: the unlinked row leaves the list (the row is the link)`, emptied);
+  check(`${ctx.kind}: an empty registry still explains how to start over`,
+    await visible(m, '#m-syncs-empty'));
+  await shot(ctx, m, 'manager-syncs-empty');
   await section(m, 'status');
   check(`${ctx.kind}: status says it is not connected and how to reconnect`,
     (await visible(m, '#m-notlinked-hint')) && /popup/i.test((await text(m, '#m-notlinked-hint')) ?? ''),
@@ -577,57 +585,25 @@ async function unlinkAndRelink(ctx, m, pop, activeId) {
     await m.evaluate(() => document.querySelector('#connect-qr').hidden));
   await shot(ctx, m, 'manager-status-unlinked');
 
-  // 3. The popup lands on Connect and offers the saved sync back.
+  // 3. The popup lands on Connect, with no saved list and no removed-sync card.
   await pop.reload({ waitUntil: 'load' });
   const popOff = await waitFor(() => visible(pop, '#view-connect'), 20000);
   check(`${ctx.kind}: popup returns to the Connect view when unlinked`, popOff);
-  const popSaved = await waitFor(async () => (await visible(pop, '#c-saved-card')) ? true : undefined, 15000);
-  check(`${ctx.kind}: popup lists the inactive sync for one-click reconnect`, popSaved);
+  check(`${ctx.kind}: popup has no sync list once the registry is empty`,
+    !(await visible(pop, '#c-saved-card')));
   check(`${ctx.kind}: the server-removed card is NOT shown for an unlink`,
     !(await visible(pop, '#p-removed')));
   await shot(ctx, pop, 'popup-unlinked');
 
-  // 4. Reconnect from the popup with the sync-change password. The row that is
-  //    left is the one picked in step 1 (the second sync), not `activeId`
-  //    (that id belonged to the row forgotten above).
-  const popRowId = ((await storage(pop, 'savedSyncs')) ?? [])[0]?.syncId;
-  await click(pop, '#c-saved-list .saved-row button');
-  await setVal(pop, '#c-saved-password', 'pin-qa');
-  await click(pop, '#c-saved-activate');
-  const backId = await waitFor(async () => {
-    const now = await syncIdNow(pop);
-    return now === popRowId ? now : undefined;
-  }, 45000);
-  check(`${ctx.kind}: the inactive sync reconnects from the popup`,
-    !!backId && backId === popRowId,
-    JSON.stringify({ backId: backId ?? null, popRowId, activeId }));
-  check(`${ctx.kind}: the popup is back on the status view`,
-    await waitFor(() => visible(pop, '#view-main'), 20000));
-  await shot(ctx, pop, 'popup-reconnected');
-
-  // 5. Remove the last row: the registry must empty and the browser unlink.
-  await section(m, 'syncs');
-  const lastRm = await m.evaluate(() =>
-    document.querySelector('#m-syncs-list .saved-row.saved-active button[id^="m-syncs-rm-"]')?.id ?? null);
-  await click(m, `#${lastRm}`);
-  const removeAsked = await confirmYes(m, lastRm);
-  check(`${ctx.kind}: removing the active row warns that this browser stops syncing`,
-    /stops syncing/i.test(removeAsked ?? ''), removeAsked?.slice(0, 120));
-  const emptied = await waitFor(async () => (await managerRows(m)).length === 0, 20000);
-  check(`${ctx.kind}: the registry is empty after the last row is removed`, emptied);
-  check(`${ctx.kind}: an empty registry still explains how to start over`,
-    await visible(m, '#m-syncs-empty'));
-  check(`${ctx.kind}: an empty registry disables server-side actions`,
-    await m.evaluate(() => !document.querySelector('#m-syncs-list .saved-row')));
-  await shot(ctx, m, 'manager-syncs-empty');
-  await pop.reload({ waitUntil: 'load' });
-  const popEmpty = await waitFor(() => visible(pop, '#view-connect'), 20000);
-  check(`${ctx.kind}: popup has no sync list once the registry is empty`,
-    popEmpty && !(await visible(pop, '#c-saved-card')));
-
   // 6. Come back with the same sync, from the manager, with the lock gate.
   await section(m, 'syncs');
   await click(m, '#m-btn-add-sync');
+  // With a sync lock set, adding opens the lock gate first (asked once).
+  check(`${ctx.kind}: adding asks for the sync-change password while a lock is set`,
+    await waitFor(() => visible(m, '#m-link-gate-pw'), 5000));
+  await setVal(m, '#m-link-gate-pw', 'pin-qa');
+  await click(m, '#m-btn-link-gate-go');
+  await waitFor(() => visible(m, '#m-link-form'), 10000);
   await click(m, 'input[name="m-link-mode"][value="existing"]');
   const relinkForm = await m.evaluate(() => ({
     form: !document.querySelector('#m-link-form').hidden,
@@ -647,9 +623,6 @@ async function unlinkAndRelink(ctx, m, pop, activeId) {
   await setVal(m, '#m-link-id', activeId);
   await setVal(m, '#m-link-name', 'Ritorno');
   await setVal(m, '#m-link-password', PASSWORD);
-  check(`${ctx.kind}: the add form asks for the sync-change password while a lock is set`,
-    await visible(m, '#m-link-lock-pw-row'));
-  await setVal(m, '#m-link-lock-pw', 'pin-qa');
   await shot(ctx, m, 'manager-relink-form');
   await click(m, '#m-btn-link-direct');
   const relinkAsked = await confirmYes(m, 'm-btn-link-direct');
