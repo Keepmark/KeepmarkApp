@@ -26,7 +26,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Sync conflict | The server copy changed since the last sync; user picks Download / Upload / Merge | |
 | Sync lock | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password, sync-change password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
-| Safety backups | Snapshots before supported destructive actions or ordinary sync changes affecting more than 10 items (newest 10 kept); no snapshot for ordinary linked-to-linked activation or deliberate browser server deletion | snapshot |
+| Safety backups | Snapshots before supported destructive actions or ordinary sync changes affecting more than 10 items (newest N kept, N set in Settings, default 10); no snapshot for ordinary linked-to-linked activation or deliberate browser server deletion | snapshot |
 | Copy of the removed sync | The local copy kept when a sync disappeared from the service; Android keeps it encrypted and restorable in Backup → Copies of removed syncs, the extension downloads it as a plain JSON file or dismisses it | orphan copy, orphan backup |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 

@@ -456,6 +456,34 @@ it('lists safety backups by day with sync name and change counts', async () => {
   expect(document.querySelectorAll('.safety-item')[1]!.textContent).toContain('No sync linked');
 });
 
+it('asks before a lower safety-backup limit deletes the oldest, then applies it', async () => {
+  const sent: unknown[] = [];
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSafetyKeep) return { keep: 10, count: 8 };
+    if (msg.command === MessageCommand.GetUiLanguage) return { language: 'en' };
+    if (msg.command === MessageCommand.SetSafetyKeep) { sent.push(msg); return { keep: msg.keep, removed: 3 }; }
+    if (msg.command === MessageCommand.GetStatus) return { syncEnabled: false, queueLength: 0, syncing: false, bookmarkCount: 0 };
+    return null;
+  });
+  (document.querySelector('#sidebar button[data-section="settings"]') as HTMLButtonElement).click();
+  await settle();
+  const select = el('m-opt-safety-keep') as HTMLSelectElement;
+  expect(select.value).toBe('10');
+  // Raising never deletes: applied without a question.
+  select.value = '20'; select.dispatchEvent(new Event('change')); await settle();
+  expect(sent).toEqual([{ command: MessageCommand.SetSafetyKeep, keep: 20 }]);
+  // 8 stored, limit 5: three would go, so it asks; Cancel restores the value.
+  select.value = '5'; select.dispatchEvent(new Event('change')); await settle();
+  expect(el('m-opt-safety-keep-confirm').textContent).toContain('Delete the 3 oldest safety backups now?');
+  el('m-opt-safety-keep-cancel').click(); await settle();
+  expect(select.value).toBe('20');
+  expect(sent).toHaveLength(1);
+  select.value = '5'; select.dispatchEvent(new Event('change')); await settle();
+  el('m-opt-safety-keep-yes').click(); await settle();
+  expect(sent[1]).toEqual({ command: MessageCommand.SetSafetyKeep, keep: 5 });
+  expect(el('settings-result-2').textContent).toContain('Keeping the newest 5 safety backups.');
+});
+
 const removedSnapshot = {
   savedAt: '2026-10-21T09:00:00.000Z',
   lastUpdated: '2026-10-20T10:00:00.000Z',

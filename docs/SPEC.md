@@ -497,7 +497,7 @@ white-mark in-page chip.
   cap, typed node validation, fresh salt per export, distinct errors per
   failure class.
 - S6. Safety snapshots (`shared/safety.ts`) are fail-closed: a failed write
-  blocks the destructive operation. Newest 10 kept in `storage.local`, encrypted
+  blocks the destructive operation. Newest N kept (Settings, default 10) in `storage.local`, encrypted
   with the sync-derived key when linked (pre-link copies are flagged plaintext).
   Backup → Safety backups lists/restores/deletes them. Ordinary saved-sync
   activation takes no snapshot; deliberate server deletion keeps no copy and

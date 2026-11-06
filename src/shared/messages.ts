@@ -53,6 +53,8 @@ export enum MessageCommand {
   SetUiLanguage = 'set-ui-language',
   PreviewBackup = 'preview-backup',
   GetSafetyList = 'get-safety-list',
+  GetSafetyKeep = 'get-safety-keep',
+  SetSafetyKeep = 'set-safety-keep',
   RestoreSafety = 'restore-safety',
   DeleteSafety = 'delete-safety',
   RemoveDuplicates = 'remove-duplicates',
@@ -345,6 +347,8 @@ export type MessagePayload =
   | { command: MessageCommand.CheckSyncTarget; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
   | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
   | { command: MessageCommand.SetVerbosity; level: number }
+  | { command: MessageCommand.GetSafetyKeep }
+  | { command: MessageCommand.SetSafetyKeep; keep: number }
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
   | { command: MessageCommand.DismissUndo }

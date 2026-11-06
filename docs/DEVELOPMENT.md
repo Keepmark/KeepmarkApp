@@ -168,7 +168,7 @@ browser did not perform.
 
 - Stored in `storage.local`: `SafetyIndex` manifest rows
   (`fileName, createdAtUtc, operation, side, items, sizeBytes, truncated
-  syncId, enc`) + one `safetyFile:` payload each. Newest 10 kept, older
+  syncId, enc`) + one `safetyFile:` payload each. Newest N kept (Settings, `StoreKey.SafetyKeep`, default 10), older
   pruned (payload + row together). Listed/restored/deleted from Manager →
   Backup → Safety backups.
 - Encrypted with the sync-derived key (`keyId` = SHA-256/8 recorded);

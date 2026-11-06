@@ -66,6 +66,9 @@ import {
   readSafetyTree,
   rekeySafety,
   writeSafety,
+  safetyKeep,
+  pruneSafety,
+  SafetyKeepChoices,
   listSafetyNamed,
   type SafetyEntry,
 } from '../shared/safety.js';
@@ -381,6 +384,18 @@ export class BackgroundCore {
         return this.previewBackup(msg.json, msg.password);
       case MessageCommand.GetSafetyList:
         return listSafetyNamed(this.store);
+      case MessageCommand.GetSafetyKeep:
+        return { keep: await safetyKeep(this.store), count: (await listSafety(this.store)).length };
+      case MessageCommand.SetSafetyKeep: {
+        if (!(SafetyKeepChoices as readonly number[]).includes(msg.keep)) {
+          throw new UnexpectedResponseException(`Invalid safety backup count: ${msg.keep}`);
+        }
+        await this.store.set(StoreKey.SafetyKeep, msg.keep);
+        // Lowering it applies now: the manager confirmed the deletion first.
+        const removed = await pruneSafety(this.store, msg.keep);
+        if (removed) this.log.log(XbsLogLevel.Info, 'safety', `Kept ${msg.keep}, removed ${removed} oldest`);
+        return { keep: msg.keep, removed };
+      }
       case MessageCommand.RestoreSafety:
         return this.restoreSafety(msg.fileName);
       case MessageCommand.DeleteSafety:

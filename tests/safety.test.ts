@@ -12,6 +12,8 @@ import {
   readSafetyTree,
   rekeySafety,
   writeSafety,
+  pruneSafety,
+  safetyKeep,
 } from '../src/shared/safety';
 
 const PASSWORD = 'correct horse battery staple';
@@ -91,6 +93,35 @@ describe('safety backups', () => {
     for (const r of rows) {
       expect(await store.get(safetyFileKey(r.fileName))).toBeDefined();
     }
+  });
+
+  it('keeps the number chosen in Settings and prunes when it is lowered', async () => {
+    const { store, derived } = await linked();
+    expect(await safetyKeep(store)).toBe(10);
+    await store.set(StoreKey.SafetyKeep, 3);
+    expect(await safetyKeep(store)).toBe(3);
+    const write = (i: number) =>
+      writeSafety(store, {
+        operation: 'take-remote',
+        side: 'local',
+        tree: [{ ...tree[0], children: [{ id: i + 1, title: `A${i}`, url: 'https://a.test' }] }],
+        derivedKey: derived,
+      });
+    for (let i = 0; i < 5; i++) await write(i);
+    expect(await listSafety(store)).toHaveLength(3);
+    // Raised: nothing comes back, new ones accumulate up to the new limit.
+    await store.set(StoreKey.SafetyKeep, 5);
+    for (let i = 5; i < 8; i++) await write(i);
+    const five = await listSafety(store);
+    expect(five).toHaveLength(5);
+    // Lowered: the oldest go now, payloads included; the newest stay.
+    expect(await pruneSafety(store, 2)).toBe(3);
+    const two = await listSafety(store);
+    expect(two.map((r) => r.fileName)).toEqual(five.slice(0, 2).map((r) => r.fileName));
+    for (const r of five.slice(2)) expect(await store.get(safetyFileKey(r.fileName))).toBeUndefined();
+    // Unknown values fall back to the default.
+    await store.set(StoreKey.SafetyKeep, 7);
+    expect(await safetyKeep(store)).toBe(10);
   });
 
   it('refuses damaged payloads and count drift', async () => {

@@ -121,7 +121,7 @@
         <div id="backup-result-2" class="result" hidden></div>
 
         <h3 data-i18n="manager.backup.safety">Safety backups</h3>
-        <p class="hint" data-i18n="manager.backup.safetyHint">Safety snapshots before destructive changes and syncs changing more than 10 items (newest 10 kept). Ordinary sync switches create no snapshot; deleting a sync from the server keeps no copy. Encrypted entries need the sync link to restore.</p>
+        <p id="m-safety-hint" class="hint">Safety snapshots before destructive changes and syncs changing more than 10 items (newest 10 kept). Ordinary sync switches create no snapshot; deleting a sync from the server keeps no copy. Encrypted entries need the sync link to restore.</p>
         <div class="row"><button id="m-btn-safety" data-i18n="manager.backup.refreshList">Refresh list</button></div>
         <div id="m-safety-list"></div>
         <div id="backup-error-3" class="error" role="alert" hidden></div>
@@ -209,6 +209,25 @@
         <!-- Troubleshooting only: the log is not a feature the user reads,
              so it stays folded behind one button and keeps its own section
              out of the sidebar. -->
+        <div class="settings-group">
+          <h3 data-i18n="manager.settings.safetyTitle">Safety backups</h3>
+          <p class="hint" data-i18n="manager.settings.safetyKeepHint">Keepmark takes one before every risky change. When a new one exceeds the limit, the oldest is deleted.</p>
+          <div class="row">
+            <label><span data-i18n="manager.settings.safetyKeep">Safety backups to keep</span>
+              <select id="m-opt-safety-keep">
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10" data-i18n="manager.settings.safetyKeepDefault">10 (default)</option>
+                <option value="20">20</option>
+                <option value="30">30</option>
+                <option value="50">50</option>
+              </select>
+            </label>
+          </div>
+          <div id="settings-error-2" class="error" role="alert" hidden></div>
+          <div id="settings-result-2" class="result" hidden></div>
+        </div>
+
         <div class="settings-group">
           <h3 data-i18n="manager.nav.logs">Logs</h3>
           <p class="hint" data-i18n="manager.settings.logsHint">Only for troubleshooting: the log stays in this browser and is never uploaded.</p>

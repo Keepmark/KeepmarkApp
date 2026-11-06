@@ -77,6 +77,25 @@ export interface SafetyEntry {
 
 /** Newest entries kept; older pruned automatically (payload + row together). */
 export const SafetyRetention = 10;
+/** Choices offered in Settings; SafetyRetention is the default. */
+export const SafetyKeepChoices = [3, 5, 10, 20, 30, 50] as const;
+
+/** The user's retention, or the default when unset or out of the choices. */
+export async function safetyKeep(store: Store): Promise<number> {
+  const raw = await store.get<number>(StoreKey.SafetyKeep);
+  return (SafetyKeepChoices as readonly number[]).includes(raw as number) ? (raw as number) : SafetyRetention;
+}
+
+/** Delete the oldest entries beyond `keep` (index row + payload). Returns
+ *  how many went. Used when the setting is lowered and on every write. */
+export async function pruneSafety(store: Store, keep: number): Promise<number> {
+  const rows = await listSafety(store);
+  if (rows.length <= keep) return 0;
+  const sorted = [...rows].sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
+  for (const old of sorted.slice(keep)) await store.remove(safetyFileKey(old.fileName));
+  await store.set(StoreKey.SafetyIndex, sorted.slice(0, keep));
+  return sorted.length - keep;
+}
 
 const SafetyApp = 'KeepmarkApp-safety';
 const SafetyFormat = 1;
@@ -206,8 +225,9 @@ export async function writeSafety(
     ...(input.changes ? { added: input.changes.added, removed: input.changes.removed } : {}),
   };
   const next = [entry, ...(await listSafety(store))].sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
-  const pruned = next.slice(0, SafetyRetention);
-  for (const old of next.slice(SafetyRetention)) {
+  const keep = await safetyKeep(store);
+  const pruned = next.slice(0, keep);
+  for (const old of next.slice(keep)) {
     await store.remove(safetyFileKey(old.fileName));
   }
   await store.set(StoreKey.SafetyIndex, pruned);

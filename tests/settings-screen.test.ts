@@ -43,8 +43,10 @@ describe('settings screen', () => {
 
   it('groups the remaining preferences instead of one flat column', () => {
     const groups = settings.querySelectorAll('.settings-group');
-    expect(groups.length).toBe(1);
-    expect(groups[0]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
+    expect(groups.length).toBe(2);
+    expect(groups[0]?.querySelector('h3[data-i18n="manager.settings.safetyTitle"]')).not.toBeNull();
+    expect(groups[0]?.querySelector('#m-opt-safety-keep')).not.toBeNull();
+    expect(groups[1]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
     // Language stays the plain top field, before the card.
     expect(settings.querySelector('#m-opt-language')).not.toBeNull();
     expect(settings.querySelector('.settings-group #m-opt-language')).toBeNull();

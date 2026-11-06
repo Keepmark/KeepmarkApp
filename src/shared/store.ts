@@ -45,6 +45,8 @@ export enum StoreKey {
   SyncRevision = 'syncRevision',
   /** Safety-backup manifest (index rows; payloads live under safetyFileKey). */
   SafetyIndex = 'safetyIndex',
+  /** How many safety backups to keep (newest first), user setting. */
+  SafetyKeep = 'safetyKeep',
   TelemetryEnabled = 'telemetryEnabled',
   TraceLog = 'traceLog',
   UndoSlot = 'undoSlot',

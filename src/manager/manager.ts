@@ -838,6 +838,9 @@ async function dismissRemovedCopy(anchorId: string): Promise<void> {
 
 async function refreshSafety(): Promise<void> {
   await refreshRemovedCard();
+  // The hint names the retention the user chose in Settings.
+  const kept = await send<{ keep: number } | null>({ command: MessageCommand.GetSafetyKeep }).catch(() => null);
+  $('m-safety-hint').textContent = t('manager.backup.safetyHint', { keep: kept?.keep ?? 10 });
   const box = $('m-safety-list');
   box.textContent = '';
   let entries: SafetyEntry[] = [];
@@ -1750,9 +1753,52 @@ async function renderSettings(): Promise<void> {
     language: 'system',
   }));
   ($('m-opt-language') as HTMLSelectElement).value = lang.language;
+  await renderSafetyKeep();
+}
+
+/** Safety-backup retention: the select shows the stored value; the backups
+ *  it would delete right now are counted for the confirmation. */
+let safetyKeepState = { keep: 10, count: 0 };
+async function renderSafetyKeep(): Promise<void> {
+  try {
+    safetyKeepState = (await send<{ keep: number; count: number } | null>({ command: MessageCommand.GetSafetyKeep })) ?? safetyKeepState;
+  } catch (err) {
+    showError('settings-error-2', (err as Error).message);
+  }
+  ($('m-opt-safety-keep') as HTMLSelectElement).value = String(safetyKeepState.keep);
+}
+
+async function changeSafetyKeep(select: HTMLSelectElement): Promise<void> {
+  clearMessages();
+  const keep = Number(select.value);
+  const excess = safetyKeepState.count - keep;
+  if (excess > 0) {
+    // Lowering below what is stored deletes the oldest now: say so first.
+    const ok = await confirmInline('m-opt-safety-keep', {
+      message: tn('mgr.settings.safetyKeepPrune', excess),
+      implication: t('mgr.settings.safetyKeepPruneImplication'),
+      confirmLabel: t('common.yesDelete'),
+      danger: true,
+    });
+    if (!ok) {
+      select.value = String(safetyKeepState.keep);
+      return;
+    }
+  }
+  try {
+    const res = await send<{ keep: number; removed: number }>({ command: MessageCommand.SetSafetyKeep, keep });
+    safetyKeepState = { keep: res.keep, count: Math.min(safetyKeepState.count, res.keep) };
+    showResult('settings-result-2', t('mgr.settings.safetyKeepSet', { keep: res.keep }));
+  } catch (err) {
+    select.value = String(safetyKeepState.keep);
+    showError('settings-error-2', (err as Error).message);
+  }
 }
 
 function initSettingsSection(): void {
+  ($('m-opt-safety-keep') as HTMLSelectElement).addEventListener('change', (e) => {
+    void changeSafetyKeep(e.target as HTMLSelectElement);
+  });
   ($('m-opt-language') as HTMLSelectElement).addEventListener('change', async (e) => {
     clearMessages();
     const language = (e.target as HTMLSelectElement).value as LangSetting;

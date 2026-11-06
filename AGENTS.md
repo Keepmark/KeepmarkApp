@@ -77,7 +77,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `merge.ts` | `mergeTrees`: pure two-way union by URL (remote kept, local adopted with fresh ids, separators unioned, deletes never merged) + preview stats | new design (connect/switch third direction) |
 | `messages.ts` | `MessageCommand` + payload/response types + `toWireError/fromWireError` (name-based rehydration) | `app/webext.interface.ts` + sendMessage |
 | `backup.ts` | Encrypted envelope `{app,format,salt,blob}` (writes shared `xBrowserSyncNg` tag, reads legacy `KeepmarkApp` too) + guards (pwd≥8, 50MB, 200k nodes, depth cap) | Keepmark `BackupGuard.cs` + envelope |
-| `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention 10, derived-key encryption + keyId, fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
+| `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention from Settings (`StoreKey.SafetyKeep`: 3/5/10/20/30/50, default 10; lowering it prunes the oldest after an inline confirmation), derived-key encryption + keyId, fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
 | `duplicates.ts` | URL groups, last-copy-locked deletion plan, `deleteByIds` | Keepmark `/duplicates` page |
 
 ### Platform layers (thin)
@@ -251,7 +251,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   `m-export-dialog`), restore from file → `backup-error-2` (inside
   `m-import-dialog`), safety list actions → `backup-error-3`;
   in-list deletes → `dup-error-2`; danger-zone actions → `status-error-2`;
-  the manager's kept copy of a removed sync (Backup) → `removed-error`.
+  the manager's kept copy of a removed sync (Backup) → `removed-error`;
+  Settings safety-backup limit → `settings-error-2`.
   Every box has class `error`, `role="alert"`, starts `hidden`, and is
   emptied (not just hidden) when cleared. `showError(id, msg)` and
   `clearMessages()` in `src/popup/flow.ts` handle all of them by selector (no
