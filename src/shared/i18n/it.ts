@@ -595,7 +595,7 @@ export const it: Record<MessageKey, string> = {
   'manager.syncs.deleteRemote': 'Elimina dal server…',
   'manager.syncs.moreActions': 'Altre azioni per {name}',
   'manager.syncs.activateHint': "Prima viene salvata la sync attuale; un conflitto o un errore blocca il cambio. Poi il browser usa la copia di {name}. Le copie sul server restano; il cambio non crea una copia di sicurezza aggiuntiva.",
-  'manager.syncs.activated': 'Passato a {name}.',
+  'manager.syncs.activated': '{name} attivato.',
   'manager.syncs.forgot': '{name} dimenticato. La copia sul server resta.',
   'manager.syncs.connected': 'Collegato a {name}.',
   'popup.saved.changePasswordLabel': 'Password del blocco sync',
