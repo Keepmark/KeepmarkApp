@@ -173,7 +173,13 @@ browser did not perform.
   Backup → Safety backups.
 - Encrypted with the sync-derived key (`keyId` = SHA-256/8 recorded);
   restores under a rotated key refuse honestly. Pre-link writes stay
-  plaintext flagged "not encrypted". Password change re-encrypts entries
+  plaintext flagged "not encrypted". `GetSafetyList` flags each row with
+  `locked` (`safetyLock`): `other-sync` when its `keyId` differs from the
+  current link's, `needs-link` when it is encrypted or remote-side while
+  unlinked. The manager hides locked rows behind a "Restorable here / All"
+  filter (shown only when some exist); a locked card is dimmed, says why, has
+  no Restore, keeps Delete, and offers `Activate <name>…` when exactly one
+  saved inactive row matches its short sync ID. Password change re-encrypts entries
   best-effort (never fails the flow).
 - Restore: local-side entries replace natives (push-if-linked);
   remote-side entries require the link and re-push (409 honest). The used

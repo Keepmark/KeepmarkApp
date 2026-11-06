@@ -382,8 +382,14 @@ export class BackgroundCore {
       }
       case MessageCommand.PreviewBackup:
         return this.previewBackup(msg.json, msg.password);
-      case MessageCommand.GetSafetyList:
-        return listSafetyNamed(this.store);
+      case MessageCommand.GetSafetyList: {
+        // Each row says whether the current link can restore it, so the
+        // manager never offers a restore that would fail.
+        const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+        const linked = !!(info?.id && info.password);
+        const keyId = info?.password ? await derivedKeyId(info.password) : undefined;
+        return listSafetyNamed(this.store, { linked, ...(keyId ? { keyId } : {}) });
+      }
       case MessageCommand.GetSafetyKeep:
         return { keep: await safetyKeep(this.store), count: (await listSafety(this.store)).length };
       case MessageCommand.SetSafetyKeep: {

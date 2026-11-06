@@ -68,6 +68,7 @@ import {
   type ConflictStateResponse,
 } from '../shared/messages.js';
 import { backupFileName, MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
+import { sanitizeSyncId } from '../shared/logging.js';
 import {
   MaxSavedSyncLabelLength,
   isActiveSavedSync,
@@ -535,6 +536,12 @@ function initBackupSection(): void {
   });
   $('m-btn-import-confirm').addEventListener('click', () => void confirmImport());
   $('m-btn-safety').addEventListener('click', () => withBusy('m-btn-safety', t('busy.loading'), () => refreshSafety()));
+  for (const [id, all] of [['m-safety-filter-here', false], ['m-safety-filter-all', true]] as const) {
+    $(id).addEventListener('click', () => {
+      safetyShowAll = all;
+      renderSafetyList();
+    });
+  }
   $('m-btn-removed-download').addEventListener('click', () =>
     void downloadRemovedCopy('m-btn-removed-download'),
   );
@@ -716,8 +723,17 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 }
 
 /** One safety backup as a card: what happened, when, to which sync, what changed. */
+/** The saved sync a locked backup belongs to, when exactly one inactive row
+ *  matches its short ID: the card can offer to activate it. */
+function safetyOwner(entry: SafetyEntry): SavedSync | undefined {
+  if (!entry.syncId || entry.syncId === '…') return undefined;
+  const rows = syncsView.syncs.filter((row) => sanitizeSyncId(row.syncId) === entry.syncId);
+  const row = rows.length === 1 ? rows[0] : undefined;
+  return row && !isActiveSavedSync(row, syncsView.active) ? row : undefined;
+}
+
 function safetyCard(entry: SafetyEntry, index: number): HTMLLIElement {
-  const li = el('li', 'safety-item');
+  const li = el('li', entry.locked ? 'safety-item locked' : 'safety-item');
   const opKey = SafetyOperations[entry.operation];
   const head = el('div', 'safety-head');
   head.append(
@@ -753,10 +769,30 @@ function safetyCard(entry: SafetyEntry, index: number): HTMLLIElement {
   li.append(meta);
 
   const actions = el('div', 'safety-actions');
+  // A backup this link cannot restore offers no Restore: it says why and, when
+  // its sync is saved here, how to get there (activate it, then restore).
+  const owner = entry.locked === 'other-sync' ? safetyOwner(entry) : undefined;
+  if (entry.locked) {
+    const why =
+      entry.locked === 'needs-link'
+        ? t('mgr.safety.lockedNeedsLink')
+        : owner
+          ? t('mgr.safety.lockedOther', { name: savedSyncName(owner) })
+          : t('mgr.safety.lockedUnknown');
+    li.insertBefore(el('p', 'safety-lock', why), meta.nextSibling);
+  }
+  if (owner) {
+    const go = el('button', 'mini primary', t('mgr.safety.activateOwner', { name: savedSyncName(owner) }));
+    go.type = 'button';
+    go.id = `safety-activate-${index}`;
+    go.addEventListener('click', () => openActivation(owner, go));
+    actions.append(go);
+  }
   const restore = el('button', 'mini', t('mgr.safety.restoreBtn'));
   restore.type = 'button';
   restore.setAttribute('aria-label', t('mgr.safety.restoreAria', { fileName: entry.fileName }));
   restore.id = `safety-restore-${index}`;
+  restore.hidden = !!entry.locked;
   restore.addEventListener('click', () => void restoreSafety(entry, restore.id));
   const del = el('button', 'mini danger', t('mgr.safety.deleteBtn'));
   del.type = 'button';
@@ -841,8 +877,8 @@ async function refreshSafety(): Promise<void> {
   // The hint names the retention the user chose in Settings.
   const kept = await send<{ keep: number } | null>({ command: MessageCommand.GetSafetyKeep }).catch(() => null);
   $('m-safety-hint').textContent = t('manager.backup.safetyHint', { keep: kept?.keep ?? 10 });
-  const box = $('m-safety-list');
-  box.textContent = '';
+  // Saved rows name the owner of a locked backup and let it be activated.
+  await refreshSyncs().catch(() => undefined);
   let entries: SafetyEntry[] = [];
   try {
     entries = await send<SafetyEntry[]>({ command: MessageCommand.GetSafetyList });
@@ -850,6 +886,28 @@ async function refreshSafety(): Promise<void> {
     showError('backup-error-3', (err as Error).message);
     return;
   }
+  safetyEntries = entries;
+  renderSafetyList();
+}
+
+/** Whether the list shows backups this link cannot restore (locked cards). */
+let safetyShowAll = false;
+let safetyEntries: SafetyEntry[] = [];
+
+function renderSafetyList(): void {
+  const box = $('m-safety-list');
+  box.textContent = '';
+  const entries = safetyEntries;
+  const filter = $('m-safety-filter') as HTMLElement;
+  const lockedCount = entries.filter((e) => e.locked).length;
+  const here = entries.length - lockedCount;
+  // The filter only exists when there is something to filter out.
+  filter.hidden = lockedCount === 0;
+  const showAll = safetyShowAll || lockedCount === 0;
+  $('m-safety-filter-here').textContent = t('mgr.safety.filterHere', { count: here });
+  $('m-safety-filter-all').textContent = t('mgr.safety.filterAll', { count: entries.length });
+  $('m-safety-filter-here').setAttribute('aria-pressed', String(!showAll));
+  $('m-safety-filter-all').setAttribute('aria-pressed', String(showAll));
   if (entries.length === 0) {
     const p = document.createElement('p');
     p.className = 'hint';
@@ -857,10 +915,18 @@ async function refreshSafety(): Promise<void> {
     box.append(p);
     return;
   }
+  if (!showAll && here === 0) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = tn('mgr.safety.noneHere', lockedCount);
+    box.append(p);
+    return;
+  }
   // Newest first, grouped by day; ids stay the index in the backend order.
   let group: HTMLUListElement | undefined;
   let label = '';
   for (const [index, entry] of entries.entries()) {
+    if (entry.locked && !showAll) continue;
     const day = safetyDayLabel(entry.createdAtUtc);
     if (!group || day !== label) {
       label = day;
@@ -1912,14 +1978,17 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'saved-actions';
 
-  const activate = document.createElement('button');
-  activate.type = 'button';
-  activate.className = 'mini primary';
-  activate.id = `m-syncs-act-${index}`;
-  activate.textContent = t('popup.saved.activate');
-  activate.disabled = isActive;
-  activate.addEventListener('click', () => openActivation(sync, activate));
-  actions.append(activate);
+  // Activation is the row's main action; the active row has nothing to
+  // activate, so it shows no button at all (its tag already says Active).
+  if (!isActive) {
+    const activate = document.createElement('button');
+    activate.type = 'button';
+    activate.className = 'mini primary';
+    activate.id = `m-syncs-act-${index}`;
+    activate.textContent = t('popup.saved.activate');
+    activate.addEventListener('click', () => openActivation(sync, activate));
+    actions.append(activate);
+  }
 
   const menu = document.createElement('details');
   menu.className = 'saved-menu';
@@ -2110,6 +2179,11 @@ async function activatePending(): Promise<void> {
       showResult('m-syncs-result', t('manager.syncs.activated', { name }));
       await refreshSyncs();
       await refreshStatus();
+      // Opened from a locked safety backup: its list now reads the new link.
+      if (!$('sec-backup').hidden) {
+        await refreshSafety();
+        showResult('backup-result-3', t('manager.syncs.activated', { name }));
+      }
     } catch (err) {
       if (!activateDialog.isOpen || activateDialog.token !== token) return;
       input('m-syncs-activate-pw').value = '';

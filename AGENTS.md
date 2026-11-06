@@ -77,7 +77,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `merge.ts` | `mergeTrees`: pure two-way union by URL (remote kept, local adopted with fresh ids, separators unioned, deletes never merged) + preview stats | new design (connect/switch third direction) |
 | `messages.ts` | `MessageCommand` + payload/response types + `toWireError/fromWireError` (name-based rehydration) | `app/webext.interface.ts` + sendMessage |
 | `backup.ts` | Encrypted envelope `{app,format,salt,blob}` (writes shared `xBrowserSyncNg` tag, reads legacy `KeepmarkApp` too) + guards (pwd≥8, 50MB, 200k nodes, depth cap) | Keepmark `BackupGuard.cs` + envelope |
-| `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention from Settings (`StoreKey.SafetyKeep`: 3/5/10/20/30/50, default 10; lowering it prunes the oldest after an inline confirmation), derived-key encryption + keyId, fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
+| `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention from Settings (`StoreKey.SafetyKeep`: 3/5/10/20/30/50, default 10; lowering it prunes the oldest after an inline confirmation), derived-key encryption + keyId, `safetyLock` (list-time `locked`: other-sync / needs-link, drives the manager filter + locked cards), fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
 | `duplicates.ts` | URL groups, last-copy-locked deletion plan, `deleteByIds` | Keepmark `/duplicates` page |
 
 ### Platform layers (thin)
@@ -311,7 +311,7 @@ wrapped rows when set; change rewraps only the vault, remove unwraps the rows,
 reset keeps the active sync and deletes the rest. Slice 3 is the UX rework:
 editable labels (max 40, case-insensitive uniqueness, host suggestion), the
 manager Sync section with `+ Add a sync` (new syncs upload the LIVE native
-tree and report the count; a pending conflict is a warning), row actions with a prominent Activate button (disabled on the active row) and
+tree and report the count; a pending conflict is a warning), row actions with a prominent Activate button (inactive rows only; the active row shows just its tag) and
 a secondary ⋮ menu (ordinary commands first; separated destructive actions last), `Forget…` on an
 inactive row and `Unlink this device…` on the active one (no last-row rule;
 the unlink also prunes the encrypted safety backups only that row's key could

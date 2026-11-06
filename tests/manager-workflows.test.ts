@@ -456,6 +456,62 @@ it('lists safety backups by day with sync name and change counts', async () => {
   expect(document.querySelectorAll('.safety-item')[1]!.textContent).toContain('No sync linked');
 });
 
+it('hides backups this link cannot restore behind a filter and offers to activate their sync', async () => {
+  const now = new Date().toISOString();
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSafetyList) {
+      return [
+        { fileName: 'mine.json', createdAtUtc: now, operation: 'sync-push', side: 'remote', items: 4, sizeBytes: 10, syncId: 'old', enc: 'derived' },
+        { fileName: 'work.json', createdAtUtc: now, operation: 'sync-pull', side: 'local', items: 9, sizeBytes: 10, syncId: 'work…99', enc: 'derived', locked: 'other-sync' },
+        { fileName: 'lost.json', createdAtUtc: now, operation: 'sync-pull', side: 'local', items: 2, sizeBytes: 10, syncId: 'gone…11', enc: 'derived', locked: 'other-sync' },
+      ];
+    }
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://old.test', syncId: 'old', lastUsedAt: '2026-10-20T10:00:00.000Z' },
+          { serviceUrl: 'https://work.test', syncId: 'workSync99', label: 'Work', lastUsedAt: '2026-10-19T10:00:00.000Z' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: false,
+      };
+    }
+    return null;
+  });
+  el('m-btn-safety').click(); await settle();
+  // Default: only what restores here; the filter says how many are hidden.
+  expect(el('m-safety-filter').hidden).toBe(false);
+  expect(el('m-safety-filter-here').textContent).toBe('Restorable here (1)');
+  expect(el('m-safety-filter-all').textContent).toBe('All (3)');
+  expect(document.querySelectorAll('#m-safety-list .safety-item')).toHaveLength(1);
+  expect(el('safety-restore-0').hidden).toBe(false);
+  // All: locked cards, no Restore, Delete kept, the owner offered when saved.
+  el('m-safety-filter-all').click();
+  expect(el('m-safety-filter-all').getAttribute('aria-pressed')).toBe('true');
+  const locked = document.querySelectorAll('#m-safety-list .safety-item.locked');
+  expect(locked).toHaveLength(2);
+  expect(locked[0]!.textContent).toContain('Restorable from “Work”');
+  expect(el('safety-restore-1').hidden).toBe(true);
+  expect(el('safety-delete-1')).toBeTruthy();
+  expect(el('safety-activate-1').textContent).toBe('Activate Work…');
+  // An unknown owner: the reason, no activation.
+  expect(locked[1]!.textContent).toContain('From another sync');
+  expect(document.getElementById('safety-activate-2')).toBeNull();
+  expect(el('safety-restore-2').hidden).toBe(true);
+});
+
+it('shows no filter when every backup restores here', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSafetyList) {
+      return [{ fileName: 'mine.json', createdAtUtc: new Date().toISOString(), operation: 'sync-push', side: 'remote', items: 4, sizeBytes: 10, syncId: 'old', enc: 'derived' }];
+    }
+    return null;
+  });
+  el('m-btn-safety').click(); await settle();
+  expect(el('m-safety-filter').hidden).toBe(true);
+  expect(document.querySelectorAll('#m-safety-list .safety-item.locked')).toHaveLength(0);
+});
+
 it('asks before a lower safety-backup limit deletes the oldest, then applies it', async () => {
   const sent: unknown[] = [];
   harness.send.mockImplementation(async (msg) => {
@@ -554,10 +610,10 @@ it('clears duplicate selections when another page activates a different sync', a
 
 it('keeps activation prominent and secondary actions in a dismissible menu', async () => {
   const row = el('m-syncs-list').querySelector('.saved-row')!;
-  const activate = el('m-syncs-act-0') as HTMLButtonElement;
   const menu = row.querySelector('details')!;
-  expect(activate.disabled).toBe(true);
-  expect(activate.closest('details')).toBeNull();
+  // The active row has nothing to activate: no button, only the tag.
+  expect(document.getElementById('m-syncs-act-0')).toBeNull();
+  expect(row.querySelector('.saved-actions > button')).toBeNull();
   expect(menu.open).toBe(false);
   expect(menu.querySelector('summary')!.getAttribute('aria-label')).toContain('old.test');
   const commands = [...menu.querySelectorAll('button')].map((button) => button.id);

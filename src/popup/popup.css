@@ -522,7 +522,8 @@ button.mini {
    used (meter + text on the same line). */
 .status-facts {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The ID never shrinks below its text: the label wraps first. */
+  grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) auto;
   align-items: center;
   gap: 6px 10px;
   margin-top: 7px;
@@ -533,16 +534,27 @@ button.mini {
 
 .status-label { color: var(--muted); }
 
-/* The 32-character sync ID is a bearer token: show it whole, split into two
-   balanced 16-character lines next to Copy, so it never wraps mid-pair and
-   never leaves a lone character on its own line. */
+/* The sync ID is a bearer token: one line, head…tail (shortSyncId), never
+   wrapped and never touching Copy; Copy still copies the whole ID. */
 .status-id {
-  min-width: 0;
+  min-width: max-content;
+  margin-right: 6px;
   font-size: 12px;
   white-space: nowrap;
 }
 
 .status-facts .meter { margin: 0; height: 4px; }
+
+/* Meter + value share the ID and Copy columns, so the long value never
+   widens the Copy column (and never squeezes the label onto two lines). */
+.status-space-row {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.status-space-row .meter { flex: 1; min-width: 24px; }
 
 .status-space {
   white-space: nowrap;

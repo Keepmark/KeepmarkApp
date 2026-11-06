@@ -123,9 +123,15 @@
         <h3 data-i18n="manager.backup.safety">Safety backups</h3>
         <p id="m-safety-hint" class="hint">Safety snapshots before destructive changes and syncs changing more than 10 items (newest 10 kept). Ordinary sync switches create no snapshot; deleting a sync from the server keeps no copy. Encrypted entries need the sync link to restore.</p>
         <div class="row"><button id="m-btn-safety" data-i18n="manager.backup.refreshList">Refresh list</button></div>
-        <div id="m-safety-list"></div>
+        <!-- Shown only when some backups cannot be restored with this link:
+             "Restorable here" (default) hides them, "All" shows them locked. -->
+        <div id="m-safety-filter" class="seg" role="group" aria-label="Safety backups shown" data-i18n-aria-label="mgr.safety.filterLabel" hidden>
+          <button id="m-safety-filter-here" type="button" aria-pressed="true"></button>
+          <button id="m-safety-filter-all" type="button" aria-pressed="false"></button>
+        </div>
         <div id="backup-error-3" class="error" role="alert" hidden></div>
         <div id="backup-result-3" class="result" hidden></div>
+        <div id="m-safety-list"></div>
 
         <div id="m-removed-card" hidden>
           <h3 data-i18n="manager.removed.title">Copy of the removed sync</h3>

@@ -1108,6 +1108,19 @@ dd:last-of-type { border-bottom: 0; }
 .safety-meta .tag.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); }
 .safety-actions { display: flex; gap: 6px; margin-top: 4px; }
 
+/* A backup this link cannot restore: dimmed, neutral edge, the reason in a
+   lock line. Its actions stay full-strength (Delete, Activate owner). */
+.safety-item.locked { border-left-color: var(--line); background: var(--surface-2); box-shadow: none; }
+.safety-item.locked > :not(.safety-actions):not(.safety-lock) { opacity: 0.6; }
+.safety-lock { margin: 0; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }
+.safety-lock::before { content: "🔒"; font-size: 11px; }
+
+/* "Restorable here / All": a two-button segmented filter. */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; margin: 4px 0 10px; background: var(--surface); }
+.seg[hidden] { display: none; }
+.seg button { border: 0; background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+
 .tag.warn {
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);

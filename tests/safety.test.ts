@@ -4,6 +4,7 @@ import { deriveKey } from '../src/shared/crypto';
 import type { BookmarkNode } from '../src/shared/models';
 import { MemoryBackend, safetyFileKey, Store, StoreKey } from '../src/shared/store';
 import {
+  safetyLock,
   buildFileName,
   deleteSafety,
   listSafety,
@@ -244,5 +245,18 @@ describe('safety backups', () => {
     const [named] = await listSafetyNamed(store);
     expect(named?.syncName).toBe('Work');
     expect(named?.added).toBeUndefined();
+  });
+});
+
+describe('safetyLock', () => {
+  const enc = { enc: 'derived' as const, keyId: 'k1', side: 'local' as const };
+  it('locks entries of another key and anything needing a link while unlinked', () => {
+    expect(safetyLock(enc, { linked: true, keyId: 'k1' })).toBeUndefined();
+    expect(safetyLock(enc, { linked: true, keyId: 'k2' })).toBe('other-sync');
+    expect(safetyLock(enc, { linked: false })).toBe('needs-link');
+    expect(safetyLock({ enc: null, side: 'remote' }, { linked: false })).toBe('needs-link');
+    expect(safetyLock({ enc: null, side: 'local' }, { linked: false })).toBeUndefined();
+    // Older entries without a key id are not guessed locked.
+    expect(safetyLock({ enc: 'derived', side: 'local' }, { linked: true, keyId: 'k2' })).toBeUndefined();
   });
 });

@@ -73,6 +73,25 @@ export interface SafetyEntry {
    *  syncs): bookmarks/folders the new side adds and drops. */
   added?: number;
   removed?: number;
+  /** List-time only (never stored): why this browser cannot restore it now. */
+  locked?: SafetyLock;
+}
+
+/** Why a safety backup cannot be restored with the current link:
+ *  `other-sync` = encrypted under another sync's key (or an older password);
+ *  `needs-link` = encrypted or server-side, and this browser is unlinked. */
+export type SafetyLock = 'other-sync' | 'needs-link';
+
+/** Same rule readSafetyTree and restoreSafety apply, decided up front so the
+ *  list never offers a restore that would fail. An encrypted entry without a
+ *  keyId (older format) is not judged here: the restore still checks it. */
+export function safetyLock(
+  entry: Pick<SafetyEntry, 'enc' | 'keyId' | 'side'>,
+  link: { linked: boolean; keyId?: string },
+): SafetyLock | undefined {
+  if (!link.linked && (entry.side === 'remote' || entry.enc === 'derived')) return 'needs-link';
+  if (entry.enc === 'derived' && entry.keyId && link.keyId && entry.keyId !== link.keyId) return 'other-sync';
+  return undefined;
 }
 
 /** Newest entries kept; older pruned automatically (payload + row together). */
@@ -88,10 +107,16 @@ export async function safetyKeep(store: Store): Promise<number> {
 
 /** Delete the oldest entries beyond `keep` (index row + payload). Returns
  *  how many went. Used when the setting is lowered and on every write. */
+/** Newest first; equal timestamps keep their index order (same-second writes),
+ *  so retention never drops a newer file in favour of an older twin. */
+function newestFirst(a: { createdAtUtc: string }, b: { createdAtUtc: string }): number {
+  return a.createdAtUtc < b.createdAtUtc ? 1 : a.createdAtUtc > b.createdAtUtc ? -1 : 0;
+}
+
 export async function pruneSafety(store: Store, keep: number): Promise<number> {
   const rows = await listSafety(store);
   if (rows.length <= keep) return 0;
-  const sorted = [...rows].sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
+  const sorted = [...rows].sort(newestFirst);
   for (const old of sorted.slice(keep)) await store.remove(safetyFileKey(old.fileName));
   await store.set(StoreKey.SafetyIndex, sorted.slice(0, keep));
   return sorted.length - keep;
@@ -142,7 +167,10 @@ async function savedNameFor(store: Store, syncId: string | undefined): Promise<s
 /** Rows with the current name of their sync: a saved sync whose truncated ID
  *  matches exactly one row lends its (possibly renamed) name; otherwise the
  *  name recorded at write time stays. */
-export async function listSafetyNamed(store: Store): Promise<SafetyEntry[]> {
+export async function listSafetyNamed(
+  store: Store,
+  link?: { linked: boolean; keyId?: string },
+): Promise<SafetyEntry[]> {
   const entries = await listSafety(store);
   let rows: SavedSync[] = [];
   try {
@@ -152,7 +180,9 @@ export async function listSafetyNamed(store: Store): Promise<SafetyEntry[]> {
   }
   return entries.map((entry) => {
     const matches = rows.filter((r) => sanitizeSyncId(r.syncId) === entry.syncId);
-    return matches.length === 1 ? { ...entry, syncName: savedSyncName(matches[0]!) } : entry;
+    const named = matches.length === 1 ? { ...entry, syncName: savedSyncName(matches[0]!) } : entry;
+    const locked = link ? safetyLock(entry, link) : undefined;
+    return locked ? { ...named, locked } : named;
   });
 }
 
@@ -172,7 +202,7 @@ export async function listSafety(store: Store): Promise<SafetyEntry[]> {
       typeof e.sizeBytes === 'number',
   );
   if (rows.length !== raw.length) return [];
-  return rows.sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
+  return rows.sort(newestFirst);
 }
 
 /**
@@ -224,7 +254,7 @@ export async function writeSafety(
     ...(syncName ? { syncName } : {}),
     ...(input.changes ? { added: input.changes.added, removed: input.changes.removed } : {}),
   };
-  const next = [entry, ...(await listSafety(store))].sort((a, b) => (a.createdAtUtc < b.createdAtUtc ? 1 : -1));
+  const next = [entry, ...(await listSafety(store))].sort(newestFirst);
   const keep = await safetyKeep(store);
   const pruned = next.slice(0, keep);
   for (const old of next.slice(keep)) {
