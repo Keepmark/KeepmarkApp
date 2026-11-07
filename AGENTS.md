@@ -128,7 +128,7 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   activation confirm (popup and manager, `activate-hint.ts`) shows its full
   explanation plus "Got it, don't repeat this" until that box is ticked on a
   confirmed Activate (`StoreKey.ActivateHintSeen`, storage.local, per
-  browser); then only "Activate {name}?" and a "What happens" link that
+  browser); then only "Activate {name}?" with a small info button (ⓘ) that
   expands the text. The sync lock password field never collapses.
   Rename/remove/add/delete live in the manager. The server-removed notice is
   informational only (the fact, no backup wording, no actions): the kept copy

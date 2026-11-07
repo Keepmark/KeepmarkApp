@@ -1,7 +1,7 @@
 // Activation confirm, short after the first time ("Variante 1"). The first
 // confirmations show the full explanation plus "Got it, don't repeat this";
 // once that box was ticked on a confirmed Activate, later confirmations show
-// only "Activate {name}?" and a "What happens" link that expands the same
+// only "Activate {name}?" with a small info button that expands the same
 // text inline. The sync lock password field is never affected: only the
 // explanation collapses. The flag is a local preference of this browser
 // (StoreKey.ActivateHintSeen, storage.local, never synced).
@@ -78,16 +78,14 @@ export function renderActivateHint(ids: HintIds, collapsed = seen): void {
   }
 }
 
-/** "What happens": expand the explanation inline (the link then goes away). */
+/** Info button next to the question: shows / hides the explanation inline. */
 export function bindActivateHintToggle(ids: HintIds): void {
   byId(ids.more)?.addEventListener('click', () => {
     const hint = byId(ids.hint);
-    if (hint) hint.hidden = false;
     const more = byId(ids.more);
-    if (more) {
-      more.setAttribute('aria-expanded', 'true');
-      more.hidden = true;
-    }
+    if (!hint || !more) return;
+    hint.hidden = !hint.hidden;
+    more.setAttribute('aria-expanded', String(!hint.hidden));
   });
 }
 

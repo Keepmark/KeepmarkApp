@@ -388,9 +388,8 @@
          live in one modal, so no other row can be touched meanwhile. -->
     <dialog id="m-activate-dialog" class="task" aria-labelledby="m-activate-title" hidden>
       <h2 id="m-activate-title" data-i18n="popup.saved.activate">Activate</h2>
-      <p><strong id="m-syncs-activate-text"></strong></p>
+      <p class="confirm-head"><strong id="m-syncs-activate-text"></strong><button id="m-syncs-activate-more" class="info-btn" type="button" hidden aria-expanded="false" title="What happens" aria-label="What happens" data-i18n-title="popup.saved.whatHappens" data-i18n-aria-label="popup.saved.whatHappens"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.01" /></svg></button></p>
       <p id="m-syncs-activate-hint" class="hint"></p>
-      <button id="m-syncs-activate-more" class="link-btn" type="button" hidden data-i18n="popup.saved.whatHappens">What happens</button>
       <label id="m-syncs-activate-ack-row" class="check"><input id="m-syncs-activate-ack" type="checkbox" /><span data-i18n="popup.saved.hintAck">Got it, don't repeat this</span></label>
       <form id="m-activate-form" autocomplete="off">
         <label id="m-syncs-pw-row" hidden><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
