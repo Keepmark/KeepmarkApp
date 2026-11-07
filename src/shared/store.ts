@@ -4,6 +4,10 @@
 
 export enum StoreKey {
   RememberedServices = 'rememberedServices',
+  /** "Got it, don't repeat this" ticked on an Activate confirmation: later
+   *  confirmations collapse the explanation behind "What happens". Local
+   *  preference of this browser (storage.local), never synced. */
+  ActivateHintSeen = 'activateHintSeen',
   AlternateSearchBarPosition = 'alternateSearchBarPosition',
   AutoFetchMetadata = 'autoFetchMetadata',
   AutoBackUpSchedule = 'autoBackUpSchedule',

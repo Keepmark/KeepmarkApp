@@ -60,6 +60,8 @@ export const ja: Record<MessageKey, string> = {
   'popup.saved.active': '使用中',
   'popup.saved.activate': '有効化',
   'popup.saved.activatePrompt': '{name}を有効にしますか？',
+  'popup.saved.hintAck': '了解、次回から表示しない',
+  'popup.saved.whatHappens': '何が起こるか',
   'popup.saved.passwordHint': '{name} の同期ロックのパスワード（同期自体のパスワードではありません）。変更の前に確認されます。',
   'popup.saved.forget': '忘れる',
   'popup.saved.forgetPrompt': '{name} を忘れますか？',

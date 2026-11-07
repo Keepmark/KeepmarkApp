@@ -676,3 +676,38 @@ it('layout B: active card first, then "Other syncs" rows with an icon-only QR', 
   expect(buttons).toEqual(['m-syncs-qr-0', 'm-syncs-act-0']);
   expect(items[2].textContent).not.toContain('Inactive');
 });
+
+it('activation confirm collapses its explanation after "Got it" (password field stays)', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://old.test', syncId: 'old' },
+          { serviceUrl: 'https://other.test', syncId: 'other', label: 'Altro' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: true,
+      };
+    }
+    if (msg.command === MessageCommand.ActivateSavedSync) return { activated: true };
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  el('m-syncs-act-1').click(); await settle();
+  expect(el('m-syncs-activate-hint').hidden).toBe(false);
+  expect(el('m-syncs-activate-ack-row').hidden).toBe(false);
+  expect(el('m-syncs-activate-more').hidden).toBe(true);
+  (el('m-syncs-activate-ack') as HTMLInputElement).checked = true;
+  field('m-syncs-activate-pw', 'pin');
+  el('m-syncs-activate-go').click(); await settle();
+  expect((el('m-activate-dialog') as HTMLDialogElement).open).toBe(false);
+
+  el('m-btn-refresh').click(); await settle();
+  el('m-syncs-act-1').click(); await settle();
+  expect(el('m-syncs-activate-text').textContent).toContain('Altro');
+  expect(el('m-syncs-activate-hint').hidden).toBe(true);
+  expect(el('m-syncs-activate-ack-row').hidden).toBe(true);
+  expect(el('m-syncs-pw-row').hidden).toBe(false);
+  el('m-syncs-activate-more').click();
+  expect(el('m-syncs-activate-hint').hidden).toBe(false);
+});

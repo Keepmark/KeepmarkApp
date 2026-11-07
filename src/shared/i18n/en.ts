@@ -60,6 +60,8 @@ export const en = {
   'popup.saved.active': 'Active',
   'popup.saved.activate': 'Activate',
   'popup.saved.activatePrompt': 'Activate {name}?',
+  'popup.saved.hintAck': "Got it, don't repeat this",
+  'popup.saved.whatHappens': 'What happens',
   'popup.saved.passwordHint': 'Sync lock password for {name} (not the sync\'s own password). It is checked before anything changes.',
   'popup.saved.forget': 'Forget',
   'popup.saved.forgetPrompt': 'Forget {name}?',

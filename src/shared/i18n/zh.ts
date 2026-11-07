@@ -61,6 +61,8 @@ export const zh: Record<MessageKey, string> = {
   'popup.saved.active': '使用中',
   'popup.saved.activate': '启用',
   'popup.saved.activatePrompt': '启用 {name}？',
+  'popup.saved.hintAck': '知道了，不再提示',
+  'popup.saved.whatHappens': '会发生什么',
   'popup.saved.passwordHint': '{name} 的同步锁密码（不是同步本身的密码）。在任何更改前都会检查。',
   'popup.saved.forget': '忘记',
   'popup.saved.forgetPrompt': '忘记 {name}？',

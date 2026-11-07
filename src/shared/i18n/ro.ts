@@ -63,6 +63,8 @@ export const ro: Record<MessageKey, string> = {
   'popup.saved.active': 'Activă',
   'popup.saved.activate': 'Activează',
   'popup.saved.activatePrompt': 'Activezi {name}?',
+  'popup.saved.hintAck': 'Am înțeles, nu mai repeta',
+  'popup.saved.whatHappens': 'Ce se întâmplă',
   'popup.saved.passwordHint': 'Parola blocării sincronizării pentru {name} (nu parola proprie a sincronizării). Este verificată înainte de orice modificare.',
   'popup.saved.forget': 'Uită',
   'popup.saved.forgetPrompt': 'Uiți {name}?',

@@ -60,6 +60,8 @@ export const pt: Record<MessageKey, string> = {
   'popup.saved.active': 'Ativo',
   'popup.saved.activate': 'Ativar',
   'popup.saved.activatePrompt': 'Ativar {name}?',
+  'popup.saved.hintAck': 'Entendi, não repetir',
+  'popup.saved.whatHappens': 'O que acontece',
   'popup.saved.passwordHint': 'Senha do bloqueio de sync para {name} (não a senha da sincronização). É verificada antes de qualquer alteração.',
   'popup.saved.forget': 'Esquecer',
   'popup.saved.forgetPrompt': 'Esquecer {name}?',

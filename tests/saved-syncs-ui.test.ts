@@ -5,10 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SavedSyncsPanel } from '../src/popup/saved-syncs';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
 import type { SavedSync } from '../src/shared/saved-syncs';
+import { loadActivateHintSeen } from '../src/popup/activate-hint';
+import { StoreKey } from '../src/shared/store';
 
 const harness = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock('../src/popup/ui', async (original) => ({ ...await original<object>(), send: harness.send }));
-vi.mock('webextension-polyfill', () => ({ default: { runtime: { sendMessage: vi.fn() } } }));
+const stored = vi.hoisted(() => new Map<string, unknown>());
+vi.mock('webextension-polyfill', () => ({ default: {
+  runtime: { sendMessage: vi.fn() },
+  storage: { local: {
+    get: async (key: string) => (stored.has(key) ? { [key]: stored.get(key) } : {}),
+    set: async (items: Record<string, unknown>) => { for (const [k, v] of Object.entries(items)) stored.set(k, v); },
+  } },
+} }));
 
 const el = (id: string): HTMLElement => document.getElementById(id)!;
 const dialog = (): HTMLDialogElement => el('p-saved-dialog') as HTMLDialogElement;
@@ -41,12 +50,15 @@ beforeEach(() => {
       <dialog id="p-saved-dialog">
         <p><strong id="p-saved-confirm-text"></strong></p>
         <p id="p-saved-hint"></p>
+        <button id="p-saved-more" type="button" hidden></button>
+        <label id="p-saved-ack-row"><input id="p-saved-ack" type="checkbox" /></label>
         <label id="p-saved-pw-row"><input id="p-saved-password" type="password" /></label>
         <button id="p-saved-activate"></button>
         <button id="p-saved-cancel"></button>
         <div id="p-saved-error" role="alert" hidden></div>
       </dialog>
     </div>`;
+  stored.clear();
   harness.send.mockReset().mockResolvedValue({});
   onChanged = vi.fn(async () => undefined);
   panel = new SavedSyncsPanel('p-saved', onChanged);
@@ -160,5 +172,49 @@ describe('saved syncs popup panel', () => {
     panel.render(data);
     expect(dialog().open).toBe(false);
     expect(harness.send).not.toHaveBeenCalled();
+  });
+
+  it('shows the full explanation with "Got it" until it is ticked on a confirmed Activate', async () => {
+    await loadActivateHintSeen();
+    panel.render({ ...data, switchLockSet: false });
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-hint').hidden).toBe(false);
+    expect(el('p-saved-hint').textContent).not.toBe('');
+    expect(el('p-saved-ack-row').hidden).toBe(false);
+    expect(el('p-saved-more').hidden).toBe(true);
+    // Not ticked: nothing stored, the next confirm is full again.
+    (el('p-saved-activate') as HTMLButtonElement).click();
+    await tick();
+    expect(stored.has(StoreKey.ActivateHintSeen)).toBe(false);
+
+    panel.render({ ...data, switchLockSet: false });
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-hint').hidden).toBe(false);
+    (el('p-saved-ack') as HTMLInputElement).checked = true;
+    (el('p-saved-activate') as HTMLButtonElement).click();
+    await tick();
+    expect(stored.get(StoreKey.ActivateHintSeen)).toBe(true);
+
+    // Collapsed: prompt only, "What happens" expands the same text inline.
+    panel.render({ ...data, switchLockSet: false });
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-confirm-text').textContent).toContain('other.example');
+    expect(el('p-saved-hint').hidden).toBe(true);
+    expect(el('p-saved-ack-row').hidden).toBe(true);
+    expect(el('p-saved-more').hidden).toBe(false);
+    expect(el('p-saved-more').getAttribute('aria-expanded')).toBe('false');
+    el('p-saved-more').click();
+    expect(el('p-saved-hint').hidden).toBe(false);
+    expect(el('p-saved-more').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps the sync lock password field when the explanation is collapsed', async () => {
+    stored.set(StoreKey.ActivateHintSeen, true);
+    await loadActivateHintSeen();
+    panel.render(data);
+    (rowEls()[1].querySelector('button') as HTMLButtonElement).click();
+    expect(el('p-saved-hint').hidden).toBe(true);
+    expect(el('p-saved-pw-row').hidden).toBe(false);
+    expect(document.activeElement).toBe(el('p-saved-password'));
   });
 });

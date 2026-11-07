@@ -32,6 +32,20 @@ import type { LangSetting } from '../shared/i18n.js';
 import { cancelAllConfirms, cancelConfirm, clearMessages, confirmInline, showError } from '../popup/flow.js';
 import { TaskDialog } from '../popup/modal.js';
 import {
+  bindActivateHintToggle,
+  commitActivateHintAck,
+  loadActivateHintSeen,
+  renderActivateHint,
+  type HintIds,
+} from '../popup/activate-hint.js';
+
+const activateHintIds: HintIds = {
+  hint: 'm-syncs-activate-hint',
+  ack: 'm-syncs-activate-ack',
+  ackRow: 'm-syncs-activate-ack-row',
+  more: 'm-syncs-activate-more',
+};
+import {
   ChangePasswordDone,
   DeleteRemoteDone,
   DeleteRemoteImplication,
@@ -2219,6 +2233,7 @@ function openActivation(sync: SavedSync, opener: HTMLElement): void {
   $('m-syncs-activate-hint').textContent = switchLockSet
     ? t('popup.saved.passwordHint', { name })
     : t('manager.syncs.activateHint', { name });
+  renderActivateHint(activateHintIds);
   ($('m-syncs-pw-row') as HTMLElement).hidden = !switchLockSet;
   input('m-syncs-activate-pw').value = '';
   const error = $('m-activate-error') as HTMLElement;
@@ -2259,6 +2274,7 @@ async function activatePending(): Promise<void> {
   }
   const name = savedSyncName(target);
   const token = activateDialog.token;
+  await commitActivateHintAck(activateHintIds);
   await withBusy('m-syncs-activate-go', t('busy.connecting'), async () => {
     try {
       await send({
@@ -2726,6 +2742,8 @@ async function init(): Promise<void> {
   // registered below already has its dialog.
   linkDialog = new TaskDialog($('m-link-dialog') as HTMLDialogElement, { onClose: resetAddSync });
   activateDialog = new TaskDialog($('m-activate-dialog') as HTMLDialogElement, { onClose: resetActivation });
+  bindActivateHintToggle(activateHintIds);
+  void loadActivateHintSeen();
   lockDialog = new TaskDialog($('m-lock-dialog') as HTMLDialogElement, { onClose: resetLockPanel });
   rowDialog = new TaskDialog($('m-row-dialog') as HTMLDialogElement, { onClose: resetRowTask });
   pwDialog = new TaskDialog($('m-pw-dialog') as HTMLDialogElement, { onClose: resetPasswordChange });

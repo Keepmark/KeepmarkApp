@@ -7,6 +7,13 @@
 import { $, input, send, withBusy } from './ui.js';
 import { showError } from './flow.js';
 import { t } from '../shared/i18n.js';
+import {
+  bindActivateHintToggle,
+  commitActivateHintAck,
+  loadActivateHintSeen,
+  renderActivateHint,
+  type HintIds,
+} from './activate-hint.js';
 import { MessageCommand, type SavedSyncsResponse } from '../shared/messages.js';
 import {
   isActiveSavedSync,
@@ -29,6 +36,8 @@ export class SavedSyncsPanel {
     private readonly prefix: string,
     private readonly onChanged: (kind: SavedSyncsChange) => Promise<void>,
   ) {
+    bindActivateHintToggle(this.hintIds());
+    void loadActivateHintSeen();
     this.el('cancel').addEventListener('click', () => this.closeConfirm());
     this.el('activate').addEventListener('click', () => void this.submit());
     this.password().addEventListener('input', () => this.clearError());
@@ -49,6 +58,15 @@ export class SavedSyncsPanel {
 
   private el(suffix: string): HTMLElement {
     return $(`${this.prefix}-${suffix}`);
+  }
+
+  private hintIds(): HintIds {
+    return {
+      hint: `${this.prefix}-hint`,
+      ack: `${this.prefix}-ack`,
+      ackRow: `${this.prefix}-ack-row`,
+      more: `${this.prefix}-more`,
+    };
   }
 
   private dialog(): HTMLDialogElement {
@@ -135,6 +153,7 @@ export class SavedSyncsPanel {
     this.el('hint').textContent = this.switchLockSet
       ? t('popup.saved.passwordHint', { name })
       : t('popup.saved.activateHintNoPassword', { name });
+    renderActivateHint(this.hintIds());
     ($(`${this.prefix}-pw-row`) as HTMLElement).hidden = !this.switchLockSet;
     this.password().value = '';
     this.clearError();
@@ -158,6 +177,7 @@ export class SavedSyncsPanel {
       return;
     }
     this.clearError();
+    await commitActivateHintAck(this.hintIds());
     await withBusy(`${this.prefix}-activate`, t('busy.connecting'), async () => {
       try {
         await send({

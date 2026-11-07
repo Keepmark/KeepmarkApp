@@ -124,7 +124,12 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   shared `ui.ts`): connect + status card + saved syncs (multi-sync) + sync now + open manager. Display
   only; mutations via messages. `saved-syncs.ts` renders the same registry in
   both views read-only (active tag, `Activate` on inactive rows only) and owns
-  the modal activation step (sync lock password only when one is set).
+  the modal activation step (sync lock password only when one is set). The
+  activation confirm (popup and manager, `activate-hint.ts`) shows its full
+  explanation plus "Got it, don't repeat this" until that box is ticked on a
+  confirmed Activate (`StoreKey.ActivateHintSeen`, storage.local, per
+  browser); then only "Activate {name}?" and a "What happens" link that
+  expands the text. The sync lock password field never collapses.
   Rename/remove/add/delete live in the manager. The server-removed notice is
   informational only (the fact, no backup wording, no actions): the kept copy
   lives in the manager's Backup section, where the user goes on their own.

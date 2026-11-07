@@ -62,6 +62,8 @@ export const ru: Record<MessageKey, string> = {
   'popup.saved.active': 'Активна',
   'popup.saved.activate': 'Активировать',
   'popup.saved.activatePrompt': 'Активировать {name}?',
+  'popup.saved.hintAck': 'Понятно, больше не показывать',
+  'popup.saved.whatHappens': 'Что произойдёт',
   'popup.saved.passwordHint': 'Пароль блокировки синхронизации для {name} (не пароль самой синхронизации). Проверяется перед любым изменением.',
   'popup.saved.forget': 'Забыть',
   'popup.saved.forgetPrompt': 'Забыть {name}?',
