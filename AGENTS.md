@@ -141,7 +141,10 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   (Status, Backup, Duplicates, Sync, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
   read-only `SwitchPreview` preflight before confirm; the Sync section owns the
-  saved registry (rows + `+ Add a sync` form + optional sync lock).
+  saved registry (rows + `+ Add a sync` form + optional sync lock). Layout:
+  the active sync is a larger card (short ID + Copy, `Show QR` with icon, ⋮);
+  the others follow under "Other syncs" as compact rows (icon-only QR,
+  Activate, ⋮). Element ids keep the registry index.
   With a password set, `+ Add a sync` asks it first (read-only
   `VerifySwitchPassword`) and only then opens the form, which has no password
   field of its own. Settings holds preferences only (language and the log panel

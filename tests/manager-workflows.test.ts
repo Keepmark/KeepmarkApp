@@ -619,11 +619,16 @@ it('keeps activation prominent and secondary actions in a dismissible menu', asy
   const menu = row.querySelector('details')!;
   // The active row has nothing to activate: no button, only the tag.
   expect(document.getElementById('m-syncs-act-0')).toBeNull();
-  expect(row.querySelector('.saved-actions > button')).toBeNull();
+  // Layout B: the active card keeps copy + QR (icon and text) in view.
+  expect(row.classList.contains('saved-hero')).toBe(true);
+  const visible = [...row.querySelectorAll('.saved-actions > button')].map((button) => button.id);
+  expect(visible).toEqual(['m-syncs-copy-0', 'm-syncs-qr-0']);
+  expect(el('m-syncs-qr-0').querySelector('svg.qr-icon')).not.toBeNull();
+  expect(el('m-syncs-qr-0').textContent).toBe('Show QR');
   expect(menu.open).toBe(false);
   expect(menu.querySelector('summary')!.getAttribute('aria-label')).toContain('old.test');
   const commands = [...menu.querySelectorAll('button')].map((button) => button.id);
-  expect(commands).toEqual(['m-syncs-rename-0', 'm-syncs-qr-0', 'm-syncs-pw-0', 'm-syncs-rm-0', 'm-syncs-delete-0']);
+  expect(commands).toEqual(['m-syncs-rename-0', 'm-syncs-pw-0', 'm-syncs-rm-0', 'm-syncs-delete-0']);
   expect(menu.querySelector('hr')!.nextElementSibling!.id).toBe('m-syncs-rm-0');
   menu.open = true;
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -638,4 +643,36 @@ it('keeps activation prominent and secondary actions in a dismissible menu', asy
   expect((el('m-row-dialog') as HTMLDialogElement).open).toBe(true);
   el('m-btn-row-cancel').click();
   expect(document.activeElement).toBe(menu.querySelector('summary'));
+});
+
+it('layout B: active card first, then "Other syncs" rows with an icon-only QR', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [
+          { serviceUrl: 'https://other.test', syncId: 'other', label: 'Altro' },
+          { serviceUrl: 'https://old.test', syncId: 'old' },
+        ],
+        active: { serviceUrl: 'https://old.test', syncId: 'old' },
+        switchLockSet: false,
+      };
+    }
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  const items = [...el('m-syncs-list').children] as HTMLElement[];
+  expect(items.map((item) => item.className)).toEqual([
+    'saved-row saved-active saved-hero', 'saved-group-title', 'saved-row',
+  ]);
+  expect(items[1].textContent).toBe('Other syncs');
+  // Registry index stays in the ids even though the active row moved first.
+  expect(items[0].querySelector('#m-syncs-qr-1')).not.toBeNull();
+  const qr = el('m-syncs-qr-0');
+  expect(items[2].contains(qr)).toBe(true);
+  expect(qr.classList.contains('icon-only')).toBe(true);
+  expect(qr.textContent).toBe('');
+  expect(qr.getAttribute('aria-label')).toContain('Altro');
+  const buttons = [...items[2].querySelectorAll('.saved-actions > button')].map((button) => button.id);
+  expect(buttons).toEqual(['m-syncs-qr-0', 'm-syncs-act-0']);
+  expect(items[2].textContent).not.toContain('Inactive');
 });

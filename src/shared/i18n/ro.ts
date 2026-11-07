@@ -377,6 +377,8 @@ export const ro: Record<MessageKey, string> = {
   'common.yesChangePw': 'Da, schimbă parola',
   'mgr.syncs.syncPassword': 'Parola sincronizării',
   'manager.syncs.showQr': 'Arată QR',
+  'manager.syncs.showQrAria': 'Arată codul QR de conectare pentru {name}',
+  'manager.syncs.otherTitle': 'Alte sincronizări',
   'mgr.syncs.confirmTargetPassword': 'Confirmă parola țintei',
   'mgr.syncs.summaryNew_one': 'Se va crea o sincronizare nouă pe {url} și se va încărca {count} marcaj. Nu e nevoie de ID — unul nou apare după mutare.',
   'mgr.syncs.summaryNew_other': 'Se va crea o sincronizare nouă pe {url} și se vor încărca {count} marcaje. Nu e nevoie de ID — unul nou apare după mutare.',

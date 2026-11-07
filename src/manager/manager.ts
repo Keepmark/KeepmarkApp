@@ -1939,7 +1939,23 @@ function renderSyncsList(): void {
   list.replaceChildren();
   const rows = syncsView.syncs;
   ($('m-syncs-empty') as HTMLElement).hidden = rows.length > 0;
-  rows.forEach((sync, index) => list.append(syncRow(sync, index)));
+  // Layout: the active sync first, as a larger card with its ID, copy and QR
+  // in view; the others below, under "Other syncs", as compact rows. Ids keep
+  // the registry index.
+  const indexed = rows.map((sync, index) => ({ sync, index }));
+  const active = indexed.filter(({ sync }) => isActiveSavedSync(sync, syncsView.active));
+  const others = indexed.filter(({ sync }) => !isActiveSavedSync(sync, syncsView.active));
+  active.forEach(({ sync, index }) => list.append(syncRow(sync, index)));
+  if (others.length > 0) {
+    const title = document.createElement('li');
+    title.className = 'saved-group-title';
+    title.setAttribute('role', 'presentation');
+    title.textContent = t('manager.syncs.otherTitle');
+    // Only a heading when something sits above it.
+    title.hidden = active.length === 0;
+    list.append(title);
+  }
+  others.forEach(({ sync, index }) => list.append(syncRow(sync, index)));
   const activeRow = rows.find((row) => isActiveSavedSync(row, syncsView.active));
   ($('m-sync-name') as HTMLElement).textContent = activeRow ? savedSyncName(activeRow) : '—';
   updateLinkConflictNote();
@@ -1954,7 +1970,7 @@ function renderSyncsList(): void {
 function syncRow(sync: SavedSync, index: number): HTMLElement {
   const isActive = isActiveSavedSync(sync, syncsView.active);
   const li = document.createElement('li');
-  li.className = isActive ? 'saved-row saved-active' : 'saved-row';
+  li.className = isActive ? 'saved-row saved-active saved-hero' : 'saved-row';
 
   const head = document.createElement('div');
   head.className = 'saved-head';
@@ -1962,11 +1978,12 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   name.textContent = savedSyncName(sync);
   const statusWrap = document.createElement('span');
   statusWrap.className = 'saved-status';
-  const tag = document.createElement('span');
-  tag.className = isActive ? 'tag ok' : 'tag';
-  tag.textContent = isActive ? t('popup.saved.active') : t('manager.syncs.dormant');
-  statusWrap.append(tag);
   if (isActive) {
+    // Inactive rows carry no tag: the "Other syncs" heading already says it.
+    const tag = document.createElement('span');
+    tag.className = 'tag ok';
+    tag.textContent = t('popup.saved.active');
+    statusWrap.append(tag);
     const gate = contractGate({
       liveV12: ping?.supportsV12,
       storedV12: status?.supportsV12,
@@ -1986,10 +2003,57 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   const lastUsed = sync.lastUsedAt ? ` · ${t('manager.syncs.lastUsed', { when: formatDateTime(sync.lastUsedAt) })}` : '';
   const sub = document.createElement('small');
   sub.className = 'saved-sub';
-  sub.textContent = `${serviceHost(sync.serviceUrl)} · ${shortSyncId(sync.syncId)}${lastUsed}`;
+  // The active card names its ID on its own line below (with copy).
+  sub.textContent = isActive
+    ? `${serviceHost(sync.serviceUrl)}${lastUsed}`
+    : `${serviceHost(sync.serviceUrl)} · ${shortSyncId(sync.syncId)}${lastUsed}`;
 
   const actions = document.createElement('div');
   actions.className = 'saved-actions';
+
+  if (isActive) {
+    // The active card shows its ID (short: bearer token) with a copy of the
+    // full one, so moving another device needs no trip to Status.
+    const idLabel = document.createElement('span');
+    idLabel.className = 'saved-id-label';
+    idLabel.textContent = t('common.syncId');
+    const idCode = document.createElement('code');
+    idCode.className = 'saved-id';
+    idCode.textContent = shortSyncId(sync.syncId);
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'mini';
+    copy.id = `m-syncs-copy-${index}`;
+    copy.textContent = t('common.copy');
+    copy.setAttribute('aria-label', t('popup.copyId.label'));
+    copy.addEventListener('click', () => void copyText(sync.syncId, t('popup.copyIdPrompt')));
+    actions.append(idLabel, idCode, copy);
+  }
+
+  // Every row can produce a QR: the phone may join a sync that is not the one
+  // active in this browser. The code names that row's own service and ID.
+  // Icon + text on the active card, icon only on the compact rows.
+  const qr = document.createElement('button');
+  qr.type = 'button';
+  qr.className = isActive ? 'mini qr-btn' : 'mini qr-btn icon-only';
+  qr.id = `m-syncs-qr-${index}`;
+  qr.append(qrIcon());
+  if (isActive) {
+    const label = document.createElement('span');
+    label.textContent = t('manager.syncs.showQr');
+    qr.append(label);
+  } else {
+    qr.title = t('manager.syncs.showQr');
+  }
+  qr.setAttribute('aria-label', t('manager.syncs.showQrAria', { name: savedSyncName(sync) }));
+  const qrTarget: ConnectQrTarget = { serviceUrl: sync.serviceUrl, syncId: sync.syncId };
+  qr.addEventListener('click', () => connectQr?.openFor(qrTarget, qr));
+  if (isActive) {
+    const spacer = document.createElement('span');
+    spacer.className = 'saved-spacer';
+    actions.append(spacer);
+  }
+  actions.append(qr);
 
   // Activation is the row's main action; the active row has nothing to
   // activate, so it shows no button at all (its tag already says Active).
@@ -2030,17 +2094,6 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   rename.addEventListener('click', () => openRowTask('rename', sync, more));
   commands.append(rename);
 
-  // Every row can produce a QR: the phone may join a sync that is not the one
-  // active in this browser. The code names that row's own service and ID.
-  const qr = document.createElement('button');
-  qr.type = 'button';
-  qr.className = 'mini';
-  qr.id = `m-syncs-qr-${index}`;
-  qr.textContent = t('manager.syncs.showQr');
-  const qrTarget: ConnectQrTarget = { serviceUrl: sync.serviceUrl, syncId: sync.syncId };
-  qr.addEventListener('click', () => connectQr?.openFor(qrTarget, more));
-  commands.append(qr);
-
   if (isActive) {
     // The long password belongs to this sync, so its change lives here, next
     // to the row it re-encrypts — not in Settings.
@@ -2079,8 +2132,37 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
     commands.append(removeRemote);
   }
 
-  li.append(head, sub, actions);
+  if (isActive) {
+    li.append(head, sub, actions);
+  } else {
+    const main = document.createElement('div');
+    main.className = 'saved-main';
+    main.append(head, sub);
+    li.append(main, actions);
+  }
   return li;
+}
+
+/** QR glyph (three finder squares + modules), built without HTML strings. */
+function qrIcon(): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', 'qr-icon');
+  for (const [x, y] of [[3, 3], [14, 3], [3, 14]]) {
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', String(x));
+    rect.setAttribute('y', String(y));
+    rect.setAttribute('width', '7');
+    rect.setAttribute('height', '7');
+    rect.setAttribute('rx', '1');
+    svg.append(rect);
+  }
+  const modules = document.createElementNS(ns, 'path');
+  modules.setAttribute('d', 'M14 14h3v3h-3zM20 14v.01M14 20v.01M17 17h4v4h-4zM6.5 6.5v.01M17.5 6.5v.01M6.5 17.5v.01');
+  svg.append(modules);
+  return svg;
 }
 
 function listOpenSyncMenus(): HTMLDetailsElement[] {
