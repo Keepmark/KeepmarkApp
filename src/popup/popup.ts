@@ -33,10 +33,27 @@ import {
   type SavedSync,
 } from '../shared/saved-syncs.js';
 import { type Direction, directionConfirm } from './texts.js';
+import {
+  applyConnectDraft,
+  captureConnectDraft,
+  saveConnectDraft,
+  takeConnectDraft,
+  type DraftArea,
+} from './handover.js';
+import { fitToWindow } from './layout.js';
+
+const isFullpage = (): boolean => new URLSearchParams(location.search).has('fullpage');
+
+/** Handover area: storage.session (memory only) when the browser has it. */
+function draftArea(): DraftArea {
+  const storage = browser.storage as unknown as { session?: DraftArea; local: DraftArea };
+  return storage.session ?? storage.local;
+}
 
 function showView(name: 'connect' | 'main'): void {
   ($('view-connect') as HTMLElement).hidden = name !== 'connect';
   ($('view-main') as HTMLElement).hidden = name !== 'main';
+  fitToWindow();
 }
 
 /** Header pill text: time only for today, short date otherwise (the full
@@ -64,6 +81,8 @@ let switchLockSet = false;
 let savedNames: SavedSync[] = [];
 /** Name typed by the user: never overwrite it with the host suggestion. */
 let connectNameTouched = false;
+/** The full tab was opened from the popup with a connect draft applied. */
+let resumedDraft = false;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -114,7 +133,13 @@ async function refreshAll(pickView = false): Promise<void> {
   // the URL input, so typing a name would silently go to the page body and
   // the suggested default would be saved. Focus the first visible field with
   // its suggestion selected, so typing replaces it.
-  if (pickView && !status?.syncEnabled) focusFirstVisible([input('service-url'), input('sync-name')], true);
+  if (pickView && !status?.syncEnabled) {
+    // A handed-over draft already holds the choices: go straight to the
+    // password, the one field the tab never receives.
+    if (resumedDraft) focusFirstVisible([input('password')]);
+    else focusFirstVisible([input('service-url'), input('sync-name')], true);
+  }
+  fitToWindow();
 }
 
 /** Multi-sync registry rows, rendered in both views. Metadata only: a row
@@ -200,18 +225,27 @@ async function initConnect(): Promise<void> {
     connectNameTouched = true;
   });
   $('btn-connect').addEventListener('click', () => void submitConnect());
-  $('btn-open-tab').addEventListener('click', () => {
-    // Popups close on focus loss (by design) — a full tab stays open while
-    // copying credentials from a vault. State carries over via storage.
-    const url = browser.runtime.getURL('popup.html?fullpage=1');
-    void browser.tabs.create({ url }).then(() => window.close());
-  });
+  $('btn-open-tab').addEventListener('click', () => void openInTab());
+}
+
+/** Popups close on focus loss (by design) — a full tab stays open while
+ *  copying credentials from a vault. The form's choices and identifiers carry
+ *  over through a short-lived storage key; passwords are typed again there. */
+async function openInTab(): Promise<void> {
+  try {
+    await saveConnectDraft(draftArea(), captureConnectDraft(document, connectNameTouched));
+  } catch {
+    // Handover is a convenience: the tab still opens with an empty form.
+  }
+  const url = browser.runtime.getURL('popup.html?fullpage=1');
+  await browser.tabs.create({ url });
+  window.close();
 }
 
 /** Open the manager (tab, or same page in fullpage mode), optionally on one section. */
 function openManager(section?: string): void {
   const url = browser.runtime.getURL(`manager.html${section ? `?section=${section}` : ''}`);
-  if (new URLSearchParams(location.search).has('fullpage')) {
+  if (isFullpage()) {
     location.href = url;
   } else {
     void browser.tabs.create({ url }).then(() => window.close());
@@ -343,7 +377,7 @@ function initMain(): void {
   $('btn-manage').addEventListener('click', () => openManager());
   $('btn-resolve-conflict').addEventListener('click', () => {
     const url = browser.runtime.getURL('manager.html?section=status');
-    if (new URLSearchParams(location.search).has('fullpage')) {
+    if (isFullpage()) {
       location.href = url;
     } else {
       void browser.tabs.create({ url }).then(() => window.close());
@@ -356,9 +390,19 @@ function initMain(): void {
 
 async function init(): Promise<void> {
   await initI18n();
-  if (new URLSearchParams(location.search).has('fullpage')) {
+  if (isFullpage()) {
     document.body.classList.add('fullpage');
     ($('btn-open-tab') as HTMLButtonElement).hidden = true;
+    // Before initConnect: its first render reads the radios and the picker
+    // keeps a non-default service URL already in the input.
+    const draft = await takeConnectDraft(draftArea());
+    if (draft) {
+      applyConnectDraft(document, draft);
+      connectNameTouched = draft.nameTouched;
+      resumedDraft = true;
+    }
+  } else {
+    window.addEventListener('resize', () => fitToWindow());
   }
   await initConnect();
   initMain();

@@ -11,6 +11,10 @@ export enum StoreKey {
   /** Pending sync conflict (encrypted local tree + remote base seen), persisted
    *  so MV3 worker sleeps / browser restarts never lose it. */
   ConflictState = 'conflictState',
+  /** Popup -> full-tab handover of the connect form (no passwords). Written
+   *  when the popup opens the tab, removed on first read, 60 s TTL. Prefers
+   *  storage.session (memory only); holds a sync ID, never log it. */
+  ConnectDraft = 'connectDraft',
   Bookmarks = 'bookmarks',
   CheckForAppUpdates = 'checkForAppUpdates',
   DarkModeEnabled = 'darkModeEnabled',

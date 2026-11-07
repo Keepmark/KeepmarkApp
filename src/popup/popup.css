@@ -56,25 +56,35 @@
   display: none !important;
 }
 
+/* Popup: fixed-width box, header on top, <main> scrolls, its action bar is
+   sticky. The height cap is 600 px or, once layout.ts finds the window
+   smaller (page zoom > 100%), the window height (--win-h). The body itself
+   never scrolls or clips, so the page still scrolls as a last resort. */
 body {
   width: 360px;
-  max-height: 600px;
+  max-height: min(600px, var(--win-h, 600px));
   margin: 0;
+  display: flex;
+  flex-direction: column;
   font: 13px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--fg);
-  overflow-y: auto;
 }
 
-/* Full-tab mode (?fullpage=1): centered column instead of popup box. */
+/* Full-tab mode (?fullpage=1): centered column instead of popup box. The
+   document scrolls (never overflow:hidden on body: it propagates to the
+   viewport and removes the scrollbar); the radius is drawn by the header. */
 body.fullpage {
   width: auto;
   max-height: none;
   max-width: 560px;
   margin: 24px auto;
   border-radius: 16px;
-  overflow: hidden;
   box-shadow: 0 4px 24px rgba(20, 27, 56, 0.12);
+}
+
+body.fullpage header {
+  border-radius: 16px 16px 0 0;
 }
 
 header {
@@ -131,7 +141,18 @@ h1 {
 }
 
 main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 14px;
+}
+
+body.fullpage main {
+  overflow: visible;
+}
+
+header {
+  flex: none;
 }
 
 section {
@@ -375,6 +396,25 @@ button.primary {
 }
 
 button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* Action bar sticks to the bottom of the scrolling area (main in the popup,
+   the window in the full tab): reachable at any zoom without scrolling. */
+.row.actions {
+  position: sticky;
+  /* Sticky offsets count from inside main's 14px padding: -14px puts the
+     bar on the scrollport's bottom edge. */
+  bottom: -14px;
+  z-index: 1;
+  margin: 0 -14px -14px;
+  padding: 10px 14px 14px;
+  background: var(--bg);
+  box-shadow: 0 -1px 0 var(--line);
+}
+
+body.fullpage .row.actions {
+  bottom: 0;
+  border-radius: 0 0 16px 16px;
+}
 
 .actions button { height: 42px; flex: 1; }
 .actions button.icon { flex: none; width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; }

@@ -128,6 +128,15 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   Rename/remove/add/delete live in the manager. The server-removed notice is
   informational only (the fact, no backup wording, no actions): the kept copy
   lives in the manager's Backup section, where the user goes on their own.
+  "Open in a full tab" (`popup.html?fullpage=1`) hands the connect form over
+  via `handover.ts`: mode, direction, service, sync ID and name under
+  `StoreKey.ConnectDraft` (storage.session when present, 60 s TTL, removed on
+  first read); passwords are never handed over, the tab focuses the password.
+  Layout (`layout.ts` + `popup.css`): header fixed, `<main>` scrolls, the
+  `.row.actions` bar is sticky; when page zoom leaves the popup window shorter
+  than its 600 px layout, `fitToWindow` caps the body to the window
+  (`--win-h`). The full tab never sets `overflow` on body (it would remove the
+  page scrollbar).
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Sync, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a
