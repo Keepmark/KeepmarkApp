@@ -377,7 +377,6 @@ export const ja: Record<MessageKey, string> = {
   'mgr.syncs.syncPassword': '同期のパスワード',
   'manager.syncs.showQr': 'QR を表示',
   'manager.syncs.showQrAria': '{name} の接続 QR を表示',
-  'manager.syncs.otherTitle': 'その他の同期',
   'mgr.syncs.confirmTargetPassword': '移行先のパスワードの確認',
   'mgr.syncs.summaryNew_one': '{url} に新しい同期を作成し、{count} 件のブックマークをアップロードします。同期 ID は不要です。移行後に新しい ID が表示されます。',
   'mgr.syncs.summaryNew_other': '{url} に新しい同期を作成し、{count} 件のブックマークをアップロードします。同期 ID は不要です。移行後に新しい ID が表示されます。',

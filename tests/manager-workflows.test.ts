@@ -645,7 +645,7 @@ it('keeps activation prominent and secondary actions in a dismissible menu', asy
   expect(document.activeElement).toBe(menu.querySelector('summary'));
 });
 
-it('layout B: active card first, then "Other syncs" rows with an icon-only QR', async () => {
+it('one list: active card first, then compact rows with an icon-only QR', async () => {
   harness.send.mockImplementation(async (msg) => {
     if (msg.command === MessageCommand.GetSavedSyncs) {
       return {
@@ -662,19 +662,18 @@ it('layout B: active card first, then "Other syncs" rows with an icon-only QR', 
   el('m-btn-refresh').click(); await settle();
   const items = [...el('m-syncs-list').children] as HTMLElement[];
   expect(items.map((item) => item.className)).toEqual([
-    'saved-row saved-active saved-hero', 'saved-group-title', 'saved-row',
+    'saved-row saved-active saved-hero', 'saved-row',
   ]);
-  expect(items[1].textContent).toBe('Other syncs');
   // Registry index stays in the ids even though the active row moved first.
   expect(items[0].querySelector('#m-syncs-qr-1')).not.toBeNull();
   const qr = el('m-syncs-qr-0');
-  expect(items[2].contains(qr)).toBe(true);
+  expect(items[1].contains(qr)).toBe(true);
   expect(qr.classList.contains('icon-only')).toBe(true);
   expect(qr.textContent).toBe('');
   expect(qr.getAttribute('aria-label')).toContain('Altro');
-  const buttons = [...items[2].querySelectorAll('.saved-actions > button')].map((button) => button.id);
+  const buttons = [...items[1].querySelectorAll('.saved-actions > button')].map((button) => button.id);
   expect(buttons).toEqual(['m-syncs-qr-0', 'm-syncs-act-0']);
-  expect(items[2].textContent).not.toContain('Inactive');
+  expect(items[1].textContent).not.toContain('Inactive');
 });
 
 it('activation confirm collapses its explanation after "Got it" (password field stays)', async () => {

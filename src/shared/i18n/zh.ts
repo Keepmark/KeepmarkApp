@@ -378,7 +378,6 @@ export const zh: Record<MessageKey, string> = {
   'mgr.syncs.syncPassword': '同步密码',
   'manager.syncs.showQr': '显示二维码',
   'manager.syncs.showQrAria': '显示 {name} 的连接二维码',
-  'manager.syncs.otherTitle': '其他同步',
   'mgr.syncs.confirmTargetPassword': '确认目标密码',
   'mgr.syncs.summaryNew_one': '将在 {url} 新建同步并上传 {count} 个书签。无需同步 ID——迁移后会显示新的 ID。',
   'mgr.syncs.summaryNew_other': '将在 {url} 新建同步并上传 {count} 个书签。无需同步 ID——迁移后会显示新的 ID。',

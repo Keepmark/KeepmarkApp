@@ -377,7 +377,6 @@ export const en = {
   'mgr.syncs.syncPassword': 'Sync password',
   'manager.syncs.showQr': 'Show QR',
   'manager.syncs.showQrAria': 'Show the connection QR for {name}',
-  'manager.syncs.otherTitle': 'Other syncs',
   'mgr.syncs.confirmTargetPassword': 'Confirm target password',
   'mgr.syncs.summaryNew_one': 'Will create a new sync on {url} and upload {count} bookmark. No sync ID needed — a new one is shown after the move.',
   'mgr.syncs.summaryNew_other': 'Will create a new sync on {url} and upload {count} bookmarks. No sync ID needed — a new one is shown after the move.',

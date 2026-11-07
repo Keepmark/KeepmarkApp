@@ -894,8 +894,8 @@ dd:last-of-type { border-bottom: 0; }
   padding: 0 10px;
 }
 
-/* Layout B: the active sync is a larger card (ID, copy, QR in view); the
-   others are compact one-line rows under "Other syncs". */
+/* One list: the active sync is a larger card (ID, copy, QR in view); the
+   others follow as compact one-line rows at the same spacing. */
 .saved-row.saved-hero {
   gap: 4px;
   padding: 14px 16px;
@@ -906,12 +906,6 @@ dd:last-of-type { border-bottom: 0; }
 .saved-id-label { font-size: 12px; color: var(--muted); }
 .saved-id { font-size: 12px; }
 .saved-spacer { flex: 1; }
-.saved-group-title {
-  margin: 8px 0 -2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
 .saved-row:not(.saved-hero) {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

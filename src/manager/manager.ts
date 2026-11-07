@@ -1953,22 +1953,13 @@ function renderSyncsList(): void {
   list.replaceChildren();
   const rows = syncsView.syncs;
   ($('m-syncs-empty') as HTMLElement).hidden = rows.length > 0;
-  // Layout: the active sync first, as a larger card with its ID, copy and QR
-  // in view; the others below, under "Other syncs", as compact rows. Ids keep
-  // the registry index.
+  // Layout: one list, the active sync first as a larger card with its ID,
+  // copy and QR in view, then the others as compact rows at the same spacing
+  // (no separate "Other syncs" section). Ids keep the registry index.
   const indexed = rows.map((sync, index) => ({ sync, index }));
   const active = indexed.filter(({ sync }) => isActiveSavedSync(sync, syncsView.active));
   const others = indexed.filter(({ sync }) => !isActiveSavedSync(sync, syncsView.active));
   active.forEach(({ sync, index }) => list.append(syncRow(sync, index)));
-  if (others.length > 0) {
-    const title = document.createElement('li');
-    title.className = 'saved-group-title';
-    title.setAttribute('role', 'presentation');
-    title.textContent = t('manager.syncs.otherTitle');
-    // Only a heading when something sits above it.
-    title.hidden = active.length === 0;
-    list.append(title);
-  }
   others.forEach(({ sync, index }) => list.append(syncRow(sync, index)));
   const activeRow = rows.find((row) => isActiveSavedSync(row, syncsView.active));
   ($('m-sync-name') as HTMLElement).textContent = activeRow ? savedSyncName(activeRow) : '—';
@@ -1993,7 +1984,7 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   const statusWrap = document.createElement('span');
   statusWrap.className = 'saved-status';
   if (isActive) {
-    // Inactive rows carry no tag: the "Other syncs" heading already says it.
+    // Inactive rows carry no tag: the Activate button already says it.
     const tag = document.createElement('span');
     tag.className = 'tag ok';
     tag.textContent = t('popup.saved.active');

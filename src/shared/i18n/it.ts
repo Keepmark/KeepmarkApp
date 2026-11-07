@@ -377,7 +377,6 @@ export const it: Record<MessageKey, string> = {
   'mgr.syncs.syncPassword': 'Password della sincronizzazione',
   'manager.syncs.showQr': 'Mostra QR',
   'manager.syncs.showQrAria': 'Mostra il QR di connessione per {name}',
-  'manager.syncs.otherTitle': 'Altri sync',
   'mgr.syncs.confirmTargetPassword': 'Conferma password di destinazione',
   'mgr.syncs.summaryNew_one': 'Creerà una nuova sincronizzazione su {url} e caricherà {count} segnalibro. Non serve un ID di sincronizzazione — ne viene mostrato uno nuovo dopo lo spostamento.',
   'mgr.syncs.summaryNew_other': 'Creerà una nuova sincronizzazione su {url} e caricherà {count} segnalibri. Non serve un ID di sincronizzazione — ne viene mostrato uno nuovo dopo lo spostamento.',
