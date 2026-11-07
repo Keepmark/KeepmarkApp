@@ -162,7 +162,7 @@ wizard the same QR button sits before the manual target credentials.
 | | |
 |---|---|
 | **Keepmark for browsers** | This extension (Firefox, Chrome, Edge, Brave) |
-| **Keepmark for Android** | Android 10+ app with search, share-to-Keepmark and app lock |
+| **Keepmark for Android** | Android 10+ app with search, share-to-Keepmark and app lock: [Google Play](https://play.google.com/store/apps/details?id=com.keepmark.mobile) |
 | **Keepmark Server** | Self-hostable sync service with atomic writes and revisions, compatible with existing xBrowserSync services |
 
 All three share the same encryption, the same backup format and the same
