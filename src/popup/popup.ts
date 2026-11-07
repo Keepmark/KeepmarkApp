@@ -40,7 +40,6 @@ import {
   takeConnectDraft,
   type DraftArea,
 } from './handover.js';
-import { fitToWindow } from './layout.js';
 
 const isFullpage = (): boolean => new URLSearchParams(location.search).has('fullpage');
 
@@ -53,7 +52,6 @@ function draftArea(): DraftArea {
 function showView(name: 'connect' | 'main'): void {
   ($('view-connect') as HTMLElement).hidden = name !== 'connect';
   ($('view-main') as HTMLElement).hidden = name !== 'main';
-  fitToWindow();
 }
 
 /** Header pill text: time only for today, short date otherwise (the full
@@ -139,7 +137,6 @@ async function refreshAll(pickView = false): Promise<void> {
     if (resumedDraft) focusFirstVisible([input('password')]);
     else focusFirstVisible([input('service-url'), input('sync-name')], true);
   }
-  fitToWindow();
 }
 
 /** Multi-sync registry rows, rendered in both views. Metadata only: a row
@@ -401,8 +398,6 @@ async function init(): Promise<void> {
       connectNameTouched = draft.nameTouched;
       resumedDraft = true;
     }
-  } else {
-    window.addEventListener('resize', () => fitToWindow());
   }
   await initConnect();
   initMain();

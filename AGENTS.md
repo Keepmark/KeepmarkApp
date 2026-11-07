@@ -132,11 +132,11 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   via `handover.ts`: mode, direction, service, sync ID and name under
   `StoreKey.ConnectDraft` (storage.session when present, 60 s TTL, removed on
   first read); passwords are never handed over, the tab focuses the password.
-  Layout (`layout.ts` + `popup.css`): header fixed, `<main>` scrolls, the
-  `.row.actions` bar is sticky; when page zoom leaves the popup window shorter
-  than its 600 px layout, `fitToWindow` caps the body to the window
-  (`--win-h`). The full tab never sets `overflow` on body (it would remove the
-  page scrollbar).
+  Layout (`popup.css`): the page is the only scroller (no inner scrolling
+  box: it gave double scrollbars), the `.row.actions` bar is sticky to the
+  window bottom so it stays reachable at page zoom > 100%. Never set
+  `overflow` on body (it propagates to the viewport and removes the
+  scrollbar).
 - `src/manager/` — full-tab manager (`manager.html` at `src/`): sidebar
   (Status, Backup, Duplicates, Sync, Settings, About), each section with
   its own contextual busy/error/result evidence; the add-sync wizard has a

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// Popup/full-tab layout: every action stays reachable at any zoom.
+// Popup/full-tab layout: one scroller (the page), every action reachable at
+// any zoom through the sticky action bar.
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FitDelayMs, fitNow, fitToWindow, PopupMaxHeight } from '../src/popup/layout';
+import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/popup/popup.css', 'utf8');
 /** Body of the first rule whose selector line is exactly `selector`. */
@@ -13,24 +13,21 @@ function rule(selector: string): string {
 }
 
 describe('popup.css layout', () => {
-  it('full tab never hides overflow (it would remove the page scrollbar)', () => {
-    expect(rule('body.fullpage')).not.toMatch(/overflow/);
+  it('never hides overflow on body (it would remove the page scrollbar)', () => {
     expect(rule('body')).not.toMatch(/overflow/);
-    expect(rule('body.fullpage main')).toMatch(/overflow:\s*visible/);
+    expect(rule('body.fullpage')).not.toMatch(/overflow/);
   });
 
-  it('popup caps the body to the window and scrolls main', () => {
-    expect(rule('body')).toMatch(/max-height:\s*min\(600px,\s*var\(--win-h,\s*600px\)\)/);
-    expect(rule('body')).toMatch(/flex-direction:\s*column/);
-    expect(rule('main')).toMatch(/overflow-y:\s*auto/);
-    expect(rule('main')).toMatch(/min-height:\s*0/);
+  it('has a single scroller: no inner scrolling box, no fixed body height', () => {
+    expect(rule('body')).not.toMatch(/max-height|height:/);
+    expect(rule('main')).not.toMatch(/overflow/);
+    expect(css).not.toMatch(/overflow(-y)?:\s*(auto|scroll)/);
   });
 
-  it('action bar is sticky at the bottom of the scrolling area', () => {
+  it('action bar is sticky at the window bottom', () => {
     const actions = rule('.row.actions');
     expect(actions).toMatch(/position:\s*sticky/);
-    expect(actions).toMatch(/bottom:\s*-14px/);
-    expect(rule('body.fullpage .row.actions')).toMatch(/bottom:\s*0/);
+    expect(actions).toMatch(/bottom:\s*0/);
     expect(actions).toMatch(/background:/);
   });
 
@@ -40,52 +37,5 @@ describe('popup.css layout', () => {
     doc.body.innerHTML = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'));
     expect(doc.querySelector('#view-connect > .row.actions #btn-connect')).not.toBeNull();
     expect(doc.querySelector('#view-main > .row.actions #btn-sync-now')).not.toBeNull();
-  });
-});
-
-describe('fitToWindow', () => {
-  const root = () => document.documentElement;
-  function size(innerHeight: number, scrollHeight: number): void {
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight });
-    Object.defineProperty(root(), 'scrollHeight', { configurable: true, value: scrollHeight });
-  }
-  beforeEach(() => {
-    document.body.className = '';
-    root().style.removeProperty('--win-h');
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it('caps to the window when zoom leaves the popup shorter than its content', () => {
-    size(400, 600);
-    fitNow();
-    expect(root().style.getPropertyValue('--win-h')).toBe('400px');
-  });
-
-  it('leaves the 600 px layout alone when it fits', () => {
-    size(PopupMaxHeight, 600);
-    fitNow();
-    expect(root().style.getPropertyValue('--win-h')).toBe('');
-    size(400, 380);
-    fitNow();
-    expect(root().style.getPropertyValue('--win-h')).toBe('');
-  });
-
-  it('never caps the full tab', () => {
-    document.body.classList.add('fullpage');
-    size(400, 1200);
-    fitNow();
-    expect(root().style.getPropertyValue('--win-h')).toBe('');
-  });
-
-  it('debounced: drops the cap at once, measures after the popup settled', () => {
-    vi.useFakeTimers();
-    root().style.setProperty('--win-h', '300px');
-    size(400, 600);
-    fitToWindow();
-    expect(root().style.getPropertyValue('--win-h')).toBe('');
-    size(500, 600); // the popup grew meanwhile
-    fitToWindow();
-    vi.advanceTimersByTime(FitDelayMs);
-    expect(root().style.getPropertyValue('--win-h')).toBe('500px');
   });
 });
