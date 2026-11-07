@@ -246,6 +246,12 @@ it('runs the existing-sync review while linked and executes from it', async () =
   el('m-btn-link').click(); await settle();
   expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.LinkSync)).toHaveLength(1);
   expect(el('m-link-form').hidden).toBe(true);
+  // Existing sync: the outcome only — no "store the ID" advice, no copy button.
+  const result = el('m-syncs-result');
+  expect(result.hidden).toBe(false);
+  expect(result.textContent).toContain('Linked');
+  expect(result.textContent).not.toContain('Store the sync ID');
+  expect(result.querySelector('button')).toBeNull();
 });
 
 it('rejects stale checks after a password edit and requires another review', async () => {

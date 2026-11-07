@@ -1500,13 +1500,21 @@ async function submitLink(): Promise<void> {
     // just the new id — the wizard offers four different outcomes.
     const done = describeLinkResult({ mode, direction, newServiceUrl, syncId, bookmarkCount: localCount });
     const box = $('m-syncs-result') as HTMLElement;
-    box.textContent = t('mgr.syncs.resultLine', { done, next: LinkDoneNext(), id: movedId });
-    const copy = document.createElement('button');
-    copy.textContent = t('mgr.syncs.copyId');
-    copy.className = 'mini';
-    copy.setAttribute('aria-label', t('mgr.syncs.copyIdAria'));
-    copy.addEventListener('click', () => void copyText(movedId!, t('popup.copyIdPrompt')));
-    box.append(' ', copy);
+    if (mode === 'new') {
+      // Only a new sync has an ID nobody knows yet: say to keep it, offer copy.
+      box.textContent = t('mgr.syncs.resultLine', { done, next: LinkDoneNext(), id: movedId });
+      const newId = movedId;
+      const copy = document.createElement('button');
+      copy.textContent = t('mgr.syncs.copyId');
+      copy.className = 'mini';
+      copy.setAttribute('aria-label', t('mgr.syncs.copyIdAria'));
+      copy.addEventListener('click', () => void copyText(newId, t('popup.copyIdPrompt')));
+      box.append(' ', copy);
+    } else {
+      // An existing sync: ID and password are already known and saved in the
+      // row, so the outcome alone (no advice, no repeated ID).
+      box.textContent = done;
+    }
     box.hidden = false;
     box.scrollIntoView({ block: 'nearest' });
     box.focus({ preventScroll: true });

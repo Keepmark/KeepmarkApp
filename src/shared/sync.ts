@@ -25,6 +25,7 @@ import { Store, StoreKey, type SyncInfo } from './store.js';
 import { BookmarkIdMapper } from './id-mapper.js';
 import type { NativeOps } from './native.js';
 import { t, tn } from './i18n.js';
+import { shortSyncId } from './saved-syncs.js';
 
 export interface SyncDeps {
   api: XSyncApiClient;
@@ -470,7 +471,10 @@ export function describeLinkResult(input: {
 }): string {
   const n = input.bookmarkCount;
   const url = input.newServiceUrl;
-  const sync = input.syncId ? t('sync.link.remoteSyncId', { id: input.syncId }) : t('sync.link.remoteSync');
+  // Short ID: the full one is a bearer token and the saved row already names it.
+  const sync = input.syncId
+    ? t('sync.link.remoteSyncId', { id: shortSyncId(input.syncId) })
+    : t('sync.link.remoteSync');
   if (input.mode === 'new') {
     return n === undefined ? t('sync.link.newNoCount', { url }) : tn('sync.link.new', n, { url });
   }

@@ -302,6 +302,14 @@ describe('describeLinkResult', () => {
       describeLinkResult({ mode: 'existing', direction: 'pull', newServiceUrl: 'https://n.test/', syncId: 's1' }),
     ).toBe('Linked — replaced your local bookmarks with the remote sync s1 from https://n.test/.');
   });
+  it('shortens a long sync ID (bearer token, already named by the saved row)', () => {
+    expect(
+      describeLinkResult({
+        mode: 'existing', direction: 'pull', newServiceUrl: 'https://n.test/',
+        syncId: '6ac2f614d6c04fe2a9729824697291fa',
+      }),
+    ).toBe('Linked — replaced your local bookmarks with the remote sync 6ac2f6…91fa from https://n.test/.');
+  });
   it('states the uploaded count when known', () => {
     expect(
       describeLinkResult({ mode: 'new', direction: 'push', newServiceUrl: 'https://n.test/', bookmarkCount: 2088 }),
