@@ -676,6 +676,27 @@ describe('background core', () => {
     expect(safeties.map((s) => s.operation)).toContain('import-backup');
   });
 
+  it('exports the active tree as a plain bookmarks.html without pushing', async () => {
+    const state = baseState();
+    const { core } = await linkedCore(state);
+    await core.handleMessage({
+      command: MessageCommand.AddBookmark,
+      container: BookmarkContainer.Other,
+      title: 'Html <one>',
+      url: 'https://html.test/?a=1&b=2',
+    });
+    const putsBefore = state.puts.length;
+    const out = (await core.handleMessage({ command: MessageCommand.ExportHtml })) as {
+      html: string;
+      bookmarks: number;
+    };
+    expect(out.html.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')).toBe(true);
+    expect(out.html).toContain('<A HREF="https://html.test/?a=1&amp;b=2"');
+    expect(out.html).toContain('>Html &lt;one&gt;</A>');
+    expect(out.bookmarks).toBeGreaterThan(0);
+    expect(state.puts.length).toBe(putsBefore);
+  });
+
   it('bulk duplicate cleanup snapshots once, pushes once, restores', async () => {
     const state = baseState();
     const { core } = await linkedCore(state);

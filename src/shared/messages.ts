@@ -61,6 +61,7 @@ export enum MessageCommand {
   GetDuplicates = 'get-duplicates',
   RemoveBookmark = 'remove-bookmark',
   ExportBackup = 'export-backup',
+  ExportHtml = 'export-html',
   ImportBackup = 'import-backup',
   LinkSync = 'link-sync',
   DeleteRemoteSync = 'delete-remote-sync',
@@ -320,6 +321,7 @@ export type MessagePayload =
   | { command: MessageCommand.GetDuplicates; target?: SavedSyncActive }
   | { command: MessageCommand.RemoveBookmark; id: number }
   | { command: MessageCommand.ExportBackup; password: string }
+  | { command: MessageCommand.ExportHtml }
   | { command: MessageCommand.ImportBackup; json: string; password: string }
   | { command: MessageCommand.LinkSync; link: SyncTarget }
   | { command: MessageCommand.DeleteRemoteSync; target: SavedSyncActive }
@@ -366,7 +368,7 @@ export type MessagePayload =
   | { command: MessageCommand.RestoreSafety; fileName: string }
   | { command: MessageCommand.DeleteSafety; fileName: string }
   | { command: MessageCommand.RemoveDuplicates; ids: number[]; target: SavedSyncActive }
-  | { command: MessageCommand.DownloadFile; filename: string; text: string }
+  | { command: MessageCommand.DownloadFile; filename: string; text: string; mime?: string }
   // Conflict resolution
   | { command: MessageCommand.GetConflictState }
   | { command: MessageCommand.GetConflictPreview }

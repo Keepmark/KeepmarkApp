@@ -82,6 +82,7 @@ import {
   type ConflictStateResponse,
 } from '../shared/messages.js';
 import { backupFileName, MaxBackupBytes, MinBackupPasswordLength } from '../shared/backup.js';
+import { htmlFileName } from '../shared/netscape.js';
 import { sanitizeSyncId } from '../shared/logging.js';
 import {
   MaxSavedSyncLabelLength,
@@ -517,6 +518,13 @@ function initBackupSection(): void {
     exportDialog.open($('m-btn-export-open'), input('m-backup-password'));
   });
   $('m-btn-export').addEventListener('click', () => void exportBackup());
+  htmlDialog = new TaskDialog($('m-html-dialog') as HTMLDialogElement);
+  $('m-btn-html-open').addEventListener('click', () => {
+    clearMessages();
+    htmlDialog.open($('m-btn-html-open'), $('m-btn-html-cancel'));
+  });
+  $('m-btn-html-export').addEventListener('click', () => void exportHtml());
+  $('m-btn-html-cancel').addEventListener('click', () => htmlDialog.close());
   $('m-btn-export-cancel').addEventListener('click', () => exportDialog.close());
   for (const id of ['m-backup-password', 'm-backup-confirm']) {
     input(id).addEventListener('keydown', (e) => {
@@ -564,6 +572,13 @@ function initBackupSection(): void {
   );
 }
 
+/** Label of the active saved sync, for file names (undefined when unknown). */
+async function activeSyncName(): Promise<string | undefined> {
+  const registry = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs }).catch(() => null);
+  const activeRow = registry?.syncs.find((row) => isActiveSavedSync(row, registry.active));
+  return activeRow ? savedSyncName(activeRow) : undefined;
+}
+
 /** Export: a new backup password typed twice (docs/WORKFLOWS.md rule 4). The
  * fields survive a failure so the user can retry. */
 async function exportBackup(): Promise<void> {
@@ -577,16 +592,29 @@ async function exportBackup(): Promise<void> {
       const json = await send<string>({ command: MessageCommand.ExportBackup, password });
       // The file name carries the sync it belongs to (slugged: it is a human
       // label), so two exports of different syncs never look identical.
-      const registry = await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs }).catch(
-        () => null,
-      );
-      const activeRow = registry?.syncs.find((row) => isActiveSavedSync(row, registry.active));
-      const filename = backupFileName(activeRow ? savedSyncName(activeRow) : undefined, new Date());
+      const filename = backupFileName(await activeSyncName(), new Date());
       await send({ command: MessageCommand.DownloadFile, filename, text: json });
       exportDialog.close();
       showResult('backup-result', exportDone(filename));
     } catch (err) {
       showError('backup-error', (err as Error).message);
+    }
+  });
+}
+
+/** Plain bookmarks.html (not encrypted): the dialog already showed the
+ * warning, this click is the confirmation. */
+async function exportHtml(): Promise<void> {
+  clearMessages();
+  await withBusy('m-btn-html-export', t('busy.exporting'), async () => {
+    try {
+      const out = await send<{ html: string; bookmarks: number }>({ command: MessageCommand.ExportHtml });
+      const filename = htmlFileName(await activeSyncName(), new Date());
+      await send({ command: MessageCommand.DownloadFile, filename, text: out.html, mime: 'text/html;charset=utf-8' });
+      htmlDialog.close();
+      showResult('backup-result', tn('mgr.backup.htmlDone', out.bookmarks, { fileName: filename }));
+    } catch (err) {
+      showError('backup-error-4', (err as Error).message);
     }
   });
 }
@@ -668,6 +696,7 @@ function resetExport(): void {
 }
 
 let exportDialog: TaskDialog;
+let htmlDialog: TaskDialog;
 let importDialog: TaskDialog;
 
 /** Back to step 1: forget file, password and check. */

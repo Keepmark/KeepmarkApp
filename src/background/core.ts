@@ -55,7 +55,8 @@ import { validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer, type NativeNode } from '../shared/bookmarks.js';
 import { changeCounts } from '../shared/tree-diff.js';
-import { countNodes, exportBackup, importBackup } from '../shared/backup.js';
+import { countNodes, exportBackup, importBackup, validateTree } from '../shared/backup.js';
+import { countHtmlBookmarks, writeNetscape } from '../shared/netscape.js';
 import { deleteByIds, getDuplicateGroups, planDuplicateDeletion } from '../shared/duplicates.js';
 import { mergeTrees, type MergeStats } from '../shared/merge.js';
 import { diffTrees, sameContent } from '../shared/tree-diff.js';
@@ -167,7 +168,7 @@ export interface NativeListenerPort {
 export interface ChromePort {
   setBadge(text: string, title: string): Promise<void>;
   notify(title: string, message: string): Promise<void>;
-  download(filename: string, text: string): Promise<void>;
+  download(filename: string, text: string, mime?: string): Promise<void>;
 }
 
 export interface CorePorts {
@@ -325,6 +326,8 @@ export class BackgroundCore {
         });
       case MessageCommand.ExportBackup:
         return this.exportBackup(msg.password);
+      case MessageCommand.ExportHtml:
+        return this.exportHtml();
       case MessageCommand.ImportBackup:
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.LinkSync:
@@ -409,7 +412,7 @@ export class BackgroundCore {
       case MessageCommand.RemoveDuplicates:
         return this.withCredentialChange(() => this.removeDuplicates(msg.ids, msg.target));
       case MessageCommand.DownloadFile:
-        return this.ports.chrome.download(msg.filename, msg.text);
+        return this.ports.chrome.download(msg.filename, msg.text, msg.mime);
       // Conflict resolution
       case MessageCommand.GetConflictState:
         return this.getConflictState();
@@ -1513,6 +1516,15 @@ export class BackgroundCore {
     const { info } = await this.requireCreds();
     const tree = await this.cachedTree(info);
     return exportBackup(tree, password);
+  }
+
+  /** Plain bookmarks.html of the active sync's tree (NOT encrypted: the
+   * manager warns before asking for it). */
+  private async exportHtml(): Promise<{ html: string; bookmarks: number }> {
+    const { info } = await this.requireCreds();
+    const tree = await this.cachedTree(info);
+    validateTree(tree);
+    return { html: writeNetscape(tree), bookmarks: countHtmlBookmarks(tree) };
   }
 
   /**

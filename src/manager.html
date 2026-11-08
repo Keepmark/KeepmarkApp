@@ -116,6 +116,11 @@
             <button id="m-btn-import" data-needs-link data-i18n="manager.backup.chooseFile">Choose backup file…</button>
             <input id="m-import-file" type="file" accept=".json,application/json" aria-label="Backup file to import" data-i18n-aria-label="manager.backup.fileLabel" hidden />
           </div>
+          <div class="backup-action">
+            <h3 data-i18n="manager.backup.html">Bookmarks file (HTML)</h3>
+            <p class="hint" data-i18n="manager.backup.htmlShort">A standard bookmarks.html any browser can import. Not encrypted.</p>
+            <button id="m-btn-html-open" data-i18n="manager.backup.htmlOpen">Export HTML…</button>
+          </div>
         </div>
         <div id="backup-result" class="result" hidden></div>
         <div id="backup-result-2" class="result" hidden></div>
@@ -465,6 +470,16 @@
         </div>
         <div id="backup-error" class="error" role="alert" hidden></div>
       </form>
+    </dialog>
+    <dialog id="m-html-dialog" class="task" aria-labelledby="m-html-title" hidden>
+      <h2 id="m-html-title" data-i18n="manager.backup.html">Bookmarks file (HTML)</h2>
+      <p class="notice" data-i18n="manager.backup.htmlWarn">This file is NOT encrypted: anyone who opens it can read every bookmark, tag and
+        description. Keep it private and delete it once imported.</p>
+      <div class="row">
+        <button id="m-btn-html-export" class="primary" type="button" data-i18n="manager.backup.htmlBtn">Export anyway</button>
+        <button id="m-btn-html-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+      </div>
+      <div id="backup-error-4" class="error" role="alert" hidden></div>
     </dialog>
     <dialog id="m-import-dialog" class="task" aria-labelledby="m-import-title" hidden>
       <h2 id="m-import-title" data-i18n="manager.backup.restore">Restore from a backup file</h2>

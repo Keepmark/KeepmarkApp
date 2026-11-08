@@ -191,8 +191,8 @@ function ports(): CorePorts {
           .then(() => undefined)
           .catch(() => undefined);
       },
-      download: async (filename, text) => {
-        const url = `data:application/json;base64,${toBase64(text)}`;
+      download: async (filename, text, mime = 'application/json') => {
+        const url = `data:${mime};base64,${toBase64(text)}`;
         await browser.downloads.download({ filename, url, saveAs: false });
       },
     },
