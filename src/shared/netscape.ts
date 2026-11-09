@@ -78,7 +78,10 @@ export function writeNetscape(roots: BookmarkNode[]): string {
       out.push(`${indent(depth)}<HR>\n`);
       return;
     }
-    let line = `${indent(depth)}<DT><A HREF="${esc(node.url ?? '')}"${date(node.dateAdded)}`;
+    // Neither folder nor link: no browser could read it back, and
+    // countHtmlBookmarks does not count it either.
+    if (!node.url) return;
+    let line = `${indent(depth)}<DT><A HREF="${esc(node.url)}"${date(node.dateAdded)}`;
     const tags = (node.tags ?? [])
       .filter((x): x is string => typeof x === 'string')
       .map((x) => x.replace(/,/g, ' ').trim())

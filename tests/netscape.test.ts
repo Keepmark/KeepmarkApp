@@ -67,6 +67,14 @@ describe('writeNetscape', () => {
     expect(out.indexOf('Loose')).toBeGreaterThan(out.indexOf('Other link'));
   });
 
+  it('skips a node that is neither folder nor link, like the count', () => {
+    const odd: BookmarkNode[] = [...tree, { id: 11, title: 'No url' }];
+    const out = writeNetscape(odd);
+    expect(out).not.toContain('No url');
+    expect(out).not.toContain('HREF=""');
+    expect((out.match(/<A HREF=/g) ?? []).length).toBe(countHtmlBookmarks(odd));
+  });
+
   it('writes an empty tree as an empty list', () => {
     expect(writeNetscape([])).toContain('<H1>Bookmarks</H1>\n<DL><p>\n</DL><p>\n');
   });
