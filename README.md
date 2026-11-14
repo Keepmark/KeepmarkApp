@@ -116,7 +116,7 @@ password and bookmarks, exactly one is active, and switching is a click.
 | | |
 |---|---|
 | **Connect** | Create a new sync or link an existing one: download, upload or merge with preview |
-| **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and password in one step |
+| **Link a phone** | Connection QR from the manager, scanned by Keepmark for Android: service, sync ID and the sync's key in one step; the password is never in the QR |
 | **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
 | **Safety backups** | Encrypted snapshot before destructive changes or syncs changing more than 10 items (newest 10 kept), grouped by day with sync name and added/removed counts; ordinary switches create none, deliberate server deletion keeps no copy |
@@ -134,16 +134,19 @@ Already syncing on Android and want the phone on the same sync? The manager
 hands the credentials over in one scan, without typing them anywhere:
 
 1. In the manager, the Android card says **Connect Keepmark on your phone**.
-   Choose **Show connection QR** and verify your current password.
+   Choose **Show connection QR**. The QR appears at once; if you set a sync
+   lock, enter its password first.
 2. In Keepmark for Android, open **Connect → Existing sync → Scan QR from
    browser**.
 3. Review the service the phone shows, tap **Connect**, then pick the direction
    (keep the server copy, merge, or keep the phone's copy).
 
-The QR carries the service, the sync ID and the password in readable form, so
-show it only to your own device: nothing is stored for it, it disappears after
-60 seconds or when the manager loses focus, and a captured copy stays usable —
-treat it like the password itself. Manual linking remains available, and in the manager's **Sync → + Add a sync**
+The QR carries the service, the sync ID and the sync's derived key, never the
+password. Anyone with a copy can still read and change that sync's bookmarks
+(but cannot learn the password), so show it only to your own device: nothing is
+stored for it, it disappears after 60 seconds or when the manager loses focus,
+and a captured copy stays usable. To protect QR export, set a sync lock in
+**Sync**. The phone needs Keepmark for Android 1.0.247 or later. Manual linking remains available, and in the manager's **Sync → + Add a sync**
 wizard the same QR button sits before the manual target credentials.
 
 ## Screenshots

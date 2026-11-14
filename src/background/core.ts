@@ -313,7 +313,7 @@ export class BackgroundCore {
       case MessageCommand.ProbeService:
         return this.probeService(msg.serviceUrl);
       case MessageCommand.PrepareConnectQr:
-        return this.prepareConnectQr(msg.currentPassword, msg.target);
+        return this.prepareConnectQr(msg.switchPassword, msg.target);
       case MessageCommand.SyncBookmarks:
         return this.queueSync(msg.sync.type, msg.sync.bookmarks);
       case MessageCommand.RestoreBookmarks:
@@ -1590,18 +1590,39 @@ export class BackgroundCore {
     try { return await action(); } finally { this.changingCredentials = false; }
   }
 
-  private async prepareConnectQr(currentPassword: string, target?: ConnectQrTarget): Promise<ConnectQrPayload> {
-    if (!currentPassword || typeof currentPassword !== 'string') throw new IncompleteSyncInfoException(t('val.current.required'));
+  /**
+   * Connection QR (format 2): carries the derived key, never the long
+   * password, so nothing is typed unless a sync lock is set — then its
+   * password gates the code, for the active sync too. Read-only: one remote
+   * GET proves the key still opens the server copy and gives its version; no
+   * sync state is touched.
+   */
+  private async prepareConnectQr(switchPassword: string | undefined, target?: ConnectQrTarget): Promise<ConnectQrPayload> {
+    if (switchPassword !== undefined && typeof switchPassword !== 'string') throw new IncompleteSyncInfoException(t('core.switchPasswordRequired'));
     if (this.connecting || this.changingCredentials || this.disabling || this.suspended > 0) throw new UnexpectedResponseException(t('core.connectBusy'));
-    // A row that is not the active sync: its long password is not stored (only
-    // the derived key is), so the typed password is the proof and one remote
-    // GET decrypts with it. Read-only, and the ACTIVE sync is untouched.
+    const lock = await this.readSwitchLock();
+    // Fail closed: a lock record this version cannot read is not "no lock".
+    if (!lock && (await this.store.get<unknown>(StoreKey.SwitchLock)) != null) {
+      throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'));
+    }
+    let vaultKey: CryptoKey | undefined;
+    if (lock) {
+      this.assertSwitchPassword(switchPassword ?? '');
+      vaultKey = await unlockSwitchLock(lock, switchPassword!);
+    }
+    // A row that is not the active sync: its key comes from the registry
+    // (plain, or wrapped under the vault just opened).
     if (target) {
       const wanted: SavedSyncActive = { serviceUrl: canonicalServiceUrl(target.serviceUrl), syncId: target.syncId };
       const row = findSavedSync(await this.savedSyncList(), wanted);
       if (!row) throw new UnexpectedResponseException(t('core.savedNotFound'));
       const active = await this.activeSavedSync();
       if (!active || !sameSavedSync(active, wanted)) {
+        if (!row.credential) throw new UnexpectedResponseException(t('core.savedCredentialMissing'));
+        const derived = await this.rowDerivedKey(row.credential, async (wrapped) => {
+          if (!vaultKey) throw new UnexpectedResponseException(t('core.savedCredentialUnreadable'));
+          return unwrapCredential(vaultKey, wrapped);
+        });
         const api = this.makeApi(wanted.serviceUrl);
         await checkService(api, this.log);
         const versionRes = await api.getVersion(wanted.syncId);
@@ -1610,20 +1631,19 @@ export class BackgroundCore {
         if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
           throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
         }
-        const derived = await deriveKey(currentPassword, wanted.syncId, row.syncVersion ?? remoteVersion);
         const remote = await api.getBookmarks(wanted.syncId);
         if (!remote.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
         try {
           await decryptData(remote.bookmarks, derived);
         } catch {
-          // Wrong password (or an expired sync): same wording as the active path.
-          throw new InvalidCredentialsException(t('core.currentPwWrong'));
+          // The saved key no longer opens the server copy (password changed elsewhere).
+          throw new InvalidCredentialsException(t('qr.keyStale'));
         }
         return buildConnectQrPayload({
           serviceUrl: wanted.serviceUrl,
           id: wanted.syncId,
           version: remote.version ?? remoteVersion,
-          password: currentPassword,
+          key: derived,
         });
       }
     }
@@ -1637,18 +1657,20 @@ export class BackgroundCore {
       }
     };
     await check();
-    const derived = await deriveKey(currentPassword, info.id!, info.version ?? SyncClientVersion);
-    if (derived !== info.password) throw new InvalidCredentialsException(t('core.currentPwWrong'));
-    await check();
+    const derived = info.password!;
     const remote = await this.makeApi(info.serviceUrl ?? DefaultServiceUrl).getBookmarks(info.id!);
     if (!remote.version || !/^\d+\.\d+\.\d+$/.test(remote.version) || compareVersions(remote.version, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(t('err.syncInfoIncomplete'));
     }
     // Read-only verification deliberately avoids fetchRemote (which may persist a downgrade).
     if (!remote.bookmarks) throw new UnexpectedResponseException(t('err.remoteCorruptShort'));
-    await decryptData(remote.bookmarks, derived);
+    try {
+      await decryptData(remote.bookmarks, derived);
+    } catch {
+      throw new InvalidCredentialsException(t('qr.keyStale'));
+    }
     await check();
-    return buildConnectQrPayload({ serviceUrl: info.serviceUrl ?? DefaultServiceUrl, id: info.id!, version: remote.version, password: currentPassword });
+    return buildConnectQrPayload({ serviceUrl: info.serviceUrl ?? DefaultServiceUrl, id: info.id!, version: remote.version, key: derived });
   }
 
   private async changePassword(

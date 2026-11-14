@@ -7,6 +7,7 @@ import {
   NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,
+  InvalidSwitchPasswordException,
   ThrottledException,
   UnsupportedVersionException,
   XbsException,
@@ -22,6 +23,12 @@ describe('message error wire format', () => {
     const rebuilt = fromWireError(wire);
     expect(rebuilt).toBeInstanceOf(SyncNotFoundException);
     expect(rebuilt.message).toBe('gone');
+  });
+
+  it('a wrong sync lock password keeps its type across the wire (the QR dialog relies on it)', () => {
+    const rebuilt = fromWireError(toWireError(new InvalidSwitchPasswordException('wrong')));
+    expect(rebuilt).toBeInstanceOf(InvalidSwitchPasswordException);
+    expect(rebuilt.message).toBe('wrong');
   });
 
   it('falls back to XbsException for unknown names', () => {

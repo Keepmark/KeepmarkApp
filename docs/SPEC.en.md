@@ -44,7 +44,7 @@ Goals:
   zero silent data loss (never auto-merge, never drop silently).
 - G2. Management UI (status, connection, space, backup, duplicates, saved
   syncs, logs, settings), not bookmark browsing.
-- G3. Same end-to-end encryption as the official xBrowserSync clients (password is never sent to the service; QR linking explicitly transfers it to Android).
+- G3. Same end-to-end encryption as the official xBrowserSync clients (password is never sent to the service and never leaves the browser; QR linking transfers the derived sync key, not the password, to Android).
 - G4. Behavioral parity between Firefox and Chromium builds.
 
 Non-goals (explicitly out of scope, must NOT be reported as missing):
@@ -384,6 +384,15 @@ uses safety snapshots as specified in S6 and, where listed, an undo slot.
   PUT (revision CAS iff v1.2 + stored revision, 412 fallback with downgrade)
   → `change-password` undo → rotate stored derived key (re-read first; abort
   on concurrent link change). The old password dies everywhere immediately.
+- `PrepareConnectQr {switchPassword?, target?}` (manager-only, read-only;
+  `currentPassword` removed in 0.1.64): builds the format-2 QR payload
+  `{app:'Keepmark', format:2, serviceType:'xbrowsersync', serviceUrl, id,
+  version, key}`, `key` = base64 of the 32-byte derived key, never the
+  password. No sync lock set → no input; sync lock set → `switchPassword`
+  required for the active sync and for a `target` row (missing →
+  `core.switchPasswordRequired`, wrong → `core.switchWrongPassword`). One
+  remote GET must decrypt with the saved key and gives the version, else
+  `qr.keyStale`. HTTPS only (`qr.httpsRequired`); 60 s display.
 - `DeleteRemoteSync {target:{serviceUrl,syncId}}`: validates the reviewed active
   identity under the credential-change gate; missing or stale identity refuses
   before mutation. Double v1.2 gate (stored flag, then live `delete`

@@ -2856,12 +2856,12 @@ async function init(): Promise<void> {
   pwDialog = new TaskDialog($('m-pw-dialog') as HTMLDialogElement, { onClose: resetPasswordChange });
   connectQr = new ConnectQrController(
     $('connect-qr'),
-    (password, target) => send<ConnectQrPayload>({
+    (switchPassword, target) => send<ConnectQrPayload>({
       command: MessageCommand.PrepareConnectQr,
-      currentPassword: password,
+      ...(switchPassword !== undefined ? { switchPassword } : {}),
       ...(target ? { target } : {}),
     }),
-    {},
+    { lockSet: async () => (await send<SwitchLockState | null>({ command: MessageCommand.GetSwitchLock }))?.set !== false },
     $('qr-dialog-host'),
   );
   initSidebar();

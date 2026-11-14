@@ -181,8 +181,8 @@
         <div id="m-protection" hidden>
           <h3><span data-i18n="manager.switchPw.title">Sync lock</span>
             <span id="m-link-state" class="tag"></span></h3>
-          <p class="hint" data-i18n="manager.switchPw.hint">Optional: require a short password (a PIN is fine) to activate or add syncs. Without
-            it the switch is one click and the saved keys are stored unencrypted in this browser.</p>
+          <p class="hint" data-i18n="manager.switchPw.hint">Optional: a short password (a PIN is fine) asked before activating or adding a sync and before showing a connection QR.
+            Without it switching is one click, the QR shows at once and the saved keys stay unencrypted in this browser.</p>
           <!-- One action at a time: the buttons below open a panel that asks
                only what that action needs (remove asks the current password). -->
           <div class="row" id="m-lock-actions">
@@ -329,7 +329,7 @@
         <p id="qr-instructions" data-i18n="qr.scan">In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.</p>
         <p id="qr-destination" class="hint"></p>
         <form autocomplete="off">
-          <label for="qr-password" id="qr-password-label" data-i18n="qr.password">Current sync password</label>
+          <label for="qr-password" id="qr-password-label" data-i18n="popup.saved.changePasswordLabel">Sync lock password</label>
           <div class="qr-password-entry">
             <svg class="qr-key-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8h3v-3h-3v-3h-3"/></svg>
             <input id="qr-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="qr-error" required>
@@ -339,7 +339,7 @@
         </form>
         <div id="qr-output"></div>
         <p id="qr-countdown"></p>
-        <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and password. Anyone with a copy can reuse it. It is hidden after 60 seconds or when you leave this view.</p>
+        <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and the sync key (not your password). Anyone with a copy can read and change these bookmarks. It is hidden after 60 seconds or when you leave this view. Set a sync lock to ask a password first.</p>
         <button id="qr-close" data-i18n="qr.close">Close</button>
       </dialog>
     </div>

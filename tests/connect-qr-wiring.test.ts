@@ -23,7 +23,7 @@ beforeAll(async () => { await import('../src/background/background'); });
 beforeEach(() => { harness.handleMessage.mockClear(); });
 
 describe('live background onMessage QR routing', () => {
-  const request = { command: MessageCommand.PrepareConnectQr, currentPassword: 'synthetic-only' };
+  const request = { command: MessageCommand.PrepareConnectQr, switchPassword: 'synthetic-only' };
   it('routes authorized manager requests to core', async () => {
     const result = await harness.listener!(request, { id: 'keepmark-test', url: 'moz-extension://test-origin/manager.html?section=status' });
     expect(result).toEqual({ ok: true, data: { synthetic: 'result' } });

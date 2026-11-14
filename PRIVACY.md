@@ -31,10 +31,12 @@ The developer of Keepmark does not receive any of this data. The sync service
 you choose is operated by its own provider (or by you), and its own privacy
 policy applies.
 
-Linking an Android phone by QR is the one case where your password appears on
-screen: the manager draws it into the connection QR so the phone can read it.
-Nothing stores or transmits that code — it is erased after 60 seconds or as
-soon as the manager loses focus, and manual linking remains available.
+Linking an Android phone by QR shows the sync's encryption key on screen: the
+manager draws the service, the sync ID and the key derived from your password
+into the connection QR so the phone can read it. Your password itself is never
+in the QR. Nothing stores or transmits that code — it is erased after 60
+seconds or as soon as the manager loses focus, and manual linking remains
+available.
 
 ## What stays on your device
 

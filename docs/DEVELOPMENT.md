@@ -25,7 +25,7 @@ Popup is vanilla TS (no framework, for MV3 longevity).
 
 - API `v1.1.13`, header `Accept-Version`, base default
   `https://api.xbrowsersync.org`. Min supported `1.1.9`.
-- Password is never sent to the service; QR linking explicitly transfers it to Android. Key = PBKDF2-SHA256/250k,
+- Password is never sent to the service and never leaves the browser; QR linking transfers the derived key (not the password) to Android. Key = PBKDF2-SHA256/250k,
   salt = UTF-8(sync ID) → base64. Legacy syncs without version rejected.
 - Wire blob = `base64(IV16B || AES-GCM-256(lzutf8(JSON bookmarks)))`.
 - Vectors: `tests/vectors.json` (copied from Keepmark, generated from the
@@ -276,21 +276,41 @@ License, third-party notices and disclaimer: see the [README](../README.md#licen
 ## Browser → Android QR
 
 Status → the “Connect Keepmark on your phone” card → “Show connection QR” opens
-a native modal `<dialog>` with password verification followed by the QR. The card
-button is hidden while the dialog is open; backdrop clicks, Escape and focus loss
-close it and clear transient state. The dialog gives instructions for Keepmark for Android. Verification
-checks the current password against the derived key and the live remote
-encrypted blob. No sync mutation or capability probe runs.
+a native modal `<dialog>` with the QR (each Manager → Sync row's `Show QR` opens
+the same dialog for that row, active or dormant). The card button is hidden
+while the dialog is open; backdrop clicks, Escape and focus loss close it and
+clear transient state. The dialog gives instructions for Keepmark for Android.
+Gate (0.1.64): with no sync lock (`StoreKey.SwitchLock`) the QR appears at once,
+nothing typed; with a sync lock the dialog asks the sync lock password (the
+same one used to activate or add syncs), for the active sync too. Wrong →
+`core.switchWrongPassword`, missing → `core.switchPasswordRequired`. The dialog
+is inert while the lock state is read; if that read fails it asks the password
+(fail closed). The long sync password is never asked. One read-only remote GET
+checks that the saved derived key still decrypts the live encrypted blob and
+gives the version; otherwise `qr.keyStale` (the password was changed
+elsewhere: link the sync again here first). A dormant row's key comes from its
+registry credential (plain, or unwrapped with the vault opened by the lock
+password; rotated chains walked). No sync mutation or capability probe runs.
 The card itself is hidden while this browser is unlinked (an inert card only
 pushes the “not connected” hint down) and, when the active service is plain HTTP
 — which the payload refuses — it stays visible with the button disabled and
 `qr.httpsRequired` in place of the destination, so the reason is on screen
 instead of hidden behind a failed attempt.
-The manager-only command returns exactly `{app:"Keepmark",format:1,
-serviceType:"xbrowsersync",serviceUrl,id,version,password}`. The numeric dotted
-version is the sync data format; ID is ASCII `[A-Za-z0-9_-]{1,128}`. Payloads
-are limited to 1800 UTF-8 bytes; HTTPS service URL must have no credentials,
-query, fragment, whitespace or backslash. Password text is preserved literally.
+The manager-only command `PrepareConnectQr {switchPassword?, target?}`
+(`currentPassword` removed in 0.1.64; `core.prepareConnectQr`,
+`buildConnectQrPayload` in `shared/connect-qr.ts`) returns exactly
+`{app:"Keepmark",format:2,serviceType:"xbrowsersync",serviceUrl,id,version,key}`.
+`key` is the sync's derived key: base64 of the 32-byte AES key
+(PBKDF2-SHA256/250k of password + sync ID), checked by `isDerivedKey`. The
+numeric dotted version is the sync data format; ID is ASCII
+`[A-Za-z0-9_-]{1,128}`. Payloads are limited to 1800 UTF-8 bytes; HTTPS service
+URL must have no credentials, query, fragment, whitespace or backslash.
+Format 1 (with `password`) is no longer produced. Keepmark for Android accepts
+format 2 from 1.0.247; older Android releases reject it as invalid.
+Security: anyone with a copy of the QR can read and change that sync's
+bookmarks (as before), but cannot learn the password, which matters if it is
+reused elsewhere. A sync lock protects QR export; its hint and
+remove-implication texts mention the QR.
 The payload builder throws `qr.httpsRequired` for a non-HTTPS (or unsafe) URL and
 `err.syncInfoIncomplete` for a structural failure, so the dialog can name the
 actionable one; `qr.busy` covers a verification attempted while a link/sync
@@ -302,8 +322,8 @@ section navigation, blur, hidden, pagehide and BFCache restore clear the canvas
 and inputs; 60 seconds limits display only. A captured QR stays reusable.
 No new extension permissions, storage keys or service endpoints are required.
 
-The QR dialog retains contextual verification errors beside its key-icon password
-field and permits retry without reopening. Known wrong-password errors use the
+With a sync lock, the QR dialog retains contextual errors beside its key-icon
+lock-password field and permits retry without reopening. Known wrong-password errors use the
 localized message; arbitrary exception text is never displayed. Close/backdrop,
 Escape and focus loss still erase transient data. `render-connect-qr.ts` draws a
 small local Keepmark icon with white backing within 10% of canvas width.

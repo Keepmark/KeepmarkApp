@@ -1,27 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { buildConnectQrPayload, serializeConnectQrPayload } from '../src/shared/connect-qr';
+import { buildConnectQrPayload, isDerivedKey, serializeConnectQrPayload } from '../src/shared/connect-qr';
 import { isConnectQrSender } from '../src/background/connect-qr-sender';
 import { t } from '../src/shared/i18n';
 
+const key = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA='; // 32 synthetic bytes
 const input = {
   serviceUrl: 'https://sync.example.test:8443/prefix',
   id: '0123456789abcdef0123456789abcdef',
   version: '1.8.0',
-  password: ' Example only: è+日本語 "\\ 😀 ',
+  key,
 };
 
-describe('connect QR contract', () => {
-  it('serializes only seven ordered fields and preserves the literal Unicode password', () => {
-    const payload = buildConnectQrPayload({ ...input, derivedKey: 'DO-NOT-EXPORT', revision: 42 } as typeof input);
-    expect(payload).toEqual({ app: 'Keepmark', format: 1, serviceType: 'xbrowsersync', ...input });
-    expect(Object.keys(payload)).toEqual(['app', 'format', 'serviceType', 'serviceUrl', 'id', 'version', 'password']);
+describe('connect QR contract (format 2)', () => {
+  it('serializes only seven ordered fields: the derived key, never a password', () => {
+    const payload = buildConnectQrPayload({ ...input, password: 'DO-NOT-EXPORT', revision: 42 } as typeof input);
+    expect(payload).toEqual({ app: 'Keepmark', format: 2, serviceType: 'xbrowsersync', ...input });
+    expect(Object.keys(payload)).toEqual(['app', 'format', 'serviceType', 'serviceUrl', 'id', 'version', 'key']);
     expect(serializeConnectQrPayload(payload)).toBe(JSON.stringify(payload));
     expect(serializeConnectQrPayload(payload)).not.toContain('DO-NOT-EXPORT');
   });
 
-  it('accepts short existing passwords and literal whitespace', () => {
-    expect(buildConnectQrPayload({ ...input, password: 'x' }).password).toBe('x');
-    expect(buildConnectQrPayload({ ...input, password: ' ' }).password).toBe(' ');
+  it.each([
+    '', 'x', key.slice(0, -1), `${key}=`, key.replace('=', 'A'),
+    'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHw==', // 31 bytes
+    'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyB=', // stray bits in the last char
+    'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0e-_A=', // base64url alphabet
+  ])('rejects a key that is not canonical base64 of 32 bytes %j', (bad) => {
+    expect(isDerivedKey(bad)).toBe(false);
+    expect(() => buildConnectQrPayload({ ...input, key: bad })).toThrow(t('err.syncInfoIncomplete'));
+  });
+
+  it('accepts every canonical 32-byte key', () => {
+    for (let i = 0; i < 64; i++) {
+      const bytes = new Uint8Array(32).map((_, j) => (i * 37 + j * 11) & 0xff);
+      const encoded = btoa(String.fromCharCode(...bytes));
+      expect(isDerivedKey(encoded)).toBe(true);
+    }
   });
 
   it.each(['', '../secret', 'id?x', 'id#x', 'id%2f', 'a/b', 'with space', '日本語', 'a'.repeat(129)])('rejects unsafe ID %j', (id) => {
@@ -43,11 +57,10 @@ describe('connect QR contract', () => {
   });
 
   it('enforces the 1800-byte limit using UTF-8 bytes rather than characters', () => {
-    const overhead = new TextEncoder().encode(serializeConnectQrPayload(buildConnectQrPayload({ ...input, password: 'x' }))).length - 1;
-    const boundary = buildConnectQrPayload({ ...input, password: 'x'.repeat(1800 - overhead) });
-    expect(new TextEncoder().encode(serializeConnectQrPayload(boundary))).toHaveLength(1800);
-    expect(() => buildConnectQrPayload({ ...input, password: 'x'.repeat(1801 - overhead) })).toThrow();
-    expect(() => buildConnectQrPayload({ ...input, password: '日'.repeat(600) })).toThrow();
+    const overhead = new TextEncoder().encode(serializeConnectQrPayload(buildConnectQrPayload({ ...input, serviceUrl: 'https://a.test/' }))).length - 'https://a.test/'.length;
+    const fits = 'https://a.test/' + 'p'.repeat(1800 - overhead - 'https://a.test/'.length);
+    expect(new TextEncoder().encode(serializeConnectQrPayload(buildConnectQrPayload({ ...input, serviceUrl: fits })))).toHaveLength(1800);
+    expect(() => buildConnectQrPayload({ ...input, serviceUrl: `${fits}p` })).toThrow(t('qr.tooLarge'));
   });
 
   it('names the HTTPS requirement instead of the generic incomplete-info error', () => {
@@ -60,14 +73,12 @@ describe('connect QR contract', () => {
     expect(() => buildConnectQrPayload({ ...input, id: 'a/b' })).toThrow(t('err.syncInfoIncomplete'));
   });
 
-  it('rejects empty passwords without including their content in errors', () => {
-    expect(() => buildConnectQrPayload({ ...input, password: '' })).toThrow();
-    const secret = 'sensitive-synthetic-value'.repeat(100);
+  it('never puts the key in an error message', () => {
     try {
-      buildConnectQrPayload({ ...input, password: secret });
-      expect.fail('oversized payload was accepted');
+      buildConnectQrPayload({ ...input, key: `${key}x` });
+      expect.fail('malformed key was accepted');
     } catch (error) {
-      expect(String(error)).not.toContain(secret);
+      expect(String(error)).not.toContain(key);
     }
   });
 });

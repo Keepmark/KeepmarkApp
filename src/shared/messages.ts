@@ -10,6 +10,7 @@ import {
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,
+  InvalidSwitchPasswordException,
   NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,
@@ -311,7 +312,8 @@ export interface ResetSwitchPasswordResult {
 export type MessagePayload =
   | { command: MessageCommand.GetServices }
   | { command: MessageCommand.ProbeService; serviceUrl: string }
-  | { command: MessageCommand.PrepareConnectQr; currentPassword: string; target?: ConnectQrTarget }
+  /** `switchPassword` only when a sync lock is set (it gates the code). */
+  | { command: MessageCommand.PrepareConnectQr; switchPassword?: string; target?: ConnectQrTarget }
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | {
@@ -410,6 +412,7 @@ const registry: Record<string, new (message: string) => Error> = {
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,
+  InvalidSwitchPasswordException,
   NotAcceptingNewSyncsException,
   ServiceOfflineException,
   SyncNotFoundException,

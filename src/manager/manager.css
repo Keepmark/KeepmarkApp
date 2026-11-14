@@ -815,6 +815,9 @@ dd:last-of-type { border-bottom: 0; }
 .qr-password-entry:has(input[aria-invalid="true"]) { border-color: var(--danger); }
 #qr-panel .qr-password-entry button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; flex-shrink: 0; padding: .65rem .8rem; border-radius: .6rem; }
 .qr-password-entry button svg { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+/* No sync lock: only the button remains (retry after an error). */
+.qr-password-entry.qr-no-password { border: 0; padding: 0; background: transparent; justify-content: flex-start; }
+.qr-password-entry.qr-no-password .qr-key-icon { display: none; }
 #qr-panel #qr-error { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .qr-password-entry { transition: none; } }
 @media (max-width: 380px) { .qr-password-entry { flex-wrap: wrap; } #qr-panel .qr-password-entry input { width: calc(100% - 3rem); } #qr-panel .qr-password-entry button { width: 100%; } }

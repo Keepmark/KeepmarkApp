@@ -7,12 +7,15 @@ import { BookmarkIdMapper } from '../src/shared/id-mapper';
 import { InMemoryLogger } from '../src/shared/logging';
 import { MessageCommand } from '../src/shared/messages';
 import { MemoryBackend, Store, StoreKey, type SyncInfo } from '../src/shared/store';
-import { InvalidServiceException, ServiceOfflineException, SyncNotFoundException } from '../src/shared/errors';
+import {
+  IncompleteSyncInfoException, InvalidServiceException, InvalidSwitchPasswordException, ServiceOfflineException, SyncNotFoundException,
+} from '../src/shared/errors';
+import { t } from '../src/shared/i18n';
 
 const password = ' Synthetic è+日本語 😀 ';
 const id = '0123456789abcdef0123456789abcdef';
 
-async function setup() {
+async function setup(opts: { lock?: string } = {}) {
   const backend = new MemoryBackend();
   const store = new Store(backend);
   const derived = await deriveKey(password, id, '1.8.0');
@@ -40,39 +43,56 @@ async function setup() {
   };
   const makeApi = vi.fn(() => api as unknown as XSyncApiClient);
   const core = new BackgroundCore(store, new BookmarkIdMapper(store), new InMemoryLogger(), adapter as unknown as NativeAdapter, ports, makeApi);
+  if (opts.lock) await core.handleMessage({ command: MessageCommand.SetSwitchPassword, password: opts.lock, confirm: opts.lock });
+  const lockState = opts.lock ? await store.get(StoreKey.SwitchLock) : undefined;
   const writes = vi.spyOn(backend, 'set');
   const removes = vi.spyOn(backend, 'remove');
   async function unchanged() {
     expect(writes).not.toHaveBeenCalled();
     expect(removes).not.toHaveBeenCalled();
     expect(await store.get(StoreKey.SyncInfo)).toEqual(info);
+    expect(await store.get(StoreKey.SwitchLock)).toEqual(lockState);
     expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
     expect(await store.get(StoreKey.Bookmarks)).toBe('local-cache-must-not-be-read-or-replaced');
     for (const mock of Object.values(api)) if (mock !== api.getBookmarks) expect(mock).not.toHaveBeenCalled();
     for (const mock of Object.values(adapter)) expect(mock).not.toHaveBeenCalled();
     expect(ports.chrome.download).not.toHaveBeenCalled();
   }
-  return { core, store, api, info, remote, makeApi, writes, unchanged };
+  return { core, store, api, info, remote, makeApi, writes, unchanged, derived };
 }
 
-const request = (currentPassword = password) => ({ command: MessageCommand.PrepareConnectQr, currentPassword } as const);
+const request = (switchPassword?: string) =>
+  ({ command: MessageCommand.PrepareConnectQr, ...(switchPassword !== undefined ? { switchPassword } : {}) } as const);
+const LOCK = '2468';
 
 describe('read-only prepare-connect-qr', () => {
-  it('rejects wrong passwords before any remote request or mutation', async () => {
+  it('without a sync lock: verifies the remote blob and returns the derived key, never the password', async () => {
     const ctx = await setup();
-    await expect(ctx.core.handleMessage(request('wrong'))).rejects.toThrow();
-    expect(ctx.makeApi).not.toHaveBeenCalled();
-    expect(ctx.api.getBookmarks).not.toHaveBeenCalled();
-    await ctx.unchanged();
-  });
-
-  it('verifies the remote blob and returns the original password without adopting data', async () => {
-    const ctx = await setup();
-    expect(await ctx.core.handleMessage(request())).toEqual({ app: 'Keepmark', format: 1, serviceType: 'xbrowsersync',
-      serviceUrl: ctx.info.serviceUrl, id, version: '1.8.0', password });
+    const payload = await ctx.core.handleMessage(request());
+    expect(payload).toEqual({ app: 'Keepmark', format: 2, serviceType: 'xbrowsersync',
+      serviceUrl: ctx.info.serviceUrl, id, version: '1.8.0', key: ctx.derived });
+    expect(JSON.stringify(payload)).not.toContain(password);
     expect(ctx.api.getBookmarks).toHaveBeenCalledOnce();
     expect(ctx.api.getBookmarks).toHaveBeenCalledWith(id);
     await ctx.unchanged();
+  });
+
+  it('with a sync lock: a missing or wrong lock password is refused before any remote request', async () => {
+    const ctx = await setup({ lock: LOCK });
+    await expect(ctx.core.handleMessage(request())).rejects.toThrow(IncompleteSyncInfoException);
+    await expect(ctx.core.handleMessage(request(''))).rejects.toThrow(IncompleteSyncInfoException);
+    await expect(ctx.core.handleMessage(request('9999'))).rejects.toThrow(InvalidSwitchPasswordException);
+    expect(ctx.api.getBookmarks).not.toHaveBeenCalled();
+    await ctx.unchanged();
+    await expect(ctx.core.handleMessage(request(LOCK))).resolves.toMatchObject({ format: 2, key: ctx.derived });
+    await ctx.unchanged();
+  });
+
+  it('a lock record this version cannot read refuses the QR instead of skipping the gate', async () => {
+    const ctx = await setup();
+    await ctx.store.set(StoreKey.SwitchLock, { v: 99, salt: 'x' });
+    await expect(ctx.core.handleMessage(request())).rejects.toThrow(t('core.savedCredentialUnreadable'));
+    expect(ctx.api.getBookmarks).not.toHaveBeenCalled();
   });
 
   it.each([new ServiceOfflineException('offline'), new SyncNotFoundException('401'), new InvalidServiceException('404')])('keeps credentials intact after remote failure %s', async (error) => {
@@ -86,7 +106,7 @@ describe('read-only prepare-connect-qr', () => {
     const ctx = await setup();
     ctx.remote.version = version;
     if (version === '1.8.0') ctx.remote.bookmarks = await encryptData('[]', await deriveKey('changed remotely', id, '1.8.0'));
-    await expect(ctx.core.handleMessage(request())).rejects.toThrow();
+    await expect(ctx.core.handleMessage(request())).rejects.toThrow(version === '1.8.0' ? t('qr.keyStale') : Error);
     await ctx.unchanged();
   });
 
@@ -99,33 +119,6 @@ describe('read-only prepare-connect-qr', () => {
     });
     await expect(ctx.core.handleMessage(request())).rejects.toThrow();
     expect(ctx.writes).toHaveBeenCalledOnce(); // only the simulated external change
-  });
-
-  it('rejects identity changed while password derivation is in flight, before GET', async () => {
-    const ctx = await setup();
-    const derive = crypto.subtle.deriveKey.bind(crypto.subtle);
-    let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => { markStarted = resolve; });
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const spy = vi.spyOn(crypto.subtle, 'deriveKey').mockImplementation(async (...args) => {
-      markStarted();
-      await gate;
-      return derive(...args);
-    });
-    try {
-      const result = ctx.core.handleMessage(request());
-      const rejected = expect(result).rejects.toThrow();
-      await started;
-      await ctx.store.set(StoreKey.SyncInfo, { ...ctx.info, id: 'changed-during-derive' });
-      release();
-      await rejected;
-      expect(ctx.api.getBookmarks).not.toHaveBeenCalled();
-      expect(ctx.writes).toHaveBeenCalledOnce();
-    } finally {
-      release();
-      spy.mockRestore();
-    }
   });
 
   it('rejects QR preparation while credentials are already changing', async () => {
@@ -181,7 +174,7 @@ describe('read-only prepare-connect-qr', () => {
       await ctx.store.set(StoreKey.SyncRevision, 42);
       return ctx.remote;
     });
-    await expect(ctx.core.handleMessage(request())).resolves.toMatchObject({ id, password });
+    await expect(ctx.core.handleMessage(request())).resolves.toMatchObject({ id, key: ctx.derived });
     expect(ctx.writes).toHaveBeenCalledTimes(2);
   });
 

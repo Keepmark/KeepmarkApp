@@ -1,5 +1,5 @@
 import { renderConnectQr } from './render-connect-qr.js';
-import { InvalidCredentialsException } from '../shared/errors.js';
+import { InvalidCredentialsException, InvalidSwitchPasswordException } from '../shared/errors.js';
 import {
   serializeConnectQrPayload,
   type ConnectQrPayload,
@@ -9,7 +9,10 @@ import type { StatusResponse } from '../shared/messages.js';
 import { t } from '../shared/i18n.js';
 
 interface QrDependencies {
-  prepare(password: string, target?: ConnectQrTarget): Promise<ConnectQrPayload>;
+  /** `switchPassword` is passed only when a sync lock is set. */
+  prepare(switchPassword: string | undefined, target?: ConnectQrTarget): Promise<ConnectQrPayload>;
+  /** Whether a sync lock is set: only then is a password asked. */
+  lockSet(): Promise<boolean>;
   render(canvas: HTMLCanvasElement, json: string): Promise<unknown>;
   now(): number;
   focused(): boolean;
@@ -31,6 +34,11 @@ export class ConnectQrController {
    *  hosted on the LAN) gets the card disabled with the reason spelled out. */
   private httpsOk = false;
   private busy = false;
+  /** True while the sync lock state is unknown or set: the password field is
+   *  shown (fail closed). False = no lock, the code is prepared at once. */
+  private needsPassword = true;
+  /** Set while the lock state is being read: no submit can run meanwhile. */
+  private lockPending = false;
   private canvas: HTMLCanvasElement | undefined;
   private readonly deps: QrDependencies;
   private readonly input: HTMLInputElement;
@@ -45,6 +53,8 @@ export class ConnectQrController {
   private readonly open: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
 
+  private readonly entry: HTMLElement;
+
   constructor(
     private readonly root: HTMLElement,
     prepare: QrDependencies['prepare'],
@@ -55,6 +65,7 @@ export class ConnectQrController {
   ) {
     this.deps = {
       prepare,
+      lockSet: () => Promise.resolve(true),
       render: renderConnectQr,
       now: () => performance.now(),
       focused: () => document.visibilityState === 'visible' && document.hasFocus(),
@@ -63,6 +74,7 @@ export class ConnectQrController {
     this.input = host.querySelector('#qr-password')!;
     this.label = host.querySelector('#qr-password-label')!;
     this.destination = host.querySelector('#qr-destination')!;
+    this.entry = host.querySelector('.qr-password-entry')!;
     this.panel = host.querySelector('#qr-panel')!;
     this.form = host.querySelector('form')!;
     this.output = host.querySelector('#qr-output')!;
@@ -143,9 +155,11 @@ export class ConnectQrController {
     return this.activeIdentity && !this.httpsOk ? t('qr.httpsRequired') : '';
   }
 
-  /** Shared opening: the dialog is focused, one subject is named, nothing is
-   *  generated until a password is proved. */
+  /** Shared opening: the dialog is focused and one subject is named. Without a
+   *  sync lock the code is prepared at once; with one, nothing is generated
+   *  until its password is proved. */
   private begin(target: ConnectQrTarget | undefined, trigger: HTMLElement): void {
+    const generation = this.generation;
     this.target = target;
     this.trigger = trigger;
     this.error.hidden = true;
@@ -158,18 +172,45 @@ export class ConnectQrController {
     if (target && !/^https:\/\//i.test(target.serviceUrl)) {
       this.error.textContent = t('qr.httpsRequired');
       this.error.hidden = false;
+      // Nothing can be generated for a plain-HTTP service: no field to fill.
+      this.showPassword(false);
+      this.generate.disabled = true;
+      return;
     }
-    this.input.focus();
+    // Until the lock state is known the dialog stays inert (no field, no
+    // button), then either asks the lock password or prepares the code.
+    this.showPassword(false);
+    this.generate.disabled = true;
+    this.setBusy(true);
+    this.lockPending = true;
+    void this.deps.lockSet().catch(() => true).then((set) => {
+      if (generation !== this.generation || this.panel.hidden) return;
+      this.lockPending = false;
+      this.setBusy(false);
+      this.generate.disabled = false;
+      this.needsPassword = set;
+      this.showPassword(set);
+      if (set) this.input.focus();
+      else void this.verify();
+    });
+  }
+
+  /** The password row exists only for a sync lock. */
+  private showPassword(show: boolean): void {
+    this.needsPassword = show;
+    this.label.hidden = !show;
+    this.input.hidden = !show;
+    this.input.required = show;
+    this.entry.classList.toggle('qr-no-password', !show);
   }
 
   /** Names what the code will carry: the active sync, or the row that asked. */
   private setSubject(): void {
+    this.label.textContent = t('popup.saved.changePasswordLabel');
     if (this.target) {
-      this.label.textContent = t('mgr.syncs.syncPassword');
       this.destination.textContent = `${this.target.serviceUrl} · ${this.target.syncId.slice(0, 8)}…`;
       return;
     }
-    this.label.textContent = t('qr.password');
     this.destination.textContent = this.activeIdentity
       ? (this.httpsOk ? `${this.activeIdentity.split('\n')[0]} · ${this.activeIdentity.split('\n')[1].slice(0, 8)}…` : t('qr.httpsRequired'))
       : '';
@@ -185,6 +226,8 @@ export class ConnectQrController {
     this.busy = false;
     this.target = undefined;
     this.trigger = undefined;
+    this.showPassword(true);
+    this.lockPending = false;
     this.open.disabled = !this.canPrepare();
     this.generate.disabled = false;
     this.setBusy(false);
@@ -226,8 +269,8 @@ export class ConnectQrController {
   }
 
   private async verify(): Promise<void> {
-    if (this.busy || !this.deps.focused() || this.panel.hidden) return;
-    if (!this.input.value) return;
+    if (this.busy || this.lockPending || !this.deps.focused() || this.panel.hidden) return;
+    if (this.needsPassword && !this.input.value) return;
     const generation = ++this.generation;
     const target = this.target;
     this.busy = true;
@@ -238,14 +281,14 @@ export class ConnectQrController {
     this.announce('');
     this.error.hidden = true;
     this.error.textContent = '';
-    let password = this.input.value;
+    let password: string | undefined = this.needsPassword ? this.input.value : undefined;
     this.input.value = '';
     let payload: ConnectQrPayload | undefined;
     let json = '';
     let canvas: HTMLCanvasElement | undefined;
     try {
       const pending = this.deps.prepare(password, target);
-      password = '';
+      password = undefined;
       payload = await pending;
       if (!this.valid(generation)) {
         if (generation === this.generation) this.close();
@@ -270,22 +313,26 @@ export class ConnectQrController {
       this.timer = setInterval(() => this.tick(), 250);
     } catch (error) {
       if (this.valid(generation)) {
-        const wrongPassword = error instanceof InvalidCredentialsException
-          && (error.message === t('core.currentPwWrong') || error.message === t('err.invalidCredentials'));
+        const wrongPassword = error instanceof InvalidSwitchPasswordException;
         this.input.value = '';
         this.input.removeAttribute('aria-invalid');
         if (wrongPassword) this.input.setAttribute('aria-invalid', 'true');
-        this.error.textContent = wrongPassword ? t('core.currentPwWrong')
+        this.error.textContent = wrongPassword ? t('core.switchWrongPassword')
+          : error instanceof InvalidCredentialsException && error.message === t('qr.keyStale') ? t('qr.keyStale')
+          : error instanceof Error && error.message === t('core.switchPasswordRequired') ? t('core.switchPasswordRequired')
           : error instanceof Error && error.message === t('qr.tooLarge') ? t('qr.tooLarge')
           : error instanceof Error && error.message === t('qr.httpsRequired') ? t('qr.httpsRequired')
           : error instanceof Error && error.message === t('core.connectBusy') ? t('qr.busy')
           : t('qr.error');
         this.error.hidden = false;
         this.input.disabled = false;
-        this.input.focus();
+        // The lock may have been set meanwhile: ask for it from now on.
+        if (error instanceof Error && error.message === t('core.switchPasswordRequired')) this.showPassword(true);
+        if (this.needsPassword) this.input.focus();
+        else this.generate.focus();
       }
     } finally {
-      password = '';
+      password = undefined;
       payload = undefined;
       json = '';
       if (canvas) this.erase(canvas);

@@ -315,18 +315,25 @@ accepts `https` and plain `http` only for `localhost` / `127.0.0.1` / `[::1]`.
 - Two entry points, one dialog: the Status card's Show connection QR (the
   ACTIVE sync) and a `Show QR` button on EVERY row of Manager → Sync, so the
   phone can join a sync that is not the one active in this browser. A row's
-  dialog names that row's service and ID, asks that sync's own long password
-  (never stored: the typed one is the proof) and decrypts one remote GET
-  read-only; the active sync, the rows and the server are untouched. The
-  dialog lives outside the sections, so a row still works while this browser is
-  unlinked. The launch button is hidden while the dialog is open. Password
-  errors stay next to the key-icon input inside the dialog and allow retry.
+  dialog names that row's service and ID; the active sync, the rows and the
+  server are untouched. The dialog lives outside the sections, so a row still
+  works while this browser is unlinked. The launch button is hidden while the
+  dialog is open.
+- The long sync password is never asked. Without a sync lock the QR appears
+  at once, nothing typed. With a sync lock the dialog asks the sync lock
+  password (the same one used to activate or add syncs), for the active sync
+  too; errors stay next to the key-icon input and allow retry. While the lock
+  state is read the dialog is inert; if that read fails it asks the password.
   The QR includes a small Keepmark logo. Outside click or Escape closes the
-  dialog and erases the QR. Local key verification (active) or the remote
-  decrypt (row) and a read-only remote GET precede display.
-- The QR is compact Keepmark format-1 JSON with service, ID, sync data version
-  and original password; 1800 UTF-8 bytes maximum. No password is persisted or
-  sent to the service. Display ends after 60 seconds, close, Escape, navigation,
+  dialog and erases the QR. A read-only remote GET precedes display: the saved
+  key must still decrypt the server copy, otherwise the dialog says to link the
+  sync again here (its password was changed elsewhere).
+- The QR is compact Keepmark format-2 JSON with service, ID, sync data version
+  and the sync's derived key (never the password); 1800 UTF-8 bytes maximum.
+  Anyone with a copy can read and change that sync's bookmarks but cannot learn
+  the password; a sync lock protects QR export. Keepmark for Android reads
+  format 2 from 1.0.247 (older releases reject it) and still accepts format 1
+  (with password). Display ends after 60 seconds, close, Escape, navigation,
   hidden, blur or pagehide; returning never restores it. A captured copy remains
   reusable: this is a display timeout, not credential expiry.
 - Android Connect (first link, and `+ Add a sync` while linked) offers a
@@ -343,7 +350,8 @@ accepts `https` and plain `http` only for `localhost` / `127.0.0.1` / `[::1]`.
   the cleartext warning shown by the manual editor (known gap).
 - Explicit Connect reuses the manual verification and reconciliation path.
   Direction consequences, one final action, preview locks and safety backups remain
-  required. Verification failure drops the QR password and requires rescanning;
+  required. A format-2 QR links from the key (the remote copy must decrypt);
+  verification failure drops the QR credentials and requires rescanning;
   manual entry remains available. Already-linked devices scan within `+ Add a
   sync` and keep the same verification/review gates.
 

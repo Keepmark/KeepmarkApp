@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { XSyncApiClient } from '../src/shared/api';
 import { deriveKey, decryptData, encryptData } from '../src/shared/crypto';
 import { SyncClientVersion } from '../src/shared/constants';
+import { t } from '../src/shared/i18n';
 import { BookmarkContainer, eachBookmark, repairBookmarkIds } from '../src/shared/bookmarks';
 import type { BookmarkNode } from '../src/shared/models';
 import { makeFirefoxAdapter } from '../src/firefox/adapter';
@@ -16,7 +17,6 @@ import { InMemoryLogger, sanitizeSyncId } from '../src/shared/logging';
 import { MessageCommand, type SavedSyncsResponse } from '../src/shared/messages';
 import {
   DataOutOfSyncException,
-  InvalidCredentialsException,
   InvalidSwitchPasswordException,
   SyncNotFoundException,
   UnsupportedVersionException,
@@ -267,7 +267,7 @@ describe('multi-sync (saved syncs)', () => {
     expect((info as { syncId: string }).syncId).toBe('B');
   });
 
-  it('builds a QR for a dormant row from its own long password, read-only', async () => {
+  it('builds a QR for a dormant row from its saved key; the sync lock gates it, read-only', async () => {
     const s = state();
     const { core } = await setup(s);
     const idA = await connectA(core);
@@ -282,35 +282,73 @@ describe('multi-sync (saved syncs)', () => {
       switchPassword: SWITCH,
     });
     const before = await saved(core);
-    // A is dormant now: its long password is the only way in (only its derived
-    // key is stored, wrapped under the switch lock).
+    const target = { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA };
+    // A is dormant: its derived key is wrapped under the sync lock, so the
+    // lock password (never A's long password) opens the code.
     const payload = (await core.handleMessage({
       command: MessageCommand.PrepareConnectQr,
-      currentPassword: PASSWORD_A,
-      target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
-    })) as { serviceUrl: string; id: string; version: string; password: string };
-    expect(payload).toMatchObject({
+      switchPassword: SWITCH,
+      target,
+    })) as Record<string, unknown>;
+    expect(payload).toEqual({
+      app: 'Keepmark', format: 2, serviceType: 'xbrowsersync',
       serviceUrl: 'https://api.xbrowsersync.org/',
       id: idA,
       version: SyncClientVersion,
-      password: PASSWORD_A,
+      key: await deriveKey(PASSWORD_A, idA, SyncClientVersion),
     });
-    // Wrong password is its own error, and nothing about the registry moved.
+    expect(JSON.stringify(payload)).not.toContain(PASSWORD_A);
+    // Wrong or missing lock password: its own errors, nothing about the registry moved.
     await expect(
-      core.handleMessage({
-        command: MessageCommand.PrepareConnectQr,
-        currentPassword: 'not the password',
-        target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
-      }),
-    ).rejects.toBeInstanceOf(InvalidCredentialsException);
+      core.handleMessage({ command: MessageCommand.PrepareConnectQr, switchPassword: '0000', target }),
+    ).rejects.toBeInstanceOf(InvalidSwitchPasswordException);
+    await expect(
+      core.handleMessage({ command: MessageCommand.PrepareConnectQr, target }),
+    ).rejects.toThrow(t('core.switchPasswordRequired'));
+    // The active sync is gated by the lock too.
+    await expect(core.handleMessage({ command: MessageCommand.PrepareConnectQr })).rejects.toThrow(t('core.switchPasswordRequired'));
     // A target that is not a saved row is refused (never a free-form probe).
     await expect(
       core.handleMessage({
         command: MessageCommand.PrepareConnectQr,
-        currentPassword: PASSWORD_A,
+        switchPassword: SWITCH,
         target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: 'unknown' },
       }),
     ).rejects.toBeTruthy();
+    expect(await saved(core)).toEqual(before);
+  });
+
+  it("without a sync lock a dormant row's QR needs nothing typed", async () => {
+    const s = state();
+    const { core } = await setup(s);
+    const idA = await connectA(core);
+    await seedSync(s, 'B', PASSWORD_B, makeTree('B', 'https://b.test'));
+    await core.handleMessage({
+      command: MessageCommand.ConnectExisting,
+      serviceUrl: 'https://other.example',
+      syncId: 'B',
+      password: PASSWORD_B,
+      direction: 'pull',
+    });
+    const before = await saved(core);
+    const payload = (await core.handleMessage({
+      command: MessageCommand.PrepareConnectQr,
+      target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
+    })) as { format: number; key: string };
+    expect(payload.format).toBe(2);
+    expect(payload.key).toBe(await deriveKey(PASSWORD_A, idA, SyncClientVersion));
+    // A password typed anyway is ignored, not refused.
+    await expect(core.handleMessage({
+      command: MessageCommand.PrepareConnectQr,
+      switchPassword: 'anything',
+      target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
+    })).resolves.toMatchObject({ key: payload.key });
+    // The saved key no longer opens A: its password changed on another device.
+    s.docs.get(idA)!.blob = await encryptData('[]', await deriveKey('changed elsewhere', idA, SyncClientVersion));
+    await expect(core.handleMessage({
+      command: MessageCommand.PrepareConnectQr,
+      target: { serviceUrl: 'https://api.xbrowsersync.org/', syncId: idA },
+    })).rejects.toThrow(t('qr.keyStale'));
     expect(await saved(core)).toEqual(before);
   });
 

@@ -1,28 +1,33 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { InvalidCredentialsException } from '../src/shared/errors';
+import { InvalidCredentialsException, InvalidSwitchPasswordException } from '../src/shared/errors';
 import { t } from '../src/shared/i18n';
 import { ConnectQrController } from '../src/manager/connect-qr';
 import type { ConnectQrPayload } from '../src/shared/connect-qr';
-const payload: ConnectQrPayload = { app: 'Keepmark', format: 1, serviceType: 'xbrowsersync', serviceUrl: 'https://example.test:8443/sync', id: 'synthetic-id', version: '1.8.0', password: 'À 日本 🔑' };
+const payload: ConnectQrPayload = { app: 'Keepmark', format: 2, serviceType: 'xbrowsersync', serviceUrl: 'https://example.test:8443/sync', id: 'synthetic-id', version: '1.8.0', key: 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' };
+/** The sync lock password the tests type (only asked while a lock is set). */
+const pin = 'À 日本 🔑';
 let controller: ConnectQrController;
 let focus: boolean;
 let render: ReturnType<typeof vi.fn>;
 let prepare: ReturnType<typeof vi.fn>;
+let lockSet: ReturnType<typeof vi.fn>;
 const el = (id: string): HTMLElement => document.getElementById(id)!;
 function submit(): void {
-  (el('qr-password') as HTMLInputElement).value = payload.password;
+  (el('qr-password') as HTMLInputElement).value = pin;
   document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 }
 async function settle(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers(); focus = true;
-  document.body.innerHTML = '<div id="root"><button id="qr-open"></button><dialog id="qr-panel"><label id="qr-password-label"></label><p id="qr-destination"></p><form><input id="qr-password"><button id="qr-generate"></button><div id="qr-error"></div></form><div id="qr-output"></div><p id="qr-countdown"></p><button id="qr-close"></button></dialog><p id="qr-feedback"></p></div>';
+  document.body.innerHTML = '<div id="root"><button id="qr-open"></button><dialog id="qr-panel"><label id="qr-password-label"></label><p id="qr-destination"></p><form><div class="qr-password-entry"><input id="qr-password"></div><button id="qr-generate"></button><div id="qr-error"></div></form><div id="qr-output"></div><p id="qr-countdown"></p><button id="qr-close"></button></dialog><p id="qr-feedback"></p></div>';
   render = vi.fn(async (canvas: HTMLCanvasElement) => { canvas.width = 320; canvas.height = 320; });
   prepare = vi.fn(async () => payload);
-  controller = new ConnectQrController(el('root'), prepare, { render, focused: () => focus, now: () => Date.now() });
+  lockSet = vi.fn(async () => true);
+  controller = new ConnectQrController(el('root'), prepare, { render, lockSet, focused: () => focus, now: () => Date.now() });
   controller.updateStatus({ syncEnabled: true, serviceUrl: payload.serviceUrl, syncId: payload.id, queueLength: 0, syncing: false });
   el('qr-open').click();
+  await settle();
 });
 afterEach(() => { controller.close(); vi.useRealTimers(); });
 it('clears password, renders a detached canvas and expires at 60 seconds', async () => {
@@ -42,8 +47,8 @@ it('rejects delayed verification after close and does not expose error details',
   let resolve!: (value: ConnectQrPayload) => void;
   prepare.mockImplementation(() => new Promise<ConnectQrPayload>((r) => { resolve = r; }));
   submit(); controller.close(); resolve(payload); await settle(); expect(render).not.toHaveBeenCalled();
-  el('qr-open').click(); prepare.mockRejectedValue(new Error(payload.password)); submit(); await settle();
-  expect(el('qr-error').textContent).not.toContain(payload.password); expect(el('qr-output').children).toHaveLength(0);
+  el('qr-open').click(); await settle(); prepare.mockRejectedValue(new Error(payload.key)); submit(); await settle();
+  expect(el('qr-error').textContent).not.toContain(payload.key); expect(el('qr-output').children).toHaveLength(0);
 });
 it('erases detached canvas when closed during rendering', async () => {
   let complete!: () => void;
@@ -64,7 +69,7 @@ it('closes on hidden visibility and Escape', async () => {
   submit(); await settle();
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   expect(el('qr-output').children).toHaveLength(0);
-  el('qr-open').click(); submit(); await settle();
+  el('qr-open').click(); await settle(); submit(); await settle();
   const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
   document.dispatchEvent(new Event('visibilitychange'));
   expect(el('qr-output').children).toHaveLength(0);
@@ -73,14 +78,14 @@ it('closes on hidden visibility and Escape', async () => {
 it('a stale generation cannot replace a newer QR', async () => {
   let resolve!: (value: ConnectQrPayload) => void;
   prepare.mockImplementationOnce(() => new Promise<ConnectQrPayload>((r) => { resolve = r; }));
-  submit(); controller.close(); el('qr-open').click(); submit(); await settle();
+  submit(); controller.close(); el('qr-open').click(); await settle(); submit(); await settle();
   const current = el('qr-output').firstElementChild;
   resolve(payload); await settle();
   expect(el('qr-output').firstElementChild).toBe(current); expect(render).toHaveBeenCalledTimes(1);
-  expect(document.body.textContent).not.toContain(payload.password);
+  expect(document.body.textContent).not.toContain(payload.key);
   expect(document.querySelector('[data-password]')).toBeNull();
 });
-it('opens a modal with focus on password, hides launch and restores it on close', () => {
+it('with a sync lock: opens a modal with focus on its password, hides launch and restores it on close', () => {
   expect((el('qr-panel') as HTMLDialogElement).open).toBe(true);
   expect(el('qr-open').hidden).toBe(true);
   expect(document.activeElement).toBe(el('qr-password'));
@@ -123,12 +128,12 @@ it('native cancellation and external dialog close invalidate verification', asyn
   expect(el('qr-panel').hidden).toBe(false);
 });
 
-it('wrong password keeps contextual feedback in the modal and allows an immediate retry', async () => {
-  prepare.mockRejectedValueOnce(new InvalidCredentialsException(t('core.currentPwWrong')));
+it('wrong sync lock password keeps contextual feedback in the modal and allows an immediate retry', async () => {
+  prepare.mockRejectedValueOnce(new InvalidSwitchPasswordException(t('core.switchWrongPassword')));
   submit(); await settle();
   expect((el('qr-panel') as HTMLDialogElement).open).toBe(true);
   expect(el('qr-error').closest('dialog')).toBe(el('qr-panel'));
-  expect(el('qr-error').textContent).toBe(t('core.currentPwWrong'));
+  expect(el('qr-error').textContent).toBe(t('core.switchWrongPassword'));
   expect(el('qr-password').getAttribute('aria-invalid')).toBe('true');
   expect((el('qr-password') as HTMLInputElement).value).toBe('');
   expect(document.activeElement).toBe(el('qr-password'));
@@ -140,10 +145,10 @@ it('wrong password keeps contextual feedback in the modal and allows an immediat
   expect(el('qr-output').children).toHaveLength(1);
 });
 it('render failure keeps the dialog open, clears the detached canvas and hides arbitrary error text', async () => {
-  render.mockRejectedValueOnce(new Error(payload.password));
+  render.mockRejectedValueOnce(new Error(payload.key));
   submit(); await settle();
   expect((el('qr-panel') as HTMLDialogElement).open).toBe(true);
-  expect(el('qr-error').textContent).not.toContain(payload.password);
+  expect(el('qr-error').textContent).not.toContain(payload.key);
   expect(render.mock.calls[0][0].width).toBe(0);
   expect(el('qr-output').children).toHaveLength(0);
   expect((el('qr-password') as HTMLInputElement).value).toBe('');
@@ -181,12 +186,13 @@ it('a row can show its own QR while the card is hidden and names that sync', asy
   const trigger = document.createElement('button');
   document.body.append(trigger);
   controller.openFor({ serviceUrl: payload.serviceUrl, syncId: payload.id }, trigger);
+  await settle();
   expect((el('qr-panel') as HTMLDialogElement).open).toBe(true);
   expect(el('qr-destination').textContent).toContain(payload.serviceUrl);
   expect(el('qr-destination').textContent).toContain(payload.id.slice(0, 8));
-  expect(el('qr-password-label').textContent).toBe(t('mgr.syncs.syncPassword'));
+  expect(el('qr-password-label').textContent).toBe(t('popup.saved.changePasswordLabel'));
   submit(); await settle();
-  expect(prepare).toHaveBeenCalledWith(payload.password, { serviceUrl: payload.serviceUrl, syncId: payload.id });
+  expect(prepare).toHaveBeenCalledWith(pin, { serviceUrl: payload.serviceUrl, syncId: payload.id });
   expect(el('qr-output').children).toHaveLength(1);
   el('qr-close').click();
   expect(document.activeElement).toBe(trigger);
@@ -198,6 +204,9 @@ it('a row on a plain-HTTP service explains the refusal before asking', () => {
   controller.openFor({ serviceUrl: 'http://sync.example.test:8090/', syncId: payload.id }, trigger);
   expect(el('qr-error').textContent).toBe(t('qr.httpsRequired'));
   expect(el('qr-error').hidden).toBe(false);
+  expect(el('qr-password').hidden).toBe(true);
+  expect((el('qr-generate') as HTMLButtonElement).disabled).toBe(true);
+  expect(lockSet).toHaveBeenCalledTimes(1); // only the card's opening asked
 });
 
 it('shows the HTTPS requirement when the background refuses to build the payload', async () => {
@@ -206,4 +215,57 @@ it('shows the HTTPS requirement when the background refuses to build the payload
   expect(el('qr-error').textContent).toBe(t('qr.httpsRequired'));
   expect(el('qr-error').hidden).toBe(false);
   expect((el('qr-generate') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('without a sync lock the QR is shown at once: no field, nothing typed', async () => {
+  controller.close();
+  lockSet.mockResolvedValue(false);
+  el('qr-open').click(); await settle(); await settle();
+  expect(el('qr-password').hidden).toBe(true);
+  expect(el('qr-password-label').hidden).toBe(true);
+  expect(prepare).toHaveBeenLastCalledWith(undefined, undefined);
+  expect(el('qr-output').children).toHaveLength(1);
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  controller.openFor({ serviceUrl: payload.serviceUrl, syncId: payload.id }, trigger);
+  await settle(); await settle();
+  expect(prepare).toHaveBeenLastCalledWith(undefined, { serviceUrl: payload.serviceUrl, syncId: payload.id });
+  expect(el('qr-output').children).toHaveLength(1);
+});
+
+it('nothing can be submitted while the lock state is unknown; a failed read asks the password', async () => {
+  controller.close();
+  let answer!: (set: boolean) => void;
+  lockSet.mockImplementationOnce(() => new Promise<boolean>((r) => { answer = r; }));
+  el('qr-open').click();
+  document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+  expect(prepare).not.toHaveBeenCalled();
+  expect((el('qr-generate') as HTMLButtonElement).disabled).toBe(true);
+  answer(true); await settle();
+  expect(el('qr-password').hidden).toBe(false);
+  expect(document.activeElement).toBe(el('qr-password'));
+
+  controller.close();
+  lockSet.mockRejectedValueOnce(new Error('no answer'));
+  el('qr-open').click(); await settle(); await settle();
+  expect(el('qr-password').hidden).toBe(false); // fail closed
+  expect(prepare).not.toHaveBeenCalled();
+});
+
+it('a lock set meanwhile, or a stale key, is explained in the dialog', async () => {
+  controller.close();
+  lockSet.mockResolvedValue(false);
+  prepare.mockRejectedValueOnce(new Error(t('core.switchPasswordRequired')));
+  el('qr-open').click(); await settle(); await settle();
+  expect(el('qr-error').textContent).toBe(t('core.switchPasswordRequired'));
+  expect(el('qr-password').hidden).toBe(false);
+  submit(); await settle();
+  expect(prepare).toHaveBeenLastCalledWith(pin, undefined);
+
+  controller.close();
+  prepare.mockRejectedValueOnce(new InvalidCredentialsException(t('qr.keyStale')));
+  el('qr-open').click(); await settle(); await settle();
+  expect(el('qr-error').textContent).toBe(t('qr.keyStale'));
+  expect(el('qr-output').children).toHaveLength(0);
 });
