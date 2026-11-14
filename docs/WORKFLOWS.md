@@ -413,9 +413,12 @@ keepmark://sync?v=2&s=<service URL, percent-encoded>&t=<32-byte secret, base64ur
   voucher the service keeps and cannot read (HKDF-SHA256 + AES-256-GCM,
   protocol in KeepmarkApi `docs/DEVELOPMENT.md`). The voucher opens once and
   expires.
-- Before the link is made the sender chooses how long it stays valid
-  (10 minutes, the default, or 1 hour, capped by the service's
-  `maxTtlSeconds`) and whether it needs a **6-digit code** (off by default).
+- The sender chooses how long it stays valid (10 minutes, the default, or
+  1 hour, capped by the service's `maxTtlSeconds`) and whether it needs a
+  **6-digit code** (off by default). The extension asks before making the
+  link; Android makes it at once with the defaults and shows
+  "Works once, until <time> · no code" with **Change**, which revokes that link
+  and makes a new one with the new options.
   The code is shown next to the link and must be told by another channel
   (voice, a different app): link and code together open the voucher. The
   service counts wrong codes and deletes the voucher after `maxAttempts`.
