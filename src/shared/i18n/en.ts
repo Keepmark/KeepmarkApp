@@ -43,6 +43,7 @@ export const en = {
   'share.introOnce': "The recipient opens it in Keepmark: by tapping it on Android, or by pasting it in “Shared link”.",
   'share.warningOnce': "Whoever opens the link first gets these bookmarks and can read and change them. Send it only to people you trust; add a code if others could read the message.",
   'share.noOneTime': "This service has no one-time links: this link does not expire.",
+  'share.error': "Unable to create the link. Check the connection and try again.",
   'share.ttlLabel': "Valid for",
   'share.ttl10': "10 minutes",
   'share.ttl60': "1 hour",

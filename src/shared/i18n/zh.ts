@@ -44,6 +44,7 @@ export const zh: Record<MessageKey, string> = {
   'share.introOnce': "接收者在 Keepmark 中打开：在 Android 上点按，或粘贴到“共享链接”。",
   'share.warningOnce': "第一个打开链接的人会获得这些书签，并可读取和更改它们。只发送给你信任的人；如果其他人可能读到消息，请添加代码。",
   'share.noOneTime': "此服务没有一次性链接：此链接不会过期。",
+  'share.error': "无法创建链接。请检查连接后重试。",
   'share.ttlLabel': "有效期",
   'share.ttl10': "10 分钟",
   'share.ttl60': "1 小时",

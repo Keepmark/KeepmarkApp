@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { InvalidSwitchPasswordException } from '../src/shared/errors';
+import { InvalidSwitchPasswordException, ServiceOfflineException, XbsException } from '../src/shared/errors';
 import { t } from '../src/shared/i18n';
 import { ConnectQrController } from '../src/manager/connect-qr';
 import type { ConnectQrPayload } from '../src/shared/connect-qr';
@@ -76,6 +76,19 @@ it('a wrong lock password shows no link', async () => {
   openShare(); await settle(); submit(); await settle();
   expect(el('share-link-text')).toBeNull();
   expect(el('qr-error').textContent).toBe(t('core.switchWrongPassword'));
+});
+
+it('a failed link says why when the error has a reason, else a link (not QR) message', async () => {
+  prepare.mockRejectedValue(new ServiceOfflineException('Service offline (TypeError: Failed to fetch)'));
+  openShare(); await settle(); submit(); await settle();
+  expect(el('share-link-text')).toBeNull();
+  expect(el('qr-error').textContent).toBe('Service offline (TypeError: Failed to fetch)');
+  prepare.mockRejectedValue(new XbsException('raw internal text'));
+  submit(); await settle();
+  expect(el('qr-error').textContent).toBe(t('share.error'));
+  prepare.mockRejectedValue(new Error('boom'));
+  submit(); await settle();
+  expect(el('qr-error').textContent).toBe(t('share.error'));
 });
 
 it('leaving the view removes the link; the next QR open uses the QR copy again', async () => {

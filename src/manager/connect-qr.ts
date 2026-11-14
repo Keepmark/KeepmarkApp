@@ -1,5 +1,5 @@
 import { renderConnectQr } from './render-connect-qr.js';
-import { HandoffLimitException, HandoffUnavailableException, InvalidCredentialsException, InvalidSwitchPasswordException } from '../shared/errors.js';
+import { InvalidCredentialsException, InvalidSwitchPasswordException, XbsException } from '../shared/errors.js';
 import {
   serializeConnectQrPayload,
   type ConnectQrPayload,
@@ -455,8 +455,11 @@ export class ConnectQrController {
           : error instanceof Error && error.message === t('qr.tooLarge') ? t('qr.tooLarge')
           : error instanceof Error && error.message === t('qr.httpsRequired') ? t('qr.httpsRequired')
           : error instanceof Error && error.message === t('core.connectBusy') ? t('qr.busy')
-          : error instanceof HandoffLimitException || error instanceof HandoffUnavailableException ? error.message
-          : t('qr.error');
+          // Typed failures carry a translated reason (offline, sync not
+          // found, newer client, …): show it. The bare base class is the
+          // wire fallback for unknown errors, whose text is not for users.
+          : error instanceof XbsException && error.constructor !== XbsException && error.message ? error.message
+          : t(this.kind === 'link' ? 'share.error' : 'qr.error');
         this.error.hidden = false;
         this.input.disabled = false;
         // The lock may have been set meanwhile: ask for it from now on.

@@ -43,6 +43,7 @@ export const de: Record<MessageKey, string> = {
   'share.introOnce': "Der Empfänger öffnet ihn in Keepmark: durch Antippen unter Android oder durch Einfügen in „Geteilter Link“.",
   'share.warningOnce': "Wer den Link zuerst öffnet, erhält diese Lesezeichen und kann sie lesen und ändern. Sende ihn nur an Personen, denen du vertraust; füge einen Code hinzu, wenn andere die Nachricht lesen könnten.",
   'share.noOneTime': "Dieser Dienst hat keine Einmal-Links: Dieser Link läuft nicht ab.",
+  'share.error': "Link konnte nicht erstellt werden. Prüfe die Verbindung und versuche es erneut.",
   'share.ttlLabel': "Gültig für",
   'share.ttl10': "10 Minuten",
   'share.ttl60': "1 Stunde",

@@ -328,11 +328,11 @@ export class BackgroundCore {
       case MessageCommand.ProbeService:
         return this.probeService(msg.serviceUrl);
       case MessageCommand.PrepareConnectQr:
-        return this.prepareConnectQr(msg.switchPassword, msg.target);
+        return this.logShareFailure('QR', this.prepareConnectQr(msg.switchPassword, msg.target));
       case MessageCommand.GetShareLinkMode:
         return this.shareLinkMode(msg.target);
       case MessageCommand.CreateShareLink:
-        return this.createShareLink(msg.switchPassword, msg.target, msg.ttlSeconds, msg.withCode === true);
+        return this.logShareFailure('Share link', this.createShareLink(msg.switchPassword, msg.target, msg.ttlSeconds, msg.withCode === true));
       case MessageCommand.RevokeShareLink:
         return this.revokeShareLink(msg.serviceUrl, msg.syncId, msg.handoffId);
       case MessageCommand.RedeemShareLink:
@@ -1701,6 +1701,17 @@ export class BackgroundCore {
     }
     await check();
     return buildConnectQrPayload({ serviceUrl: info.serviceUrl ?? DefaultServiceUrl, id: info.id!, version: remote.version, key: derived });
+  }
+
+  /** Failed QR / share-link preparation leaves its error kind in the log
+   *  (never the message: it may name a service or sync), then rethrows. */
+  private async logShareFailure<T>(what: string, work: Promise<T>): Promise<T> {
+    try {
+      return await work;
+    } catch (err) {
+      this.log.log(XbsLogLevel.Warning, 'share', `${what} failed: ${(err as Error)?.name ?? 'error'}`);
+      throw err;
+    }
   }
 
   /** Service of the sync a share would carry: the row asked for, else the active one. */

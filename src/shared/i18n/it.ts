@@ -43,6 +43,7 @@ export const it: Record<MessageKey, string> = {
   'share.introOnce': "Chi lo riceve lo apre in Keepmark: toccandolo su Android, o incollandolo in «Link condiviso».",
   'share.warningOnce': "Chi apre il link per primo riceve questi segnalibri e può leggerli e modificarli. Invialo solo a persone di fiducia; aggiungi un codice se altri potrebbero leggere il messaggio.",
   'share.noOneTime': "Questo servizio non ha link monouso: questo link non scade.",
+  'share.error': "Impossibile creare il link. Controlla la connessione e riprova.",
   'share.ttlLabel': "Valido per",
   'share.ttl10': "10 minuti",
   'share.ttl60': "1 ora",

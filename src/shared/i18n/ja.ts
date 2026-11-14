@@ -43,6 +43,7 @@ export const ja: Record<MessageKey, string> = {
   'share.introOnce': "受け取った人は Keepmark で開きます：Android ではタップ、または「共有リンク」に貼り付けます。",
   'share.warningOnce': "最初にリンクを開いた人がこれらのブックマークを受け取り、閲覧・変更できます。信頼できる人にだけ送り、他の人がメッセージを読む可能性がある場合はコードを追加してください。",
   'share.noOneTime': "このサービスには1回限りのリンクがありません。このリンクは期限切れになりません。",
+  'share.error': "リンクを作成できませんでした。接続を確認して再試行してください。",
   'share.ttlLabel': "有効期間",
   'share.ttl10': "10分",
   'share.ttl60': "1時間",

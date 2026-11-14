@@ -46,6 +46,7 @@ export const ro: Record<MessageKey, string> = {
   'share.introOnce': "Destinatarul îl deschide în Keepmark: atingându-l pe Android sau lipindu-l în „Link partajat”.",
   'share.warningOnce': "Cine deschide primul linkul primește aceste marcaje și le poate citi și modifica. Trimite-l doar persoanelor de încredere; adaugă un cod dacă alții ar putea citi mesajul.",
   'share.noOneTime': "Acest serviciu nu are linkuri de unică folosință: acest link nu expiră.",
+  'share.error': "Nu se poate crea linkul. Verifică conexiunea și încearcă din nou.",
   'share.ttlLabel': "Valabil",
   'share.ttl10': "10 minute",
   'share.ttl60': "1 oră",
