@@ -364,6 +364,8 @@ const managerRows = (m) => m.evaluate(() => [...document.querySelectorAll('#m-sy
   name: li.querySelector('strong')?.textContent ?? '',
   active: li.classList.contains('saved-active'),
   sub: li.querySelector('.saved-sub')?.textContent ?? '',
+  // The active card shows its short ID on its own line, not in the sub-line.
+  shortId: li.querySelector('.saved-id')?.textContent ?? '',
   actions: [...li.querySelectorAll('button')].map((b) => b.id || b.dataset.action || ''),
 })));
 const popupRows = (p) => p.evaluate(() => [...document.querySelectorAll('#p-saved-list .saved-row')].map((li) => ({
@@ -539,8 +541,8 @@ async function unlinkAndRelink(ctx, m, pop, activeId) {
   const rowsBefore = await managerRows(m);
   check(`${ctx.kind}: the sync list marks the sync the browser is really on`,
     rowsBefore.length === 2 && rowsBefore.filter((r) => r.active).length === 1 &&
-    (rowsBefore.find((r) => r.active)?.sub ?? '').includes(String(activeBefore).slice(0, 6)),
-    JSON.stringify({ activeBefore, rows: rowsBefore.map((r) => [r.name, r.active, r.sub]) }));
+    (rowsBefore.find((r) => r.active)?.shortId ?? '').includes(String(activeBefore).slice(0, 6)),
+    JSON.stringify({ activeBefore, rows: rowsBefore.map((r) => [r.name, r.active, r.shortId || r.sub]) }));
   const dormantRm = await m.evaluate(() =>
     document.querySelector('#m-syncs-list .saved-row:not(.saved-active) button[id^="m-syncs-rm-"]')?.id ?? null);
   await click(m, `#${dormantRm}`);
@@ -766,8 +768,12 @@ try {
     await waitFor(() => visible(crM2, '#m-safety-list'), 15000);
     const copyShown = await visible(crM2, '#m-removed-card');
     check('chromium: a deliberate delete keeps no plaintext copy in Backup', !copyShown);
+    // Automatic backups (0.1.63) of the now unlinked browser share this list;
+    // only safety entries taken by operations must be gone.
     const safetyText = await text(crM2, '#m-safety-list');
-    check('chromium: the delete-remote safety entry is pruned too', /No safety backups/i.test(safetyText), safetyText);
+    const opEntries = await crM2.evaluate(() => [...document.querySelectorAll('#m-safety-list .safety-item .safety-title')]
+      .map((el) => el.textContent ?? '').filter((title) => !/^Automatic backup$/i.test(title)));
+    check('chromium: the delete-remote safety entry is pruned too', opEntries.length === 0, `${opEntries.join(', ')} | ${safetyText.slice(0, 120)}`);
     await shot(cr, crM2, 'manager-backup-after-delete');
     await crPop.reload({ waitUntil: 'load' });
     await waitFor(() => visible(crPop, '#view-connect'), 20000);

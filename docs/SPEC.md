@@ -609,7 +609,7 @@ white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no QR scanning in the browser (the browser only shows a QR for the Android app); retired toolbar migration +
+Browser QA automated (§11.2b, last run 94/94 on Firefox 160 + Chromium 157, KeepmarkApi 1.2.0 with handoffs); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no QR scanning in the browser (the browser only shows a QR for the Android app); retired toolbar migration +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
 assuming state.
