@@ -355,6 +355,52 @@ accepts `https` and plain `http` only for `localhost` / `127.0.0.1` / `[::1]`.
   manual entry remains available. Already-linked devices scan within `+ Add a
   sync` and keep the same verification/review gates.
 
+## Shared sync link (both apps)
+
+The text form of the connection QR, for sharing a sync with another person or
+a device without a camera:
+
+```
+keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key, base64url>
+```
+
+- `v` is the link format (1). `k` is the sync's derived key (32 bytes,
+  base64url, no padding): never the password. The sync data version is not
+  carried; the verification reads it from the service. Exactly these four
+  parameters, once each; anything else is refused. Text around the link (a
+  chat message) is ignored when pasting.
+- **It is a lasting credential.** The QR lives 60 seconds on a screen; a link
+  stays in chats, clipboards and their backups. Anyone holding it can read and
+  change the bookmarks until the sync password is changed, which is the only
+  revocation (every other device must then be linked again). Both apps say so
+  next to the link.
+- **Share** (extension: share icon beside the QR icon on every saved sync in
+  Manager → Sync; Android: `⋮` → `Share sync…` on every saved sync with a
+  key). Same gate as the QR / a switch: the extension asks the sync-lock
+  password when a lock is set (nothing otherwise); Android asks the device
+  unlock when app lock is on (nothing otherwise). A read-only GET + decrypt
+  proves the saved key still opens the server copy first; a stale key is
+  reported, never shared. The link is shown in a read-only box with Copy
+  (Android marks the clip sensitive) and, on Android, the system share sheet.
+  It is held in memory only, never stored or logged, and is cleared on close,
+  lock or leaving the view.
+- **Import** — one more entry of "existing sync", beside the QR and the manual
+  fields: a `Shared link` field (paste, then `Use link`). On Android a tapped
+  `keepmark://sync` link and text shared to Keepmark that contains one open
+  Syncs → `+ Add a sync` with the link already read (after the app lock);
+  such text is never offered as a bookmark. On Android a valid link produces
+  the same reviewed candidate as a QR (service + short ID, Continue / Cancel,
+  discarded after 60 seconds, on lock or background). In the extension (popup
+  `Existing sync` and Manager `+ Add a sync` → `An existing sync`) a pasted
+  link is read at once: it selects the service, fills the sync ID, hides the
+  password and says the key was read; editing the service or the ID drops the
+  key (the password is asked again). Both then run the normal verification,
+  direction choice, merge preview and safety backups. A key that no longer
+  opens the sync reports "ask for a new link". The extension accepts a plain
+  `http` link only for loopback hosts, like any service URL.
+- A device linked from a link (or a QR) never knew the password, so it cannot
+  run `Change password` (which asks the current one).
+
 ## Android: organize multiple items
 
 Hold a bookmark/folder, or choose Select from its action menu. Tap more rows or All;

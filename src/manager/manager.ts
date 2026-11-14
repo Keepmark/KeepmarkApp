@@ -4,6 +4,8 @@
 
 import browser from 'webextension-polyfill';
 import { ServicePicker } from '../popup/service-picker.js';
+import { ShareLinkField } from '../popup/share-link-field.js';
+import { InvalidCredentialsException as LinkKeyRejected } from '../shared/errors.js';
 import { ConnectQrController } from './connect-qr.js';
 import type { ConnectQrPayload, ConnectQrTarget } from '../shared/connect-qr.js';
 import { ApiVersion, ApiVersion12, MinApiVersion, PasswordTooShort, SyncClientVersion } from '../shared/constants.js';
@@ -114,6 +116,16 @@ let mergeStats: MergePreview | undefined;
 /** Move URL prefilled once from the current link (never clobbers typing). */
 let linkUrlPrefilled = false;
 let linkService: ServicePicker;
+/** Shared-link entry of "An existing sync" (key kept in memory only). */
+let linkShare: ShareLinkField | undefined;
+/** The shared-link key, only while the form still names its service and ID. */
+function linkKey(): string | undefined {
+  return linkMode() === 'existing' ? linkShare?.key(input('m-link-url').value, input('m-link-id').value) : undefined;
+}
+/** A wrong key from a link is not a typo: the link is out of date. */
+function linkErrorText(err: unknown, key: string | undefined): string {
+  return key && err instanceof LinkKeyRejected ? t('link.keyStale') : (err as Error).message;
+}
 let checkingTarget = false;
 let linking = false;
 /** Current conflict preview (fetched when status.conflict === true). */
@@ -1274,6 +1286,11 @@ function updateLinkForm(): void {
   const wizard = mode === 'existing' && linked;
   linkService?.updateMode();
   ($('m-link-id-row') as HTMLElement).hidden = mode !== 'existing';
+  if (linkShare) linkShare.root.hidden = mode !== 'existing';
+  // A link key replaces the password of the existing sync it names.
+  const keyed = !!linkKey();
+  ($('m-link-password-row') as HTMLElement).hidden = keyed;
+  if (keyed) input('m-link-password').value = '';
   ($('m-link-direction-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-link-check-row') as HTMLElement).hidden = !wizard;
   ($('m-link-direct') as HTMLElement).hidden = wizard;
@@ -1357,8 +1374,9 @@ async function previewTarget(): Promise<void> {
     showError('link-error', t('val.syncId.required'));
     return;
   }
+  const key = linkKey();
   const invalid = validateSwitch({ mode, newServiceUrl, syncId,
-    newPassword: input('m-link-password').value, confirm: input('m-link-confirm').value });
+    newPassword: input('m-link-password').value, confirm: input('m-link-confirm').value, keyed: !!key });
   if (invalid) return showError('link-error', invalid);
   const generation = linkGeneration;
   const urlErr = validateServiceUrl(newServiceUrl);
@@ -1410,8 +1428,8 @@ async function previewTarget(): Promise<void> {
       // Keep union statistics so changing direction needs no further check.
       mergeStats = undefined;
       if (mode === 'existing' && preview.remoteExists) {
-        const mergePassword = input('m-link-password').value;
-        if (!mergePassword) {
+        const mergePassword = key ? '' : input('m-link-password').value;
+        if (!mergePassword && !key) {
           box.textContent = lines.join('\n') + '\n' + t('mgr.syncs.enterPwForMerge');
           box.hidden = false;
           setLinkGate(false);
@@ -1423,6 +1441,7 @@ async function previewTarget(): Promise<void> {
             serviceUrl: newServiceUrl,
             syncId: syncId!,
             password: mergePassword,
+            ...(key ? { derivedKey: key } : {}),
           });
           if (generation !== linkGeneration) return;
           mergeStats = checkedMerge;
@@ -1440,7 +1459,7 @@ async function previewTarget(): Promise<void> {
           );
         } catch (err) {
           if (generation !== linkGeneration) return;
-          showError('link-error', (err as Error).message);
+          showError('link-error', linkErrorText(err, key));
           return;
         }
       }
@@ -1481,9 +1500,10 @@ async function submitLink(): Promise<void> {
   const mode = linkMode();
   const direction = linkDirection();
   const syncId = input('m-link-id').value.trim() || undefined;
-  const newPassword = input('m-link-password').value;
+  const key = linkKey();
+  const newPassword = key ? '' : input('m-link-password').value;
   const confirm = input('m-link-confirm').value;
-  const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm });
+  const invalid = validateSwitch({ mode, newServiceUrl, syncId, newPassword, confirm, keyed: !!key });
   if (invalid) {
     showError('link-error-2', invalid);
     return;
@@ -1528,7 +1548,9 @@ async function submitLink(): Promise<void> {
     try {
       const res = await send<{ id: string }>({
         command: MessageCommand.LinkSync,
-        link: { newServiceUrl, mode, syncId, newPassword, direction, switchPassword, label },
+        link: key
+          ? { newServiceUrl, mode, syncId, newDerivedKey: key, direction, switchPassword, label }
+          : { newServiceUrl, mode, syncId, newPassword, direction, switchPassword, label },
       });
       input('m-link-password').value = '';
       input('m-link-confirm').value = '';
@@ -1537,7 +1559,7 @@ async function submitLink(): Promise<void> {
       movedId = res.id;
     } catch (err) {
       input('m-link-confirm').value = '';
-      showError('link-error-2', (err as Error).message);
+      showError('link-error-2', linkErrorText(err, key));
     }
   });
   linking = false;
@@ -1589,9 +1611,11 @@ async function directConnect(): Promise<void> {
   const mode = linkMode();
   const direction = linkDirection();
   const syncId = input('m-link-id').value.trim() || undefined;
-  const password = input('m-link-password').value;
+  const key = linkKey();
+  const password = key ? '' : input('m-link-password').value;
+  const keyArg = key ? { derivedKey: key } : {};
   const invalid = validateSwitch({ mode, newServiceUrl: serviceUrl, syncId,
-    newPassword: password, confirm: input('m-link-confirm').value });
+    newPassword: password, confirm: input('m-link-confirm').value, keyed: !!key });
   if (invalid) return showError('link-error', invalid);
   const urlErr = validateServiceUrl(serviceUrl);
   if (urlErr) return showError('link-error', urlErr);
@@ -1614,9 +1638,10 @@ async function directConnect(): Promise<void> {
             serviceUrl,
             syncId: syncId!,
             password,
+            ...keyArg,
           });
         } catch (err) {
-          showError('link-error', (err as Error).message);
+          showError('link-error', linkErrorText(err, key));
         }
       });
       if (!preview) return;
@@ -1657,6 +1682,7 @@ async function directConnect(): Promise<void> {
           serviceUrl,
           syncId: syncId!,
           password,
+          ...keyArg,
           direction,
           switchPassword,
           label,
@@ -1674,7 +1700,7 @@ async function directConnect(): Promise<void> {
       await refreshStatus();
     } catch (err) {
       input('m-link-confirm').value = '';
-      showError('link-error', (err as Error).message);
+      showError('link-error', linkErrorText(err, key));
     }
   });
   updateLinkForm();
@@ -1783,6 +1809,8 @@ function resetAddSync(): void {
   input('m-link-confirm').value = '';
   input('m-link-id').value = '';
   input('m-link-name').value = '';
+  linkShare?.reset();
+  ($('m-link-password-row') as HTMLElement).hidden = false;
   nameTouched = false;
   preview = undefined;
   previewFor = undefined;
@@ -1798,9 +1826,16 @@ function resetAddSync(): void {
 function initMoveSection(): void {
   linkService = new ServicePicker({
     input: input('m-link-url'), mode: linkMode,
-    onChange: () => updateLinkForm(),
+    onChange: () => { linkShare?.refresh(); updateLinkForm(); },
     onState: () => updateLinkServiceGate(),
   });
+  linkShare = new ShareLinkField({
+    prefix: 'm-link',
+    picker: () => linkService,
+    syncId: input('m-link-id'),
+    onChange: () => updateLinkForm(),
+  });
+  $('m-link-id-row').before(linkShare.root);
   document.querySelectorAll('input[name="m-link-mode"]').forEach((el) => {
     el.addEventListener('change', updateLinkForm);
   });
@@ -2169,12 +2204,22 @@ function syncRow(sync: SavedSync, index: number): HTMLElement {
   qr.setAttribute('aria-label', t('manager.syncs.showQrAria', { name: savedSyncName(sync) }));
   const qrTarget: ConnectQrTarget = { serviceUrl: sync.serviceUrl, syncId: sync.syncId };
   qr.addEventListener('click', () => connectQr?.openFor(qrTarget, qr));
+  // Shared link: the same key as text, to send to another person. Same gate
+  // as the QR (sync lock password when set), icon only beside it.
+  const share = document.createElement('button');
+  share.type = 'button';
+  share.className = 'mini qr-btn icon-only share-btn';
+  share.id = `m-syncs-share-${index}`;
+  share.append(shareIcon());
+  share.title = t('manager.syncs.shareLink');
+  share.setAttribute('aria-label', t('manager.syncs.shareLinkAria', { name: savedSyncName(sync) }));
+  share.addEventListener('click', () => connectQr?.openFor(qrTarget, share, 'link'));
   if (isActive) {
     const spacer = document.createElement('span');
     spacer.className = 'saved-spacer';
     actions.append(spacer);
   }
-  actions.append(qr);
+  actions.append(qr, share);
 
   // Activation is the row's main action; the active row has nothing to
   // activate, so it shows no button at all (its tag already says Active).
@@ -2283,6 +2328,26 @@ function qrIcon(): SVGSVGElement {
   const modules = document.createElementNS(ns, 'path');
   modules.setAttribute('d', 'M14 14h3v3h-3zM20 14v.01M14 20v.01M17 17h4v4h-4zM6.5 6.5v.01M17.5 6.5v.01M6.5 17.5v.01');
   svg.append(modules);
+  return svg;
+}
+
+/** Share glyph (three linked nodes), built without HTML strings. */
+function shareIcon(): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', 'qr-icon share-icon');
+  for (const [cx, cy] of [[18, 5], [6, 12], [18, 19]]) {
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', '3');
+    svg.append(circle);
+  }
+  const lines = document.createElementNS(ns, 'path');
+  lines.setAttribute('d', 'M8.6 10.5l6.8-4M8.6 13.5l6.8 4');
+  svg.append(lines);
   return svg;
 }
 

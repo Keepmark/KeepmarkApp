@@ -4,6 +4,8 @@
 
 import browser from 'webextension-polyfill';
 import { ServicePicker } from './service-picker.js';
+import { ShareLinkField } from './share-link-field.js';
+import { InvalidCredentialsException } from '../shared/errors.js';
 import { formatDate, formatTime, t } from '../shared/i18n.js';
 import {
   $,
@@ -69,6 +71,8 @@ let ping: PingResponse | undefined;
 /** Generation token: stale refresh responses never overwrite newer state. */
 let refreshSeq = 0;
 let connectService: ServicePicker;
+/** Shared-link entry of the existing-sync form (key kept in memory only). */
+let connectLink: ShareLinkField;
 let connecting = false;
 /** Saved-syncs panels: main view + connect view share the same data. */
 let savedMain: SavedSyncsPanel;
@@ -175,6 +179,14 @@ function refreshRemovedCard(): void {
   ($('p-removed') as HTMLElement).hidden = !(status?.removedSync && !status.syncEnabled);
 }
 
+/** A link key replaces the password: its row is hidden while it applies. */
+function updateKeyed(): void {
+  const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+  const keyed = mode === 'existing' && !!connectLink?.key(connectService.url, input('sync-id').value);
+  (input('password').closest('label') as HTMLElement).hidden = keyed;
+  if (keyed) input('password').value = '';
+}
+
 async function initConnect(): Promise<void> {
   connectService = new ServicePicker({
     input: input('service-url'),
@@ -182,13 +194,22 @@ async function initConnect(): Promise<void> {
     onChange: () => {
       cancelConfirm('btn-connect');
       updateConnectName();
+      connectLink?.refresh();
     },
     onState: () => {
       if (!connecting) ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
     },
   });
+  connectLink = new ShareLinkField({
+    prefix: 'conn',
+    picker: () => connectService,
+    syncId: input('sync-id'),
+    onChange: () => { cancelConfirm('btn-connect'); updateKeyed(); },
+  });
+  $('conn-existing-only').prepend(connectLink.root);
   const updateMode = (): void => {
     const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+    updateKeyed();
     ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-existing-direction') as HTMLElement).hidden = mode !== 'existing';
     ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
@@ -265,7 +286,12 @@ async function submitConnect(): Promise<void> {
   if (!connectService.ready) return;
   const serviceUrl = connectService.url;
   const syncId = input('sync-id').value.trim();
-  const password = input('password').value;
+  const derivedKey = mode === 'existing' ? connectLink.key(serviceUrl, syncId) : undefined;
+  const password = derivedKey ? '' : input('password').value;
+  const keyArg = derivedKey ? { derivedKey } : {};
+  // A wrong key from a link is not a typo: the link is out of date.
+  const message = (err: unknown): string =>
+    derivedKey && err instanceof InvalidCredentialsException ? t('link.keyStale') : (err as Error).message;
   const invalid = validateConnect({
     mode,
     direction,
@@ -273,6 +299,7 @@ async function submitConnect(): Promise<void> {
     syncId,
     password,
     confirm: input('confirm-password').value,
+    keyed: !!derivedKey,
   });
   if (invalid) {
     showError('connect-error', invalid);
@@ -286,9 +313,9 @@ async function submitConnect(): Promise<void> {
       let preview: MergePreview | undefined;
       await withBusy('btn-connect', t('busy.checking'), async () => {
         try {
-          preview = await send<MergePreview>({ command: MessageCommand.PreviewMerge, serviceUrl, syncId, password });
+          preview = await send<MergePreview>({ command: MessageCommand.PreviewMerge, serviceUrl, syncId, password, ...keyArg });
         } catch (err) {
-          showError('connect-error', (err as Error).message);
+          showError('connect-error', message(err));
         }
       });
       if (!preview) return;
@@ -327,11 +354,14 @@ async function submitConnect(): Promise<void> {
           serviceUrl,
           syncId,
           password,
+          ...keyArg,
           direction,
           switchPassword,
           label,
         });
       }
+      connectLink.reset();
+      updateKeyed();
       await connectService.refreshCatalog().catch(err => showError('connect-error', (err as Error).message));
       input('password').value = '';
       input('confirm-password').value = '';
@@ -344,7 +374,7 @@ async function submitConnect(): Promise<void> {
       // Never leave the confirmation in the DOM; the main password stays so
       // a transient failure doesn't force a full retype from the vault.
       input('confirm-password').value = '';
-      showError('connect-error', (err as Error).message);
+      showError('connect-error', message(err));
     }
   });
   connecting = false;

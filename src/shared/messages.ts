@@ -328,6 +328,9 @@ export type MessagePayload =
       serviceUrl: string;
       syncId: string;
       password: string;
+      /** Shared-link path: the 32-byte key from the link replaces the
+       *  password (then empty); never derived, never shown. */
+      derivedKey?: string;
       direction: 'pull' | 'push' | 'merge';
       switchPassword?: string;
       label?: string;
@@ -366,7 +369,7 @@ export type MessagePayload =
   | { command: MessageCommand.RemoveSwitchPassword; current: string }
   | { command: MessageCommand.VerifySwitchPassword; password: string }
   | { command: MessageCommand.CheckSyncTarget; newServiceUrl: string; mode: 'new' | 'existing'; syncId?: string }
-  | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string }
+  | { command: MessageCommand.PreviewMerge; serviceUrl: string; syncId: string; password: string; derivedKey?: string }
   | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.GetSafetyKeep }
   | { command: MessageCommand.SetSafetyKeep; keep: number }

@@ -622,7 +622,7 @@ it('keeps activation prominent and secondary actions in a dismissible menu', asy
   // Layout B: the active card keeps copy + QR (icon and text) in view.
   expect(row.classList.contains('saved-hero')).toBe(true);
   const visible = [...row.querySelectorAll('.saved-actions > button')].map((button) => button.id);
-  expect(visible).toEqual(['m-syncs-copy-0', 'm-syncs-qr-0']);
+  expect(visible).toEqual(['m-syncs-copy-0', 'm-syncs-qr-0', 'm-syncs-share-0']);
   expect(el('m-syncs-qr-0').querySelector('svg.qr-icon')).not.toBeNull();
   expect(el('m-syncs-qr-0').textContent).toBe('Show QR');
   expect(menu.open).toBe(false);
@@ -672,7 +672,7 @@ it('one list: active card first, then compact rows with an icon-only QR', async 
   expect(qr.textContent).toBe('');
   expect(qr.getAttribute('aria-label')).toContain('Altro');
   const buttons = [...items[1].querySelectorAll('.saved-actions > button')].map((button) => button.id);
-  expect(buttons).toEqual(['m-syncs-qr-0', 'm-syncs-act-0']);
+  expect(buttons).toEqual(['m-syncs-qr-0', 'm-syncs-share-0', 'm-syncs-act-0']);
   expect(items[1].textContent).not.toContain('Inactive');
 });
 

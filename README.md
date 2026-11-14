@@ -124,7 +124,7 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Backup** | Encrypted export and import in two compact actions, compatible with Keepmark for Android; the verified review is the only confirmation. Plain `bookmarks.html` export for other browsers, warned as not encrypted |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
-| **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |
+| **Add a sync** | Create a new sync on another service or open one you already use (by ID and password, or from a shared link), with one reviewed confirmation; the sync you were using stays saved |
 | **Controls** | Change password on the active sync row; activity log in Settings; recovery in Backup → Safety backups |
 | **Languages** | English, Italiano, Français, Español, Deutsch, 日本語, Português (Brasil), Română, Русский, 简体中文; follows the browser, override in Settings |
 
@@ -148,6 +148,19 @@ stored for it, it disappears after 60 seconds or when the manager loses focus,
 and a captured copy stays usable. To protect QR export, set a sync lock in
 **Sync**. The phone needs Keepmark for Android 1.0.247 or later. Manual linking remains available, and in the manager's **Sync → + Add a sync**
 wizard the same QR button sits before the manual target credentials.
+
+## Share a sync with a link
+
+To give someone else (or a device without a camera) access to a sync, use the
+share icon next to **Show QR** in **Sync**. After the sync lock password, if
+you set one, the manager shows a `keepmark://sync?…` link with **Copy**. The
+other person pastes it in **Existing sync** (popup) or **+ Add a sync → An
+existing sync** (manager), or in Keepmark for Android: no password to type.
+
+Like the QR, the link carries the service, the sync ID and the sync key, never
+the password. Unlike the QR it does not expire: anyone holding it can read and
+change those bookmarks until the sync password is changed, so send it only to
+people you trust.
 
 ## Screenshots
 

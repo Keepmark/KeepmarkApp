@@ -424,6 +424,39 @@ so). Keepmark for Android reads format 2 from 1.0.247; older Android releases
 reject it as invalid.
 
 
+## Shared sync link (0.1.65)
+
+`shared/share-link.ts` builds and parses the text form of the connection QR,
+`keepmark://sync?v=1&s=<service, EscapeDataString>&id=<sync ID>&k=<derived key,
+base64url no padding>` — the same contract as Android `SyncShareLink`
+(`tests/share-link.test.ts` pins the shared vector; never change one side
+alone). Strict parse: exactly `v,s,id,k` once each, `v=1`, canonical 32-byte
+key (`isDerivedKey`), https/http URL without credentials/query/fragment; text
+around the link is ignored.
+
+- Share: a share icon beside `Show QR` on every Manager → Sync row opens the
+  same `ConnectQrController` dialog in `kind: 'link'` (`openFor(target,
+  trigger, 'link')`): same lock gate, same `PrepareConnectQr` (read-only key
+  check, `qr.keyStale`), then `buildShareLink` from the payload in the page —
+  no new background command. Read-only textarea + Copy (`deps.copy`), warning
+  `share.warning`; no 60 s timer (the link is a lasting credential) but it is
+  removed on close, blur, hide and identity change like the QR.
+- Import: `popup/share-link-field.ts` (`ShareLinkField`) is the `Shared link`
+  entry in popup `Existing sync` and Manager `An existing sync`. A paste (or
+  `Use link`) clears the field, fills the sync ID, `ServicePicker.select(url,
+  true, probeCustom=true)`, and keeps the key in memory bound to that service
+  + ID: `key(url, id)` returns it only while both still match, so any edit
+  drops it. While keyed the password row is hidden and `validateConnect` /
+  `validateSwitch` take `keyed`.
+- Background: `ConnectExisting` / `PreviewMerge` accept `derivedKey` (password
+  then `''`), `LinkSync` already had `newDerivedKey`; `sharedLinkKey()` refuses
+  a non-canonical key before anything runs. Pull, merge and push all use it.
+  A wrong key surfaces as `InvalidCredentialsException`, which the forms show
+  as `link.keyStale`.
+- Tests: `share-link.test.ts`, `share-link-ui.test.ts`, two cases in
+  `background-core.test.ts`. Workflow text: `docs/WORKFLOWS.md` "Shared sync
+  link (both apps)" (identical in KeepmarkMobile).
+
 ## Service picker
 
 Use `popup/service-picker.ts` for every editable service URL (popup connect and

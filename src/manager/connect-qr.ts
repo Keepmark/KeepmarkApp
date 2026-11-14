@@ -5,6 +5,7 @@ import {
   type ConnectQrPayload,
   type ConnectQrTarget,
 } from '../shared/connect-qr.js';
+import { buildShareLink } from '../shared/share-link.js';
 import type { StatusResponse } from '../shared/messages.js';
 import { t } from '../shared/i18n.js';
 
@@ -16,7 +17,13 @@ interface QrDependencies {
   render(canvas: HTMLCanvasElement, json: string): Promise<unknown>;
   now(): number;
   focused(): boolean;
+  /** Clipboard write for the shared link (rejects when denied). */
+  copy(text: string): Promise<void>;
 }
+
+/** What the dialog hands out: the 60-second QR for the owner's phone, or
+ *  the shared link (same key, text form) to send to someone else. */
+export type ConnectQrKind = 'qr' | 'link';
 
 /** Owns only transient UI state. Secrets remain in operation-local variables. */
 export class ConnectQrController {
@@ -30,6 +37,7 @@ export class ConnectQrController {
    *  hidden (rows survive an unlink). */
   private target: ConnectQrTarget | undefined;
   private trigger: HTMLElement | undefined;
+  private kind: ConnectQrKind = 'qr';
   /** The payload only accepts an https service URL: a plain-http link (self
    *  hosted on the LAN) gets the card disabled with the reason spelled out. */
   private httpsOk = false;
@@ -69,6 +77,7 @@ export class ConnectQrController {
       render: renderConnectQr,
       now: () => performance.now(),
       focused: () => document.visibilityState === 'visible' && document.hasFocus(),
+      copy: (text) => navigator.clipboard.writeText(text),
       ...overrides,
     };
     this.input = host.querySelector('#qr-password')!;
@@ -137,9 +146,10 @@ export class ConnectQrController {
   /** Row entry point: show the QR for one saved sync, active or not. The row
    *  carries its own service and ID, so the dialog no longer depends on the
    *  status card (which is hidden while unlinked). */
-  openFor(target: ConnectQrTarget, trigger: HTMLElement): void {
+  openFor(target: ConnectQrTarget, trigger: HTMLElement, kind: ConnectQrKind = 'qr'): void {
     this.close();
     if (!this.deps.focused()) return;
+    this.kind = kind;
     this.begin(target, trigger);
   }
 
@@ -168,6 +178,7 @@ export class ConnectQrController {
     this.open.hidden = true;
     this.panel.showModal();
     this.form.hidden = false;
+    this.applyKind();
     this.setSubject();
     if (target && !/^https:\/\//i.test(target.serviceUrl)) {
       this.error.textContent = t('qr.httpsRequired');
@@ -193,6 +204,20 @@ export class ConnectQrController {
       if (set) this.input.focus();
       else void this.verify();
     });
+  }
+
+  /** Dialog copy for the current kind: the same gate, two different handouts. */
+  private applyKind(): void {
+    const link = this.kind === 'link';
+    const text = (id: string, key: Parameters<typeof t>[0]): void => {
+      const el = this.host.querySelector<HTMLElement>(`#${id}`);
+      if (el) el.textContent = t(key);
+    };
+    text('qr-dialog-title', link ? 'share.title' : 'qr.title');
+    text('qr-instructions', link ? 'share.intro' : 'qr.scan');
+    text('qr-security-note', link ? 'share.warning' : 'qr.explanation');
+    this.panel.classList.toggle('share-link', link);
+    this.setBusy(this.busy);
   }
 
   /** The password row exists only for a sync lock. */
@@ -226,6 +251,7 @@ export class ConnectQrController {
     this.busy = false;
     this.target = undefined;
     this.trigger = undefined;
+    this.kind = 'qr';
     this.showPassword(true);
     this.lockPending = false;
     this.open.disabled = !this.canPrepare();
@@ -243,14 +269,15 @@ export class ConnectQrController {
     this.canvas = undefined;
     this.output.replaceChildren();
     this.announce(wasOpen ? t('qr.hidden') : this.standingMessage());
+    this.applyKind();
     if (restoreFocus && !trigger.hidden && this.deps.focused()) trigger.focus();
   }
 
   private setBusy(busy: boolean): void {
     this.input.disabled = busy;
     this.generate.setAttribute('aria-busy', String(busy));
-    const label = this.generate.querySelector('[data-i18n="qr.generate"]');
-    if (label) label.textContent = t(busy ? 'busy.checking' : 'qr.generate');
+    const label = this.generate.querySelector('#qr-generate-label');
+    if (label) label.textContent = t(busy ? 'busy.checking' : this.kind === 'link' ? 'share.generate' : 'qr.generate');
   }
 
   private announce(message: string): void {
@@ -292,6 +319,12 @@ export class ConnectQrController {
       payload = await pending;
       if (!this.valid(generation)) {
         if (generation === this.generation) this.close();
+        return;
+      }
+      if (this.kind === 'link') {
+        const link = buildShareLink({ serviceUrl: payload.serviceUrl, id: payload.id, key: payload.key });
+        payload = undefined;
+        this.showLink(link);
         return;
       }
       json = serializeConnectQrPayload(payload);
@@ -343,6 +376,41 @@ export class ConnectQrController {
         this.generate.disabled = !!this.canvas;
       }
     }
+  }
+
+  /** The link stays on screen while the dialog is open and in front (it is
+   *  hidden on leave like the QR); Copy marks the clipboard item sensitive
+   *  where the browser can (it cannot: say so in the warning). */
+  private showLink(link: string): void {
+    const box = document.createElement('textarea');
+    box.id = 'share-link-text';
+    box.readOnly = true;
+    box.rows = 4;
+    box.spellcheck = false;
+    box.value = link;
+    box.setAttribute('aria-label', t('share.linkLabel'));
+    box.addEventListener('focus', () => box.select());
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.id = 'share-link-copy';
+    copy.className = 'primary';
+    copy.textContent = t('common.copy');
+    copy.addEventListener('click', () => {
+      const generation = this.generation;
+      void this.deps.copy(box.value).then(
+        () => { if (generation === this.generation) this.countdown.textContent = t('share.copied'); },
+        () => {
+          if (generation !== this.generation) return;
+          box.focus();
+          box.select();
+          this.countdown.textContent = t('share.copyFailed');
+        },
+      );
+    });
+    this.output.replaceChildren(box, copy);
+    this.form.hidden = true;
+    this.countdown.textContent = '';
+    box.focus();
   }
 
   private tick(): void {

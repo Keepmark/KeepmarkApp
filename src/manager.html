@@ -333,13 +333,13 @@
           <div class="qr-password-entry">
             <svg class="qr-key-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8h3v-3h-3v-3h-3"/></svg>
             <input id="qr-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="qr-error" required>
-            <button id="qr-generate" class="primary" type="submit"><span data-i18n="qr.generate">Show QR</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+            <button id="qr-generate" class="primary" type="submit"><span id="qr-generate-label">Show QR</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
           </div>
           <div id="qr-error" class="error" role="alert" hidden></div>
         </form>
         <div id="qr-output"></div>
         <p id="qr-countdown"></p>
-        <p class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and the sync key (not your password). Anyone with a copy can read and change these bookmarks. It is hidden after 60 seconds or when you leave this view. Set a sync lock to ask a password first.</p>
+        <p id="qr-security-note" class="qr-security-note" data-i18n="qr.explanation">The QR contains your service, sync ID and the sync key (not your password). Anyone with a copy can read and change these bookmarks. It is hidden after 60 seconds or when you leave this view. Set a sync lock to ask a password first.</p>
         <button id="qr-close" data-i18n="qr.close">Close</button>
       </dialog>
     </div>

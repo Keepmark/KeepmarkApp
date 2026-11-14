@@ -11,6 +11,7 @@ import { getLang, setLang } from '../src/shared/i18n';
 import { InMemoryLogger } from '../src/shared/logging';
 import { MessageCommand } from '../src/shared/messages';
 import { MemoryBackend, Store, StoreKey } from '../src/shared/store';
+import { IncompleteSyncInfoException, InvalidCredentialsException as LinkKeyRejected } from '../src/shared/errors';
 import { makeMockApi } from './firefox-bookmarks.test';
 import { makeChromiumMockApi } from './chromium-bookmarks.test';
 import { makeChromiumAdapter } from '../src/chromium/adapter';
@@ -371,6 +372,55 @@ describe('background core', () => {
     expect(children.map((c) => c.title)).toContain('R');
     // Repair (containers added) triggered a follow-up push.
     expect(state.puts.length).toBe(1);
+  });
+
+  it('shared link: connect-existing opens with the link key, no password', async () => {
+    for (const direction of ['pull', 'merge', 'push'] as const) {
+      const state = baseState();
+      const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+      const remote: BookmarkNode[] = [
+        { id: 1, title: BookmarkContainer.Other, children: [{ id: 2, title: 'R', url: 'https://r.test' }] },
+      ];
+      state.remoteBlob = await encryptData(JSON.stringify(remote), derived);
+      state.remoteLastUpdated = 't9';
+      const store = new Store(new MemoryBackend());
+      const mockApi = makeMockApi();
+      const core = new BackgroundCore(
+        store, new BookmarkIdMapper(store), new InMemoryLogger(), makeFirefoxAdapter(mockApi), makePorts(), makeFakeApi(state), { debounceMs: 5 },
+      );
+      if (direction === 'merge') {
+        const stats = (await core.handleMessage({
+          command: MessageCommand.PreviewMerge, serviceUrl: 'https://x.test/', syncId: SYNC_ID, password: '', derivedKey: derived,
+        })) as { remoteOnly: number };
+        expect(stats.remoteOnly).toBeGreaterThan(0);
+      }
+      await core.handleMessage({
+        command: MessageCommand.ConnectExisting, serviceUrl: 'https://x.test/', syncId: SYNC_ID, password: '', derivedKey: derived, direction,
+      });
+      const info = (await store.get<{ id: string; password: string }>(StoreKey.SyncInfo))!;
+      expect(info.id).toBe(SYNC_ID);
+      expect(info.password).toBe(derived);
+      expect(await store.get(StoreKey.SyncEnabled)).toBe(true);
+    }
+  });
+
+  it('shared link: a malformed key never runs; a wrong key fails as InvalidCredentials', async () => {
+    const state = baseState();
+    const derived = await deriveKey(PASSWORD, SYNC_ID, SyncClientVersion);
+    state.remoteBlob = await encryptData('[]', derived);
+    state.remoteLastUpdated = 't9';
+    const store = new Store(new MemoryBackend());
+    const core = new BackgroundCore(
+      store, new BookmarkIdMapper(store), new InMemoryLogger(), makeFirefoxAdapter(makeMockApi()), makePorts(), makeFakeApi(state), { debounceMs: 5 },
+    );
+    await expect(core.handleMessage({
+      command: MessageCommand.ConnectExisting, serviceUrl: 'https://x.test/', syncId: SYNC_ID, password: '', derivedKey: 'not-a-key', direction: 'pull',
+    })).rejects.toBeInstanceOf(IncompleteSyncInfoException);
+    await expect(core.handleMessage({
+      command: MessageCommand.PreviewMerge, serviceUrl: 'https://x.test/', syncId: SYNC_ID, password: '',
+      derivedKey: 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=',
+    })).rejects.toBeInstanceOf(LinkKeyRejected);
+    expect(await store.get(StoreKey.SyncEnabled)).toBeFalsy();
   });
 
   it('connect-merge unions local and remote with dual safety nets', async () => {

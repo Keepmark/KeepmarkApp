@@ -805,6 +805,8 @@ dd:last-of-type { border-bottom: 0; }
 #qr-countdown { text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
 .qr-security-note { font-size: .85rem; color: var(--muted); }
 #qr-close { display: block; margin-left: auto; }
+#share-link-text { display: block; width: 100%; box-sizing: border-box; margin: 1rem 0 .6rem; font-family: ui-monospace, monospace; font-size: .85rem; overflow-wrap: anywhere; word-break: break-all; resize: none; }
+#share-link-copy { display: block; margin: 0 auto; }
 @media (max-width: 480px) { #qr-panel { padding: 1rem; } .qr-card-heading { align-items: flex-start; } .qr-open { width: 100%; justify-content: center; } }
 
 /* Single password action, with contextual feedback kept inside the dialog. */

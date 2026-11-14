@@ -14,7 +14,7 @@ import {
   type SavedSyncActive,
 } from '../shared/saved-syncs.js';
 import type { ServiceProbeResponse } from '../shared/messages.js';
-import { buildConnectQrPayload, type ConnectQrPayload, type ConnectQrTarget } from '../shared/connect-qr.js';
+import { buildConnectQrPayload, isDerivedKey, type ConnectQrPayload, type ConnectQrTarget } from '../shared/connect-qr.js';
 import {
   changeSwitchLockPassword,
   createSwitchLock,
@@ -221,6 +221,14 @@ interface ConflictData {
   reason?: ConflictReason;
 }
 
+
+/** A key sent by the UI from a shared sync link: canonical base64 of 32
+ *  bytes or nothing runs (a wrong-but-valid key fails later as
+ *  InvalidCredentials, like a wrong password). */
+function sharedLinkKey(value: unknown): string {
+  if (!isDerivedKey(value)) throw new IncompleteSyncInfoException(t('err.syncInfoIncomplete'));
+  return value;
+}
 export class BackgroundCore {
   readonly queue: SyncQueue;
   private suspended = 0;
@@ -322,6 +330,7 @@ export class BackgroundCore {
         return this.withCredentialChange(() => this.connectNew(msg.serviceUrl, msg.password, msg.switchPassword, msg.label));
       case MessageCommand.ConnectExisting:
         return this.withCredentialChange(() => this.connectExisting(msg.serviceUrl, msg.syncId, msg.password, msg.direction, {
+          ...(msg.derivedKey !== undefined ? { derivedKey: sharedLinkKey(msg.derivedKey) } : {}),
           switchPassword: msg.switchPassword,
           ...(msg.label !== undefined ? { label: msg.label } : {}),
         }));
@@ -349,7 +358,8 @@ export class BackgroundCore {
       case MessageCommand.ImportBackup:
         return this.importBackup(msg.json, msg.password);
       case MessageCommand.LinkSync:
-        return this.withCredentialChange(() => this.linkSync(msg.link));
+        return this.withCredentialChange(() => this.linkSync(
+          msg.link?.newDerivedKey !== undefined ? { ...msg.link, newDerivedKey: sharedLinkKey(msg.link.newDerivedKey) } : msg.link));
       case MessageCommand.DeleteRemoteSync:
         return this.withCredentialChange(() => this.deleteRemoteSync(msg.target));
       case MessageCommand.GetSavedSyncs:
@@ -377,7 +387,8 @@ export class BackgroundCore {
       case MessageCommand.CheckSyncTarget:
         return this.checkSyncTarget(msg.newServiceUrl, msg.mode, msg.syncId);
       case MessageCommand.PreviewMerge:
-        return this.previewMerge(msg.serviceUrl, msg.syncId, msg.password);
+        return this.previewMerge(msg.serviceUrl, msg.syncId, msg.password,
+          msg.derivedKey !== undefined ? sharedLinkKey(msg.derivedKey) : undefined);
       case MessageCommand.SetVerbosity:
         return this.setVerbosity(msg.level);
       case MessageCommand.GetUndoState:
@@ -1159,9 +1170,9 @@ export class BackgroundCore {
       const svc = await checkService(api, this.log);
       const v12 = await this.isV12(serviceUrl);
       if (direction === 'push') {
-        await this.connectPushExisting(api, serviceUrl, syncId, password, v12);
+        await this.connectPushExisting(api, serviceUrl, syncId, password, v12, options.derivedKey);
       } else if (direction === 'merge') {
-        await this.connectMergeExisting(api, serviceUrl, syncId, password, v12);
+        await this.connectMergeExisting(api, serviceUrl, syncId, password, v12, options.derivedKey);
       } else {
         const versionRes = await api.getVersion(syncId);
         const remoteVersion = versionRes.version ?? undefined;
@@ -1247,6 +1258,8 @@ export class BackgroundCore {
     syncId: string,
     password: string,
     v12: boolean,
+    /** Shared-link path: the key is known, the password is not. */
+    derivedKey?: string,
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
@@ -1256,7 +1269,7 @@ export class BackgroundCore {
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
-    const derived = await deriveKey(password, syncId, remoteVersion);
+    const derived = derivedKey ?? (await deriveKey(password, syncId, remoteVersion));
     // v1.2 links read the extended shape so the upload can use revision CAS.
     // A 412 anywhere (downgraded service) falls back to the legacy contract.
     let remote: import('../shared/api.js').GetBookmarksResponse;
@@ -1338,7 +1351,7 @@ export class BackgroundCore {
    * queue, no native changes. Wrong password surfaces as
    * InvalidCredentials before anything else runs.
    */
-  private async previewMerge(serviceUrl: string, syncId: string, password: string): Promise<MergeStats> {
+  private async previewMerge(serviceUrl: string, syncId: string, password: string, derivedKey?: string): Promise<MergeStats> {
     const api = this.makeApi(serviceUrl);
     await checkService(api, this.log);
     const versionRes = await api.getVersion(syncId);
@@ -1349,7 +1362,7 @@ export class BackgroundCore {
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
-    const derived = await deriveKey(password, syncId, remoteVersion);
+    const derived = derivedKey ?? (await deriveKey(password, syncId, remoteVersion));
     const res = await api.getBookmarks(syncId);
     const plain = await decryptData(res.bookmarks ?? '', derived);
     let remoteTree: BookmarkNode[];
@@ -1375,6 +1388,8 @@ export class BackgroundCore {
     syncId: string,
     password: string,
     v12: boolean,
+    /** Shared-link path: the key is known, the password is not. */
+    derivedKey?: string,
   ): Promise<void> {
     const versionRes = await api.getVersion(syncId);
     const remoteVersion = versionRes.version ?? undefined;
@@ -1384,7 +1399,7 @@ export class BackgroundCore {
     if (compareVersions(remoteVersion, SyncClientVersion) > 0) {
       throw new UnsupportedSyncVersionException(t('err.newerClient', { version: remoteVersion }));
     }
-    const derived = await deriveKey(password, syncId, remoteVersion);
+    const derived = derivedKey ?? (await deriveKey(password, syncId, remoteVersion));
     let res: import('../shared/api.js').GetBookmarksResponse;
     let effectiveV12 = v12;
     if (v12) {

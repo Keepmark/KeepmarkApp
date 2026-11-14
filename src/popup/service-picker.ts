@@ -99,8 +99,10 @@ export class ServicePicker {
     await this.select(this.url === DefaultServiceUrl || !this.url ? initialUrl : this.url, false);
   }
 
-  /** Restore a URL supplied by current credentials without treating it as verified. */
-  async select(value: string, emit = true): Promise<void> {
+  /** Restore a URL supplied by current credentials without treating it as
+   *  verified. `probeCustom` also checks a URL outside the catalog (a shared
+   *  link names its service: no extra Check click). */
+  async select(value: string, emit = true, probeCustom = false): Promise<void> {
     this.generation++;
     this.result = undefined;
     this.checkedUrl = '';
@@ -116,7 +118,7 @@ export class ServicePicker {
     if (emit) this.config.onChange();
     this.show(t('servicePicker.needsCheck'));
     this.notify();
-    if (!this.custom) await this.probe();
+    if (!this.custom || probeCustom) await this.probe();
   }
 
   async refreshCatalog(): Promise<void> {

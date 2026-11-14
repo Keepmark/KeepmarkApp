@@ -286,9 +286,12 @@ export function validateConnect(input: {
   syncId: string;
   password: string;
   confirm: string;
+  /** Existing sync opened from a shared link: its key replaces the password. */
+  keyed?: boolean;
 }): string | null {
   const urlErr = validateServiceUrl(input.serviceUrl);
   if (urlErr) return urlErr;
+  if (input.mode === 'existing' && input.keyed) return input.syncId.trim() ? null : t('val.syncId.required');
   if (!input.password) return t('val.password.required');
   if (input.mode === 'new') {
     if (input.password.length < MinNewPasswordLength) return PasswordTooShort();
@@ -316,9 +319,12 @@ export function validateSwitch(input: {
   syncId?: string;
   newPassword: string;
   confirm: string;
+  /** Existing sync opened from a shared link: its key replaces the password. */
+  keyed?: boolean;
 }): string | null {
   const urlErr = validateServiceUrl(input.newServiceUrl);
   if (urlErr) return urlErr;
+  if (input.mode === 'existing' && input.keyed) return input.syncId?.trim() ? null : t('val.syncId.required');
   if (!input.newPassword) {
     return input.mode === 'new' ? t('val.new.required') : t('val.target.passwordRequired');
   }
