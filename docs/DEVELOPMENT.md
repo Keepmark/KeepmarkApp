@@ -275,8 +275,9 @@ License, third-party notices and disclaimer: see the [README](../README.md#licen
 
 ## Browser → Android QR
 
-Status → the “Connect Keepmark on your phone” card → “Show connection QR” opens
-a native modal `<dialog>` with the QR (each Manager → Sync row's `Show QR` opens
+Status → the “Connect another device” card → “Show connection QR” opens
+a native modal `<dialog>` with the QR (its “Share link” opens the same dialog
+in link mode for the active sync) (each Manager → Sync row's `Show QR` opens
 the same dialog for that row, active or dormant). The card button is hidden
 while the dialog is open; backdrop clicks, Escape and focus loss close it and
 clear transient state. The dialog gives instructions for Keepmark for Android.

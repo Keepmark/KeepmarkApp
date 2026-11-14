@@ -795,6 +795,7 @@ dd:last-of-type { border-bottom: 0; }
 .qr-android-icon circle { fill: currentColor; stroke: none; }
 .qr-android-badge .qr-android-icon { width: 2.3rem; height: 2.3rem; }
 .qr-open { display: inline-flex; align-items: center; gap: .65rem; }
+.qr-card-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .qr-connect-card > #qr-feedback { grid-column: 1 / -1; }
 @media (max-width: 600px) { .qr-connect-card { grid-template-columns: minmax(0, 1fr); padding: 1.1rem; } .qr-card-preview { display: none; } .status-actions { margin-left: 0; } }
 #qr-panel { width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem; background: var(--surface); color: var(--fg); overflow-y: auto; box-shadow: 0 1rem 4rem #0005; }
@@ -817,7 +818,7 @@ dd:last-of-type { border-bottom: 0; }
 #share-code-value { font-family: ui-monospace, monospace; font-size: 1.8rem; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
 #share-valid-until, #share-mode-note, #share-revoked { margin: .8rem 0 .4rem; }
 #share-revoke { display: block; margin: .4rem auto 0; }
-@media (max-width: 480px) { #qr-panel { padding: 1rem; } .qr-card-heading { align-items: flex-start; } .qr-open { width: 100%; justify-content: center; } }
+@media (max-width: 480px) { #qr-panel { padding: 1rem; } .qr-card-heading { align-items: flex-start; } .qr-open { flex: 1 1 100%; justify-content: center; } }
 
 /* Single password action, with contextual feedback kept inside the dialog. */
 .qr-password-entry { display: flex; align-items: center; gap: .65rem; padding: .4rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--bg); transition: border-color .15s; }

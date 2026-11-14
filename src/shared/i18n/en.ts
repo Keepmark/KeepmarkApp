@@ -2,11 +2,13 @@
 // keys and {placeholders} exactly (tests/i18n.test.ts).
 export const en = {
   'qr.scan': "In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.",
-  'qr.intro': "Scan a QR code to sync your bookmarks. No credentials to type.",
   'qr.hidden': "QR hidden.",
   'qr.title': "Connect Keepmark on your phone",
   'qr.explanation': "The QR contains your service, sync ID and the sync key (not your password). Anyone with a copy can read and change these bookmarks. It is hidden after 60 seconds or when you leave this view. Set a sync lock to ask a password first.",
   'qr.open': "Show connection QR",
+  'qr.cardTitle': "Connect another device",
+  'qr.cardIntro': "Scan the QR with your phone, or send a link. No credentials to type.",
+  'share.open': "Share link",
   'qr.generate': "Show QR",
   'qr.close': "Close",
   'qr.error': 'Unable to prepare the QR. Check the connection and try again.',

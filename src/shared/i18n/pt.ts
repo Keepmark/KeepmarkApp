@@ -2,11 +2,13 @@ import type { MessageKey } from './en.js';
 
 export const pt: Record<MessageKey, string> = {
   'qr.scan': "No Keepmark para Android, abra Conectar → Sincronização existente → Ler QR do navegador.",
-  'qr.intro': "Leia um código QR para sincronizar seus favoritos. Sem digitar credenciais.",
   'qr.hidden': "QR oculto.",
   'qr.title': "Conecte o Keepmark no seu celular",
   'qr.explanation': "O QR contém o serviço, o ID de sincronização e a chave da sincronização (não a sua senha). Quem tiver uma cópia pode ler e alterar estes favoritos. Ele some após 60 segundos ou quando você sai desta tela. Defina um bloqueio de sync para pedir uma senha antes.",
   'qr.open': "Mostrar QR de conexão",
+  'qr.cardTitle': "Ligar outro dispositivo",
+  'qr.cardIntro': "Leia o QR com o telemóvel ou envie um link. Sem credenciais para escrever.",
+  'share.open': "Partilhar link",
   'qr.generate': "Mostrar QR",
   'qr.close': "Fechar",
   'qr.error': 'Não foi possível preparar o QR. Verifique a ligação e tente outra vez.',

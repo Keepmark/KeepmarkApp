@@ -5,11 +5,13 @@ import type { MessageKey } from './en.js';
 // few+other to `_other`, so `_other` is the plain plural ("2 marcaje").
 export const ro: Record<MessageKey, string> = {
   'qr.scan': 'În Keepmark pentru Android, deschide Conectare → Sincronizare existentă → Scanează QR din browser.',
-  'qr.intro': 'Scanează un cod QR pentru a-ți sincroniza marcajele. Nicio acreditare de tastat.',
   'qr.hidden': "Cod QR ascuns.",
   'qr.title': 'Conectează Keepmark pe telefon',
   'qr.explanation': "Codul QR conține serviciul, ID-ul sincronizării și cheia sincronizării (nu parola ta). Oricine are o copie poate citi și modifica aceste marcaje. Este ascuns după 60 de secunde sau când părăsești această vizualizare. Setează o blocare a sincronizării ca să se ceară mai întâi o parolă.",
   'qr.open': 'Arată QR de conectare',
+  'qr.cardTitle': "Conectează alt dispozitiv",
+  'qr.cardIntro': "Scanează codul QR cu telefonul sau trimite un link. Fără date de autentificare de tastat.",
+  'share.open': "Partajează linkul",
   'qr.generate': 'Arată QR',
   'qr.close': 'Închide',
   'qr.error': 'Nu se poate pregăti codul QR. Verifică conexiunea și încearcă din nou.',

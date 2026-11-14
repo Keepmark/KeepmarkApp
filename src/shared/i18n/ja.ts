@@ -2,11 +2,13 @@ import type { MessageKey } from './en.js';
 
 export const ja: Record<MessageKey, string> = {
   'qr.scan': "Android 版 Keepmark で「接続」→「既存の同期」→「ブラウザーの QR をスキャン」を開いてください。",
-  'qr.intro': "QR コードをスキャンしてブックマークを同期。認証情報の入力は不要です。",
   'qr.hidden': "QR を非表示にしました。",
   'qr.title': "スマートフォンの Keepmark を接続",
   'qr.explanation': "QR にはサービス、同期 ID、同期キー（パスワードではありません）が含まれます。コピーを持つ人はこのブックマークを読み取り、変更できます。60 秒後、またはこの画面を離れると非表示になります。先にパスワードを求めるには同期ロックを設定してください。",
   'qr.open': "接続用 QR を表示",
+  'qr.cardTitle': "別のデバイスを接続",
+  'qr.cardIntro': "スマートフォンで QR を読み取るか、リンクを送信します。認証情報の入力は不要です。",
+  'share.open': "リンクを共有",
   'qr.generate': "QRを表示",
   'qr.close': "閉じる",
   'qr.error': 'QR を準備できませんでした。接続を確認して再試行してください。',

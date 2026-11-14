@@ -393,8 +393,9 @@ sync's derived key (base64 of the 32-byte AES key, checked by `isDerivedKey`).
 The long password never leaves the browser and is never in the QR (0.1.64; up
 to 0.1.63 it was format 1 with the password). `manager/connect-qr.ts` owns the
 native modal dialog, canvas lifetime and generation guards. Status shows the
-Android card (“Connect Keepmark on your phone”); its “Show connection QR”
-button opens the dialog and is hidden while it is open; the whole card is
+Android card (“Connect another device”); its “Show connection QR” and
+“Share link” buttons open the dialog (QR / link mode, active sync) and are
+hidden while it is open; the whole card is
 hidden while this browser is unlinked and its button is disabled (with the
 reason on the card) for a plain-HTTP service, which the payload refuses with
 the dedicated `qr.httpsRequired` message. Every row in Manager → Sync also has

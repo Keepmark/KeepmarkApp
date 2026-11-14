@@ -78,6 +78,26 @@ it('a wrong lock password shows no link', async () => {
   expect(el('qr-error').textContent).toBe(t('core.switchWrongPassword'));
 });
 
+it('the card Share link button opens the link dialog for the active sync', async () => {
+  controller.close();
+  document.body.innerHTML = dialogHtml.replace('<button id="qr-open"></button>', '<button id="qr-open"></button><button id="qr-share"></button>');
+  controller = new ConnectQrController(el('root'), prepare, { render, lockSet, copy, focused: () => focus, now: () => Date.now() });
+  controller.updateStatus({ syncEnabled: true, serviceUrl: payload.serviceUrl, syncId: payload.id, queueLength: 0, syncing: false });
+  expect((el('qr-share') as HTMLButtonElement).disabled).toBe(false);
+  el('qr-share').click(); await settle();
+  expect(el('qr-dialog-title').textContent).toBe(t('share.title'));
+  expect(el('qr-share').hidden).toBe(true);
+  submit(); await settle();
+  expect(prepare).toHaveBeenCalledWith('lock pw', undefined);
+  expect(render).not.toHaveBeenCalled();
+  expect((el('share-link-text') as HTMLTextAreaElement).value).toBe(vector);
+  el('qr-close').click();
+  expect(el('qr-share').hidden).toBe(false);
+  // The QR button still opens the QR, not the link.
+  el('qr-open').click(); await settle();
+  expect(el('qr-dialog-title').textContent).toBe(t('qr.title'));
+});
+
 it('a failed link says why when the error has a reason, else a link (not QR) message', async () => {
   prepare.mockRejectedValue(new ServiceOfflineException('Service offline (TypeError: Failed to fetch)'));
   openShare(); await settle(); submit(); await settle();

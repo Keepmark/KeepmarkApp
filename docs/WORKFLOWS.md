@@ -375,7 +375,8 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
   revocation (every other device must then be linked again). Both apps say so
   next to the link.
 - **Share** (extension: share icon beside the QR icon on every saved sync in
-  Manager → Sync; Android: `⋮` → `Share sync…` on every saved sync with a
+  Manager → Sync, plus “Share link” beside “Show connection QR” on the Status
+  card for the active sync; Android: `⋮` → `Share sync…` on every saved sync with a
   key). Same gate as the QR / a switch: the extension asks the sync-lock
   password when a lock is set (nothing otherwise); Android asks the device
   unlock when app lock is on (nothing otherwise). A read-only GET + decrypt

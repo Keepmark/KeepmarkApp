@@ -70,6 +70,8 @@ export class ConnectQrController {
   private readonly countdown: HTMLElement;
   private readonly generate: HTMLButtonElement;
   private readonly open: HTMLButtonElement;
+  /** Card shortcut to the share-link dialog for the active sync (absent in older markup). */
+  private readonly share: HTMLButtonElement | undefined;
   private readonly closeButton: HTMLButtonElement;
 
   private readonly entry: HTMLElement;
@@ -109,6 +111,7 @@ export class ConnectQrController {
     this.generate = host.querySelector('#qr-generate')!;
     this.closeButton = host.querySelector('#qr-close')!;
     this.open = root.querySelector('#qr-open')!;
+    this.share = root.querySelector<HTMLButtonElement>('#qr-share') ?? undefined;
     this.buildOptions();
     this.input.addEventListener('input', () => {
       this.error.hidden = true;
@@ -119,6 +122,13 @@ export class ConnectQrController {
       this.close();
       if (!this.activeIdentity || !this.deps.focused()) return;
       this.begin(undefined, this.open);
+    });
+    // Same dialog as a row's "Share", for the active sync.
+    this.share?.addEventListener('click', () => {
+      this.close();
+      if (!this.activeIdentity || !this.deps.focused() || !this.share) return;
+      this.kind = 'link';
+      this.begin(undefined, this.share);
     });
     this.panel.addEventListener('cancel', (event) => { event.preventDefault(); this.close(true); });
     this.panel.addEventListener('close', () => { if (!this.panel.hidden && !this.panel.open) this.close(true); });
@@ -213,6 +223,7 @@ export class ConnectQrController {
     this.root.hidden = !identity;
     if (!this.target) this.setSubject();
     this.open.disabled = !this.canPrepare();
+    if (this.share) this.share.disabled = this.open.disabled;
     this.announce(this.standingMessage());
   }
 
@@ -249,6 +260,7 @@ export class ConnectQrController {
     this.error.textContent = '';
     this.panel.hidden = false;
     this.open.hidden = true;
+    if (this.share) this.share.hidden = this.open.hidden;
     this.panel.showModal();
     this.form.hidden = false;
     this.applyKind();
@@ -337,6 +349,7 @@ export class ConnectQrController {
     this.showPassword(true);
     this.lockPending = false;
     this.open.disabled = !this.canPrepare();
+    if (this.share) this.share.disabled = this.open.disabled;
     this.generate.disabled = false;
     this.setBusy(false);
     this.input.removeAttribute('aria-invalid');
@@ -347,6 +360,7 @@ export class ConnectQrController {
     this.panel.hidden = true;
     if (this.panel.open) this.panel.close();
     this.open.hidden = false;
+    if (this.share) this.share.hidden = this.open.hidden;
     if (this.canvas) this.erase(this.canvas);
     this.canvas = undefined;
     this.output.replaceChildren();
@@ -386,6 +400,7 @@ export class ConnectQrController {
     const target = this.target;
     this.busy = true;
     this.open.disabled = true;
+    if (this.share) this.share.disabled = this.open.disabled;
     this.generate.disabled = true;
     this.setBusy(true);
     this.input.removeAttribute('aria-invalid');
