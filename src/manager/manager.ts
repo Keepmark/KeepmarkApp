@@ -74,6 +74,7 @@ import {
   type SafetyEntry,
   type SavedSyncsResponse,
   type StatusResponse,
+  type AutoBackupResponse,
   type SwitchLockState,
   type SyncTargetPreview,
   // Conflict resolution types
@@ -217,10 +218,17 @@ async function refreshStatus(): Promise<void> {
     updateLinkGates();
     renderConflictSection();
     ($('m-notlinked-hint') as HTMLElement).hidden = true;
+    ($('m-auto-backup-warning') as HTMLElement).hidden = true;
     showError('status-error', (err as Error).message);
     return;
   }
   if (my !== statusSeq) return;
+  const autoWarning = $('m-auto-backup-warning') as HTMLElement;
+  const autoError = status?.autoBackupError;
+  autoWarning.hidden = !autoError;
+  autoWarning.textContent = autoError
+    ? t('mgr.status.autoBackupFailed', { reason: autoError.replace(/[.!?]*$/, '.') })
+    : '';
   connectQr?.updateStatus(status);
   const view: StatusView = { status, ping: undefined };
   renderStatusCard('m', view);
@@ -746,6 +754,7 @@ const SafetyOperations: Record<string, MessageKey> = {
   'conflict-push': 'mgr.safety.op.conflictPush',
   'conflict-merge': 'mgr.safety.op.conflictMerge',
   'toolbar-adopt': 'mgr.safety.op.toolbarAdopt',
+  auto: 'mgr.safety.op.auto',
 };
 
 /** Day heading for the safety list: Today / Yesterday / a localized date. */
@@ -1876,6 +1885,81 @@ async function renderSettings(): Promise<void> {
   }));
   ($('m-opt-language') as HTMLSelectElement).value = lang.language;
   await renderSafetyKeep();
+  await renderAutoBackup();
+}
+
+/** Automatic backups: on/off, frequency and how many to keep. One message
+ *  carries the three values; the selects are inert while it is off. */
+let autoBackupUi: AutoBackupResponse = { enabled: true, everyDays: 1, keep: 7, count: 0 };
+/** One change at a time: the controls are inert while a change is in flight,
+ *  so two answers can never land out of order. */
+let autoBackupSaving = false;
+/** False until the stored settings were read: guessed defaults must never be
+ *  sent back (they could switch a disabled feature on again). */
+let autoBackupLoaded = false;
+function paintAutoBackup(): void {
+  const every = $('m-opt-auto-every') as HTMLSelectElement;
+  const keep = $('m-opt-auto-keep') as HTMLSelectElement;
+  ($('m-opt-auto-enabled') as HTMLInputElement).checked = autoBackupUi.enabled;
+  every.value = String(autoBackupUi.everyDays);
+  keep.value = String(autoBackupUi.keep);
+  const inert = autoBackupSaving || !autoBackupLoaded;
+  ($('m-opt-auto-enabled') as HTMLInputElement).disabled = inert;
+  every.disabled = keep.disabled = inert || !autoBackupUi.enabled;
+  $('m-auto-last').textContent = autoBackupUi.lastBackupUtc
+    ? t('mgr.settings.autoLast', { when: formatDateTime(autoBackupUi.lastBackupUtc) })
+    : t('mgr.settings.autoNone');
+}
+
+async function renderAutoBackup(): Promise<void> {
+  try {
+    const stored = await send<AutoBackupResponse | null>({ command: MessageCommand.GetAutoBackup });
+    if (stored) {
+      autoBackupUi = stored;
+      autoBackupLoaded = true;
+    }
+  } catch (err) {
+    showError('settings-error-3', (err as Error).message);
+  }
+  paintAutoBackup();
+}
+
+async function changeAutoBackup(): Promise<void> {
+  if (autoBackupSaving || !autoBackupLoaded) return;
+  // Claimed before the first await: a second change event cannot overtake.
+  autoBackupSaving = true;
+  clearMessages();
+  const enabled = ($('m-opt-auto-enabled') as HTMLInputElement).checked;
+  const everyDays = Number(($('m-opt-auto-every') as HTMLSelectElement).value);
+  const keep = Number(($('m-opt-auto-keep') as HTMLSelectElement).value);
+  // A background run may have added copies since this section was drawn.
+  const fresh = await send<AutoBackupResponse | null>({ command: MessageCommand.GetAutoBackup }).catch(() => null);
+  const excess = (fresh?.count ?? autoBackupUi.count) - keep;
+  if (excess > 0) {
+    // Lowering below what is stored deletes the oldest now: say so first.
+    const ok = await confirmInline('m-opt-auto-keep', {
+      message: tn('mgr.settings.autoKeepPrune', excess),
+      implication: t('mgr.settings.safetyKeepPruneImplication'),
+      confirmLabel: t('common.yesDelete'),
+      danger: true,
+    });
+    if (!ok) {
+      autoBackupSaving = false;
+      paintAutoBackup();
+      return;
+    }
+  }
+  paintAutoBackup();
+  ($('m-opt-auto-enabled') as HTMLInputElement).checked = enabled;
+  try {
+    autoBackupUi = await send<AutoBackupResponse>({ command: MessageCommand.SetAutoBackup, enabled, everyDays, keep });
+    showResult('settings-result-3', t(autoBackupUi.enabled ? 'mgr.settings.autoSaved' : 'mgr.settings.autoOff'));
+  } catch (err) {
+    showError('settings-error-3', (err as Error).message);
+  } finally {
+    autoBackupSaving = false;
+    paintAutoBackup();
+  }
 }
 
 /** Safety-backup retention: the select shows the stored value; the backups
@@ -1918,6 +2002,9 @@ async function changeSafetyKeep(select: HTMLSelectElement): Promise<void> {
 }
 
 function initSettingsSection(): void {
+  for (const id of ['m-opt-auto-enabled', 'm-opt-auto-every', 'm-opt-auto-keep']) {
+    $(id).addEventListener('change', () => void changeAutoBackup());
+  }
   ($('m-opt-safety-keep') as HTMLSelectElement).addEventListener('change', (e) => {
     void changeSafetyKeep(e.target as HTMLSelectElement);
   });

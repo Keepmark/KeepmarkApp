@@ -44,6 +44,9 @@
             </dd>
           </dl>
         </div>
+        <!-- Automatic backup that failed: the only place it is reported
+             (never a notification). Cleared by the next completed run. -->
+        <div id="m-auto-backup-warning" class="error" role="status" hidden></div>
         <div id="connect-qr" class="card qr-connect-card" hidden>
           <div class="qr-card-content"><div class="qr-card-heading">
             <span class="qr-android-badge"><svg class="qr-android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.3 5.3-1.5-2.6m12.9 2.6 1.5-2.6M3 13a9 9 0 0 1 18 0v6H3z"/><circle cx="8" cy="10" r=".9"/><circle cx="16" cy="10" r=".9"/></svg></span>
@@ -237,6 +240,30 @@
           </div>
           <div id="settings-error-2" class="error" role="alert" hidden></div>
           <div id="settings-result-2" class="result" hidden></div>
+        </div>
+        <div class="settings-group">
+          <h3 data-i18n="manager.settings.autoTitle">Automatic backups</h3>
+          <p class="hint" data-i18n="manager.settings.autoHint">A copy of this browser's bookmarks, taken in the background only when they have changed. It is stored in this browser, next to the safety backups: restore one from Backup. Removing the extension removes the copies too. While no sync is linked the copy is not encrypted.</p>
+          <label class="check"><input id="m-opt-auto-enabled" type="checkbox" /><span data-i18n="manager.settings.autoEnabled">Back up automatically</span></label>
+          <div class="row">
+            <label><span data-i18n="manager.settings.autoEvery">How often</span>
+              <select id="m-opt-auto-every">
+                <option value="1" data-i18n="manager.settings.autoDaily">Every day</option>
+                <option value="7" data-i18n="manager.settings.autoWeekly">Every week</option>
+              </select>
+            </label>
+            <label><span data-i18n="manager.settings.autoKeep">Automatic backups to keep</span>
+              <select id="m-opt-auto-keep">
+                <option value="3">3</option>
+                <option value="7" data-i18n="manager.settings.autoKeepDefault">7 (default)</option>
+                <option value="14">14</option>
+                <option value="30">30</option>
+              </select>
+            </label>
+          </div>
+          <p id="m-auto-last" class="hint"></p>
+          <div id="settings-error-3" class="error" role="alert" hidden></div>
+          <div id="settings-result-3" class="result" hidden></div>
         </div>
 
         <div class="settings-group">

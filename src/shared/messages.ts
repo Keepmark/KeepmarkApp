@@ -55,6 +55,8 @@ export enum MessageCommand {
   GetSafetyList = 'get-safety-list',
   GetSafetyKeep = 'get-safety-keep',
   SetSafetyKeep = 'set-safety-keep',
+  GetAutoBackup = 'get-auto-backup',
+  SetAutoBackup = 'set-auto-backup',
   RestoreSafety = 'restore-safety',
   DeleteSafety = 'delete-safety',
   RemoveDuplicates = 'remove-duplicates',
@@ -114,6 +116,21 @@ export interface StatusResponse {
   removedSync?: boolean;
   /** True when a push received 409 and conflict state is captured. */
   conflict?: boolean;
+  /** Why the last automatic backup failed (absent once a run completes). */
+  autoBackupError?: string;
+}
+
+/** Automatic backup settings plus what the manager needs to explain them. */
+export interface AutoBackupResponse {
+  enabled: boolean;
+  everyDays: number;
+  keep: number;
+  /** Automatic backups stored right now (for the "delete the oldest" prompt). */
+  count: number;
+  lastBackupUtc?: string;
+  error?: string;
+  /** SetAutoBackup only: how many old automatic backups the change deleted. */
+  removed?: number;
 }
 
 /** Plaintext snapshot of a server-deleted sync (no password ever stored). */
@@ -351,6 +368,8 @@ export type MessagePayload =
   | { command: MessageCommand.SetVerbosity; level: number }
   | { command: MessageCommand.GetSafetyKeep }
   | { command: MessageCommand.SetSafetyKeep; keep: number }
+  | { command: MessageCommand.GetAutoBackup }
+  | { command: MessageCommand.SetAutoBackup; enabled: boolean; everyDays: number; keep: number }
   | { command: MessageCommand.GetUndoState }
   | { command: MessageCommand.UndoLastLink }
   | { command: MessageCommand.DismissUndo }

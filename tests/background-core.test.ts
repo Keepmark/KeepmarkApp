@@ -289,7 +289,8 @@ describe('background core', () => {
     await core.startup();
     const first = await store.get<string>(StoreKey.InstallBackup);
     expect(first).toContain('[xbs]');
-    expect(ports.scheduled).toHaveLength(0);
+    // No sync poll without a link; the automatic backup runs regardless.
+    expect(ports.scheduled).toEqual([{ name: 'xbs-auto-backup', minutes: 60 }]);
     // Second startup (e.g. MV3 wake) must not contaminate the snapshot.
     await core.startup();
     expect(await store.get<string>(StoreKey.InstallBackup)).toBe(first);

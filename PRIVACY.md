@@ -44,15 +44,19 @@ Keepmark stores the following locally in your browser's extension storage:
 - the sync ID and the key derived from your password (never the password
   itself),
 - sync state and an activity log of recent sync events,
-- up to 5 encrypted safety backups taken before destructive operations.
+- safety backups taken before destructive operations (the newest 10 unless
+  you change the limit) and automatic backups of your bookmarks (the newest 7
+  unless you change the limit or turn them off). Both are encrypted with the
+  key of the linked sync; while no sync is linked they are stored unencrypted
+  and marked as such.
 
-Backup files are created only when you export a backup, and are saved to your
-device. Removing the extension deletes the local data.
+Backup files and plain `bookmarks.html` files are created only when you export
+them, and are saved to your device. Removing the extension deletes the local data.
 
 ## Permissions
 
 Keepmark asks only for what sync needs: bookmarks, storage, alarms (periodic
-check for changes), notifications (conflicts, removed sync), downloads
+check for changes, automatic backups), notifications (conflicts, removed sync), downloads
 (backup export) and, on Chromium-based browsers, offscreen (theme detection
 for the toolbar icon) and network access to reach the sync service you
 choose. There are no content scripts and no remote code.

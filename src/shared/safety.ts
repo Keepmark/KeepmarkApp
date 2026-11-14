@@ -50,7 +50,10 @@ export type SafetyOperation =
   | 'sync-push'
   /** One-shot upgrade from the retired toolbar switch: the stale local
    *  toolbar was snapshotted before the active sync's toolbar replaced it. */
-  | 'toolbar-adopt';
+  | 'toolbar-adopt'
+  /** Scheduled copy of the local bookmarks (auto-backup.ts): nothing was
+   *  destroyed. Kept under its own retention, never the safety one. */
+  | 'auto';
 
 /** One manifest row (mirrors Keepmark safety-index.json). */
 export interface SafetyEntry {
@@ -105,21 +108,66 @@ export async function safetyKeep(store: Store): Promise<number> {
   return (SafetyKeepChoices as readonly number[]).includes(raw as number) ? (raw as number) : SafetyRetention;
 }
 
-/** Delete the oldest entries beyond `keep` (index row + payload). Returns
- *  how many went. Used when the setting is lowered and on every write. */
+/** Automatic backups kept by default, and the choices offered in Settings. */
+export const AutoBackupRetention = 7;
+export const AutoBackupKeepChoices = [3, 7, 14, 30] as const;
+
+/** Retention of the automatic backups (the `keep` field of the
+ *  StoreKey.AutoBackup settings), or the default when unset or invalid. */
+export async function autoBackupKeep(store: Store): Promise<number> {
+  const raw = await store.get<{ keep?: unknown }>(StoreKey.AutoBackup);
+  const keep = raw && typeof raw === 'object' ? raw.keep : undefined;
+  return (AutoBackupKeepChoices as readonly unknown[]).includes(keep) ? (keep as number) : AutoBackupRetention;
+}
+
+/** Two independent budgets: automatic backups never evict safety backups
+ *  and the other way round. Newest first inside each. */
+function retain(rows: SafetyEntry[], keep: number, autoKeep: number): { kept: SafetyEntry[]; dropped: SafetyEntry[] } {
+  const kept: SafetyEntry[] = [];
+  const dropped: SafetyEntry[] = [];
+  let safety = 0;
+  let auto = 0;
+  for (const row of [...rows].sort(newestFirst)) {
+    const fits = row.operation === 'auto' ? auto++ < autoKeep : safety++ < keep;
+    (fits ? kept : dropped).push(row);
+  }
+  return { kept, dropped };
+}
+
 /** Newest first; equal timestamps keep their index order (same-second writes),
  *  so retention never drops a newer file in favour of an older twin. */
 function newestFirst(a: { createdAtUtc: string }, b: { createdAtUtc: string }): number {
   return a.createdAtUtc < b.createdAtUtc ? 1 : a.createdAtUtc > b.createdAtUtc ? -1 : 0;
 }
 
-export async function pruneSafety(store: Store, keep: number): Promise<number> {
+/** Delete the oldest entries beyond each budget (index row + payload).
+ *  Returns how many went. Used when a retention setting is lowered. `keep`
+ *  is the safety budget (default: the stored setting); the automatic budget
+ *  always comes from its own setting. */
+export function pruneSafety(store: Store, keep?: number): Promise<number> {
+  return indexLocked(() => pruneSafetyUnlocked(store, keep));
+}
+
+async function pruneSafetyUnlocked(store: Store, keep?: number): Promise<number> {
   const rows = await listSafety(store);
-  if (rows.length <= keep) return 0;
-  const sorted = [...rows].sort(newestFirst);
-  for (const old of sorted.slice(keep)) await store.remove(safetyFileKey(old.fileName));
-  await store.set(StoreKey.SafetyIndex, sorted.slice(0, keep));
-  return sorted.length - keep;
+  const { kept, dropped } = retain(rows, keep ?? (await safetyKeep(store)), await autoBackupKeep(store));
+  if (dropped.length === 0) return 0;
+  for (const old of dropped) await store.remove(safetyFileKey(old.fileName));
+  await store.set(StoreKey.SafetyIndex, kept);
+  return dropped.length;
+}
+
+/** Serializes every read-modify-write of the index (same pattern as
+ *  id-mapper.ts). The automatic backup writes outside the sync queue: without
+ *  this, two writers listing the same index would each save their own row and
+ *  the second save would drop the first, orphaning a snapshot a destructive
+ *  step relies on. One background context owns all writes, so a module-level
+ *  chain is enough. */
+let indexTail: Promise<unknown> = Promise.resolve();
+function indexLocked<T>(fn: () => Promise<T>): Promise<T> {
+  const run = indexTail.then(fn, fn);
+  indexTail = run.catch(() => undefined);
+  return run;
 }
 
 const SafetyApp = 'KeepmarkApp-safety';
@@ -209,7 +257,7 @@ export async function listSafety(store: Store): Promise<SafetyEntry[]> {
  * Snapshot a tree. Throws on validation or storage failure — the caller
  * must abort the destructive operation (fail closed).
  */
-export async function writeSafety(
+async function writeSafetyUnlocked(
   store: Store,
   input: {
     operation: SafetyOperation;
@@ -254,13 +302,15 @@ export async function writeSafety(
     ...(syncName ? { syncName } : {}),
     ...(input.changes ? { added: input.changes.added, removed: input.changes.removed } : {}),
   };
-  const next = [entry, ...(await listSafety(store))].sort(newestFirst);
-  const keep = await safetyKeep(store);
-  const pruned = next.slice(0, keep);
-  for (const old of next.slice(keep)) {
+  const { kept, dropped } = retain(
+    [entry, ...(await listSafety(store))],
+    await safetyKeep(store),
+    await autoBackupKeep(store),
+  );
+  for (const old of dropped) {
     await store.remove(safetyFileKey(old.fileName));
   }
-  await store.set(StoreKey.SafetyIndex, pruned);
+  await store.set(StoreKey.SafetyIndex, kept);
   return entry;
 }
 
@@ -310,7 +360,11 @@ export async function readSafetyTree(
 }
 
 /** Remove payload + index row. UI confirms (two-tap) before calling. */
-export async function deleteSafety(store: Store, fileName: string): Promise<boolean> {
+export function deleteSafety(store: Store, fileName: string): Promise<boolean> {
+  return indexLocked(() => deleteSafetyUnlocked(store, fileName));
+}
+
+async function deleteSafetyUnlocked(store: Store, fileName: string): Promise<boolean> {
   const rows = await listSafety(store);
   if (!rows.some((e) => e.fileName === fileName)) return false;
   await store.remove(safetyFileKey(fileName));
@@ -329,7 +383,7 @@ export async function deleteSafety(store: Store, fileName: string): Promise<bool
  * need no key. Matching is exact on keyId when known, else on the truncated
  * sync id (the only sync identifier the manifest stores).
  */
-export async function pruneSafetyForSync(
+async function pruneSafetyForSyncUnlocked(
   store: Store,
   target: { syncId?: string; keyId?: string },
 ): Promise<number> {
@@ -355,7 +409,7 @@ export async function pruneSafetyForSync(
  * rotation). Best-effort: failures are collected, never thrown — rotation
  * must not fail the user flow.
  */
-export async function rekeySafety(
+async function rekeySafetyUnlocked(
   store: Store,
   oldKey: string,
   newKey: string,
@@ -385,4 +439,19 @@ export async function rekeySafety(
   }
   if (indexChanged) await store.set(StoreKey.SafetyIndex, rows);
   return { rekeyed, skipped };
+}
+
+// Public entry points of the writers above: each runs under the index lock.
+export function writeSafety(...args: Parameters<typeof writeSafetyUnlocked>): Promise<SafetyEntry> {
+  return indexLocked(() => writeSafetyUnlocked(...args));
+}
+
+export function pruneSafetyForSync(...args: Parameters<typeof pruneSafetyForSyncUnlocked>): Promise<number> {
+  return indexLocked(() => pruneSafetyForSyncUnlocked(...args));
+}
+
+export function rekeySafety(
+  ...args: Parameters<typeof rekeySafetyUnlocked>
+): Promise<{ rekeyed: number; skipped: string[] }> {
+  return indexLocked(() => rekeySafetyUnlocked(...args));
 }

@@ -39,7 +39,7 @@ Goals:
 
 Non-goals (explicitly out of scope, must NOT be "found missing"):
 
-- Bookmark browsing/search UI, auto-backup schedule, connecting by scanning a
+- Bookmark browsing/search UI, connecting by scanning a
   QR (showing one, for the Android app, is in scope), telemetry.
 
 ## 2. Stack, layout, commands
@@ -316,6 +316,20 @@ safety snapshots as specified in S6 and, where listed, an undo slot.
   native write by stable synced id via mappings, then push-now (errors thrown
   to UI).
 - `RestoreBookmarks {bookmarks}`: undo `restore`, overwrite natives, push.
+- `ExportHtml` (0.1.61): plain Netscape `bookmarks.html` of the local tree
+  (`shared/netscape.ts`), downloaded as `keepmark-[<sync>-]YYYYMMDD-HHmmss.html`.
+  NOT encrypted: the manager shows the warning and only `Export anyway` runs
+  it. Nodes that are neither folder nor link are skipped, so the file matches
+  the reported count (0.1.62). There is no HTML import in the extension.
+- `GetAutoBackup` / `SetAutoBackup {enabled, everyDays, keep}` (0.1.63):
+  automatic backup settings (default on, 1 day, 7 kept; 1 or 7 days; 3, 7, 14
+  or 30 kept). Invalid values are rejected; lowering `keep` prunes the oldest
+  automatic backups at once (the manager confirms first). The run itself is
+  the hourly `AutoBackupAlarmName` tick: postponed during sync activity, a
+  conflict or before startup; nothing written when the tree is unchanged;
+  plaintext `enc:null` while unlinked; failure surfaced as
+  `GetStatus.autoBackupError`. Forget / Unlink / Delete from server remove the
+  encrypted automatic backups of that sync together with its safety backups.
 - `ExportBackup {password}`: encrypted envelope
   `{app:'KeepmarkApp', format:1, salt, blob}`; guards mirror §9 (password ≥ 8,
   fresh random salt per export, 50 MB byte limit on real bytes, 200k nodes,
@@ -499,7 +513,11 @@ white-mark in-page chip.
 - S6. Safety snapshots (`shared/safety.ts`) are fail-closed: a failed write
   blocks the destructive operation. Newest N kept (Settings, default 10) in `storage.local`, encrypted
   with the sync-derived key when linked (pre-link copies are flagged plaintext).
-  Backup → Safety backups lists/restores/deletes them. Ordinary saved-sync
+  Backup → Safety backups lists/restores/deletes them. Automatic backups
+  (`shared/auto-backup.ts`, operation `auto`, since 0.1.63) share that list
+  under their own limit (Settings, default 7, daily or weekly, written only
+  when the local tree changed); neither budget evicts the other, and a failed
+  automatic run is reported in Status, never as a notification. Ordinary saved-sync
   activation takes no snapshot; deliberate server deletion keeps no copy and
   prunes that sync’s snapshots. A sync changing more than 10 nodes snapshots
   the replaced side (`sync-pull` local / `sync-push` remote); additions,
@@ -582,7 +600,7 @@ white-mark in-page chip.
 
 ## 12. Known limitations (not defects)
 
-Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no auto-backup schedule and no QR scanning in the browser (the browser only shows a QR for the Android app); retired toolbar migration +
+Browser QA automated (§11.2b, last run 99/99 on Firefox 157 + Chromium 153); remaining manual items in §11.3; Firefox and Chrome distributed through their stores; no QR scanning in the browser (the browser only shows a QR for the Android app); retired toolbar migration +
 Chromium Menu-folder edges covered by tests but untested live; another agent
 may work concurrently in the tree — verify `git status`/`log` before
 assuming state.

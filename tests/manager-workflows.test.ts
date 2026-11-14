@@ -710,3 +710,67 @@ it('activation confirm collapses its explanation after "Got it" (password field 
   el('m-syncs-activate-more').click();
   expect(el('m-syncs-activate-hint').hidden).toBe(false);
 });
+
+it('automatic backups: Settings sends the three values together; Status reports a failed run', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetStatus) return { syncEnabled: false, queueLength: 0, syncing: false, autoBackupError: 'disk full' };
+    if (msg.command === MessageCommand.GetAutoBackup) return { enabled: true, everyDays: 1, keep: 7, count: 2, lastBackupUtc: '2026-11-11T08:00:00.000Z' };
+    if (msg.command === MessageCommand.SetAutoBackup) return { enabled: msg.enabled, everyDays: msg.everyDays, keep: msg.keep, count: 2 };
+    if (msg.command === MessageCommand.GetUiLanguage) return { language: 'system' };
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  expect(el('m-auto-backup-warning').hidden).toBe(false);
+  expect(el('m-auto-backup-warning').textContent).toContain('disk full.');
+
+  (document.querySelector('#sidebar button[data-section="settings"]') as HTMLButtonElement).click();
+  // Settings renders several preferences in sequence before this group.
+  for (let i = 0; i < 8; i++) await settle();
+  const enabled = el('m-opt-auto-enabled') as HTMLInputElement;
+  const every = el('m-opt-auto-every') as HTMLSelectElement;
+  expect(enabled.checked).toBe(true);
+  expect(every.value).toBe('1');
+  expect(el('m-auto-last').textContent).toContain('2026');
+
+  every.value = '7';
+  every.dispatchEvent(new Event('change')); await settle();
+  const sent = harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.SetAutoBackup).map(([m]) => m);
+  expect(sent).toEqual([{ command: MessageCommand.SetAutoBackup, enabled: true, everyDays: 7, keep: 7 }]);
+
+  enabled.checked = false;
+  enabled.dispatchEvent(new Event('change')); await settle();
+  expect(every.disabled).toBe(true);
+  expect((el('m-opt-auto-keep') as HTMLSelectElement).disabled).toBe(true);
+  expect(el('settings-result-3').hidden).toBe(false);
+});
+
+it('automatic backups: unread settings stay inert; two quick changes send one request', async () => {
+  let fail = true;
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetAutoBackup) {
+      if (fail) throw new Error('no answer');
+      return { enabled: false, everyDays: 1, keep: 7, count: 0 };
+    }
+    if (msg.command === MessageCommand.SetAutoBackup) return { enabled: msg.enabled, everyDays: msg.everyDays, keep: msg.keep, count: 0 };
+    if (msg.command === MessageCommand.GetUiLanguage) return { language: 'system' };
+    return null;
+  });
+  (document.querySelector('#sidebar button[data-section="settings"]') as HTMLButtonElement).click();
+  for (let i = 0; i < 8; i++) await settle();
+  const enabled = el('m-opt-auto-enabled') as HTMLInputElement;
+  // A failed read must not let guessed defaults ("on") be sent back.
+  expect(enabled.disabled).toBe(true);
+  enabled.dispatchEvent(new Event('change')); await settle();
+  expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.SetAutoBackup)).toBe(false);
+
+  fail = false;
+  (document.querySelector('#sidebar button[data-section="settings"]') as HTMLButtonElement).click();
+  for (let i = 0; i < 8; i++) await settle();
+  expect(enabled.disabled).toBe(false);
+  expect(enabled.checked).toBe(false);
+  enabled.checked = true;
+  enabled.dispatchEvent(new Event('change'));
+  enabled.dispatchEvent(new Event('change'));
+  for (let i = 0; i < 3; i++) await settle();
+  expect(harness.send.mock.calls.filter(([m]) => m.command === MessageCommand.SetAutoBackup)).toHaveLength(1);
+});

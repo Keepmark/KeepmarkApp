@@ -73,6 +73,14 @@ import {
   listSafetyNamed,
   type SafetyEntry,
 } from '../shared/safety.js';
+import {
+  autoBackupDue,
+  autoBackupSettings,
+  autoBackupState,
+  noteAutoBackupError,
+  runAutoBackup,
+  sanitizeAutoBackup,
+} from '../shared/auto-backup.js';
 import { BookmarkIdMapper } from '../shared/id-mapper.js';
 import {
   MessageCommand,
@@ -84,6 +92,7 @@ import {
   type ChangeSwitchPasswordResult,
   type ResetSwitchPasswordResult,
   type RemoveSwitchPasswordResult,
+  type AutoBackupResponse,
   type StatusResponse,
   type SwitchLockState,
   type SyncTargetPreview,
@@ -119,6 +128,10 @@ import { overwriteAll, type NativeAdapter } from './adapter.js';
 
 export const UpdatesAlarmName = 'xbs-sync-updates-check';
 export const NativeDebounceAlarmName = 'xbs-native-debounce';
+/** Hourly tick of the automatic backup: the run itself is decided by
+ *  autoBackupDue, so a browser closed at the due time catches up on start. */
+export const AutoBackupAlarmName = 'xbs-auto-backup';
+export const AutoBackupTickMinutes = 60;
 
 /** Encrypted undo snapshot for one dangerous link operation. */
 export interface UndoSlotData {
@@ -214,6 +227,7 @@ export class BackgroundCore {
   /** Native change arrived while suspended: re-schedule on release. */
   private dirtyDuringSuspend = false;
   private connecting = false;
+  private autoBackupRunning = false;
   private changingCredentials = false;
   private started = false;
   /** In-flight drain shared by concurrent callers (no false "did not drain"). */
@@ -261,6 +275,10 @@ export class BackgroundCore {
         this.queue.enqueue('remote', false);
         void this.loadLanguage()
           .then(() => this.drain())
+          .catch((err) => this.onBackgroundError(err));
+      } else if (name === AutoBackupAlarmName) {
+        void this.loadLanguage()
+          .then(() => this.autoBackupTick())
           .catch((err) => this.onBackgroundError(err));
       }
     });
@@ -394,7 +412,11 @@ export class BackgroundCore {
         return listSafetyNamed(this.store, { linked, ...(keyId ? { keyId } : {}) });
       }
       case MessageCommand.GetSafetyKeep:
-        return { keep: await safetyKeep(this.store), count: (await listSafety(this.store)).length };
+        // Automatic backups have their own budget: they never count here.
+        return {
+          keep: await safetyKeep(this.store),
+          count: (await listSafety(this.store)).filter((e) => e.operation !== 'auto').length,
+        };
       case MessageCommand.SetSafetyKeep: {
         if (!(SafetyKeepChoices as readonly number[]).includes(msg.keep)) {
           throw new UnexpectedResponseException(`Invalid safety backup count: ${msg.keep}`);
@@ -404,6 +426,23 @@ export class BackgroundCore {
         const removed = await pruneSafety(this.store, msg.keep);
         if (removed) this.log.log(XbsLogLevel.Info, 'safety', `Kept ${msg.keep}, removed ${removed} oldest`);
         return { keep: msg.keep, removed };
+      }
+      case MessageCommand.GetAutoBackup:
+        return this.getAutoBackup();
+      case MessageCommand.SetAutoBackup: {
+        const wanted = { enabled: msg.enabled, everyDays: msg.everyDays, keep: msg.keep };
+        const clean = sanitizeAutoBackup(wanted);
+        if (clean.enabled !== wanted.enabled || clean.everyDays !== wanted.everyDays || clean.keep !== wanted.keep) {
+          throw new UnexpectedResponseException('Invalid automatic backup settings');
+        }
+        await this.store.set(StoreKey.AutoBackup, clean);
+        // Lowering the count applies now: the manager confirmed the deletion first.
+        const removed = await pruneSafety(this.store);
+        if (removed) this.log.log(XbsLogLevel.Info, 'safety', `Automatic backups: kept ${clean.keep}, removed ${removed} oldest`);
+        await this.scheduleAutoBackup();
+        // Switched on (or made more frequent): take the copy now if one is due.
+        await this.autoBackupTick();
+        return { ...(await this.getAutoBackup()), removed };
       }
       case MessageCommand.RestoreSafety:
         return this.restoreSafety(msg.fileName);
@@ -2883,6 +2922,8 @@ export class BackgroundCore {
     const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
     const lastUpdated = await this.store.get<string>(StoreKey.LastUpdated);
     const blob = await this.store.get<string>(StoreKey.Bookmarks);
+    const autoBackup = await autoBackupSettings(this.store);
+    const autoState = await autoBackupState(this.store);
     return {
       syncEnabled,
       syncId: info?.id,
@@ -2897,7 +2938,73 @@ export class BackgroundCore {
       supportsV12: v12Usable(info),
       removedSync: (await this.store.get(StoreKey.RemovedSync)) !== undefined,
       conflict: await this.hasConflict(),
+      ...(autoBackup.enabled && autoState.error ? { autoBackupError: autoState.error } : {}),
     };
+  }
+
+  // ------------------------------------------------------- automatic backup
+
+  private async getAutoBackup(): Promise<AutoBackupResponse> {
+    const settings = await autoBackupSettings(this.store);
+    const state = await autoBackupState(this.store);
+    return {
+      ...settings,
+      count: (await listSafety(this.store)).filter((e) => e.operation === 'auto').length,
+      ...(state.lastBackupUtc ? { lastBackupUtc: state.lastBackupUtc } : {}),
+      ...(settings.enabled && state.error ? { error: state.error } : {}),
+    };
+  }
+
+  /** The alarm exists only while the feature is on. Independent of the sync
+   *  link: an unlinked browser is backed up too (plaintext, flagged so). */
+  private async scheduleAutoBackup(): Promise<void> {
+    if ((await autoBackupSettings(this.store)).enabled) {
+      await this.ports.alarms.schedule(AutoBackupAlarmName, AutoBackupTickMinutes);
+    } else {
+      await this.ports.alarms.clear(AutoBackupAlarmName);
+    }
+  }
+
+  /**
+   * Take the automatic backup when one is due. Never throws and never
+   * notifies: a failure is logged and kept for the manager's Status. Skipped
+   * (retried on the next tick) while a sync, a link change or a conflict is
+   * in progress. The tree is read inside a suspend, re-checked there: a
+   * restore or a sync that starts meanwhile finds the core suspended or is
+   * seen by the second check, so the copy is never a half-applied tree.
+   * Before startup() finished (an alarm waking an MV3 worker) it does
+   * nothing: startup() ends with its own tick, after the toolbar adoption.
+   */
+  private async autoBackupTick(): Promise<void> {
+    if (this.autoBackupRunning || !this.started) return;
+    this.autoBackupRunning = true;
+    try {
+      const settings = await autoBackupSettings(this.store);
+      if (!autoBackupDue(settings, await autoBackupState(this.store), Date.now())) return;
+      const busy = (): boolean =>
+        this.queue.syncing || this.queue.length > 0 || this.connecting || this.changingCredentials || this.disabling;
+      const postponed = (): void =>
+        this.log.log(XbsLogLevel.Debug, 'safety', 'Automatic backup postponed: sync activity in progress');
+      if (busy() || this.suspended > 0 || (await this.hasConflict())) return postponed();
+      const info = await this.store.get<SyncInfo>(StoreKey.SyncInfo);
+      const linked = !!(info?.id && info.password);
+      const outcome = await this.withSuspended(async () => {
+        // Everything awaited above may have let a sync or a restore start.
+        if (busy() || this.suspended > 1) return undefined;
+        return runAutoBackup(this.store, {
+          tree: await this.adapter.readAll(),
+          ...(linked ? { syncId: info!.id!, derivedKey: info!.password! } : {}),
+        });
+      });
+      if (!outcome) return postponed();
+      this.log.log(XbsLogLevel.Info, 'safety', `Automatic backup: ${outcome}`);
+    } catch (err) {
+      const message = (err as Error)?.message ?? String(err);
+      this.log.log(XbsLogLevel.Warning, 'safety', `Automatic backup failed: ${message}`);
+      await noteAutoBackupError(this.store, message).catch(() => undefined);
+    } finally {
+      this.autoBackupRunning = false;
+    }
   }
 
   /** Current conflict state for the resolution UI. */
@@ -3326,6 +3433,12 @@ export class BackgroundCore {
     // Mark started only after success: a failed boot retries next time
     // instead of wedging the worker with started=true and no listeners' work.
     this.started = true;
+    // After the first sync check, so the copy is the settled tree. A browser
+    // that was closed at the due time catches up here.
+    await this.scheduleAutoBackup().catch((err) =>
+      this.log.log(XbsLogLevel.Warning, 'safety', `Automatic backup schedule failed: ${(err as Error)?.message}`),
+    );
+    await this.autoBackupTick();
   }
 
   /**

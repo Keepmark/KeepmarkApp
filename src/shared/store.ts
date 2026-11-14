@@ -11,6 +11,11 @@ export enum StoreKey {
   AlternateSearchBarPosition = 'alternateSearchBarPosition',
   AutoFetchMetadata = 'autoFetchMetadata',
   AutoBackUpSchedule = 'autoBackUpSchedule',
+  /** Automatic backup settings: { enabled, everyDays, keep } (auto-backup.ts). */
+  AutoBackup = 'autoBackup',
+  /** Automatic backup bookkeeping: last check/backup time, fingerprint of the
+   *  last saved tree, last failure. No bookmark data. */
+  AutoBackupState = 'autoBackupState',
   BookmarkIdMappings = 'bookmarkIdMappings',
   /** Pending sync conflict (encrypted local tree + remote base seen), persisted
    *  so MV3 worker sleeps / browser restarts never lose it. */

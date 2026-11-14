@@ -43,10 +43,15 @@ describe('settings screen', () => {
 
   it('groups the remaining preferences instead of one flat column', () => {
     const groups = settings.querySelectorAll('.settings-group');
-    expect(groups.length).toBe(2);
+    expect(groups.length).toBe(3);
     expect(groups[0]?.querySelector('h3[data-i18n="manager.settings.safetyTitle"]')).not.toBeNull();
     expect(groups[0]?.querySelector('#m-opt-safety-keep')).not.toBeNull();
-    expect(groups[1]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
+    // Automatic backups: one switch, frequency and their own retention.
+    expect(groups[1]?.querySelector('h3[data-i18n="manager.settings.autoTitle"]')).not.toBeNull();
+    expect(groups[1]?.querySelector<HTMLInputElement>('#m-opt-auto-enabled')?.type).toBe('checkbox');
+    expect([...groups[1]!.querySelectorAll('#m-opt-auto-every option')].map((o) => o.getAttribute('value'))).toEqual(['1', '7']);
+    expect([...groups[1]!.querySelectorAll('#m-opt-auto-keep option')].map((o) => o.getAttribute('value'))).toEqual(['3', '7', '14', '30']);
+    expect(groups[2]?.querySelector('h3[data-i18n="manager.nav.logs"]')).not.toBeNull();
     // Language stays the plain top field, before the card.
     expect(settings.querySelector('#m-opt-language')).not.toBeNull();
     expect(settings.querySelector('.settings-group #m-opt-language')).toBeNull();

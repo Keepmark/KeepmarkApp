@@ -78,7 +78,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 | `messages.ts` | `MessageCommand` + payload/response types + `toWireError/fromWireError` (name-based rehydration) | `app/webext.interface.ts` + sendMessage |
 | `backup.ts` | Encrypted envelope `{app,format,salt,blob}` (writes shared `xBrowserSyncNg` tag, reads legacy `KeepmarkApp` too) + guards (pwd≥8, 50MB, 200k nodes, depth cap) | Keepmark `BackupGuard.cs` + envelope |
 | `safety.ts` | Safety snapshots: manifest + payloads in storage.local, retention from Settings (`StoreKey.SafetyKeep`: 3/5/10/20/30/50, default 10; lowering it prunes the oldest after an inline confirmation), derived-key encryption + keyId, `safetyLock` (list-time `locked`: other-sync / needs-link, drives the manager filter + locked cards), fail-closed writes, restore/delete/rekey | Keepmark safety spec (no master key: derived key is the anchor, like the undo slot) |
-| `netscape.ts` | `bookmarks.html` export only (not encrypted, manager warns first): Menu children at top level, Toolbar/Other flagged `PERSONAL_TOOLBAR_FOLDER`/`UNFILED_BOOKMARKS_FOLDER`, ADD_DATE in seconds, TAGS, DD, HR separators; `htmlFileName` = `keepmark-[slug-]YYYYMMDD-HHmmss.html` | Keepmark `NetscapeBookmarks.Write` |
+| `auto-backup.ts` | Automatic backups: settings `StoreKey.AutoBackup` `{enabled, everyDays 1/7, keep 3/7/14/30}` (default on, daily, 7), bookkeeping `StoreKey.AutoBackupState`, `autoBackupDue`, `treeFingerprint` (HMAC-SHA-256 keyed by the derived key over key id + tree; plain SHA-256 while unlinked, when the copy is plain text anyway), `runAutoBackup` (writes a `SafetyOperation` `auto` entry, or nothing when the tree is unchanged and an `auto` entry still exists) | new (no upstream equivalent) |
+| `netscape.ts` | `bookmarks.html` export only (not encrypted, manager warns first): nodes that are neither folder nor link are skipped so the file matches the reported count (0.1.62); Menu children at top level, Toolbar/Other flagged `PERSONAL_TOOLBAR_FOLDER`/`UNFILED_BOOKMARKS_FOLDER`, ADD_DATE in seconds, TAGS, DD, HR separators; `htmlFileName` = `keepmark-[slug-]YYYYMMDD-HHmmss.html` | Keepmark `NetscapeBookmarks.Write` |
 | `duplicates.ts` | URL groups, last-copy-locked deletion plan, `deleteByIds` | Keepmark `/duplicates` page |
 
 ### Platform layers (thin)
@@ -303,18 +304,15 @@ toolchain is system node). `build/` and `dist/` are gitignored.
 **Icons/assets — DONE (v0.1.12, canvas "BxRibbon"):** see section 3; PNGs
 are rendered from SVG (5D geometry from `../KeepmarkMobile` launcher icon).
 
-**Chromium narrow host permissions (not started, agreed 2026-10-11):** Chrome
-Web Store flags `host_permissions https://*/*` as "broad host permissions"
-(in-depth review, slower on every update). Plan: keep only the default
-service in `host_permissions`, move `https://*/*` to
-`optional_host_permissions`, call `chrome.permissions.request({origins})`
-from the popup/manager (user gesture) on connect and when adding a sync; test
-connect + add flows (unit + `qa:browser`). First check whether CORS alone
-already lets the MV3 worker reach the service without any host grant.
+**Chromium narrow host permissions (DROPPED by the user, 2026-11-12; do not
+propose again):** Chrome Web Store flags `host_permissions https://*/*` as
+"broad host permissions" (in-depth review, slower on every update). The idea
+was to move `https://*/*` to `optional_host_permissions` and request origins
+on connect / add; the user decided to keep the broad permission as is.
 
 **Known limitations / next features (not started):** manual browser QA
 (see README "Get it"); QR connection hardware QA;
-no auto-backup schedule; retired toolbar migration + Chromium Menu
+retired toolbar migration + Chromium Menu
 folder edge cases covered by tests but untested live.
 
 **Multi-sync — slices 1–3 DONE (merged in `master`, 0.1.36):** `SavedSyncs` registry
@@ -338,9 +336,53 @@ active row (keeps no copy: no backup is taken or kept, no `RemovedSync`,
 no notification), and a read-only popup with a modal activation dialog that
 names the sync lock password. Post-review fixes landed in 0.1.34–0.1.36
 (removed-sync copy in Backup, deliberate delete keeps nothing and prunes
-orphaned safety backups). Next slices: "Show QR" per row, then
-KeepmarkMobile (credential index + one DB per sync + Syncs page + biometry
-gate + QR add-or-activate).
+orphaned safety backups). "Show QR" per row is done (see "QR linking"). The
+slice planned after it was KeepmarkMobile (credential index + one DB per sync
++ Syncs page + biometry gate + QR add-or-activate): check that repo for its
+state.
+
+## Automatic backups (0.1.63)
+
+A periodic copy of the LOCAL bookmarks, stored as a safety entry with
+operation `auto` (same index, list, restore and delete as safety backups;
+encrypted with the active sync key, plaintext `enc:null` when unlinked).
+- Schedule: `AutoBackupAlarmName` ticks every 60 min while the feature is on;
+  `autoBackupTick` (background `core.ts`) runs when `autoBackupDue` says so,
+  on the alarm and at the end of `startup()` (catch-up after a closed
+  browser). The alarm does not depend on the sync link and survives
+  `disableSync`.
+- Skipped, and retried on the next tick, while the queue is busy, a
+  connect / credential change / disable / suspend is in flight, or a conflict
+  is pending.
+- Unchanged bookmarks write nothing: `AutoBackupState` keeps the fingerprint
+  and the file name of the last copy, and the same tree is saved again once
+  that file is deleted or pruned.
+- The tick does nothing before `startup()` finished (an alarm can wake an MV3
+  worker first); `startup()` ends with its own tick, which is also what
+  catches up when frequent worker restarts keep resetting the hourly alarm.
+- The tree is read inside `withSuspended`, with the busy check repeated there.
+- Every `SafetyIndex` read-modify-write in `safety.ts` runs under
+  `indexLocked` (write, delete, prune, prune-for-sync, rekey): the tick writes
+  outside the sync queue and must never race a safety snapshot.
+- Retention: two independent budgets in `safety.ts` `retain` — `auto` rows by
+  the `keep` of `StoreKey.AutoBackup`, every other row by `StoreKey.SafetyKeep`.
+  Neither evicts the other. `GetSafetyKeep.count` excludes `auto` rows.
+- Silent: no notification, no badge. A failed run stores the reason
+  (`AutoBackupState.error`), which `GetStatus` returns as `autoBackupError`
+  and the manager shows under the Status card (`m-auto-backup-warning`).
+- UI: Manager → Settings → "Automatic backups" (`GetAutoBackup` /
+  `SetAutoBackup`, one message with the three values; lowering `keep` below
+  the stored count asks before deleting). Turning it off deletes nothing.
+  The controls stay disabled until `GetAutoBackup` answered (guessed defaults
+  are never sent back) and while a change is in flight; the in-flight flag is
+  set before the first await, so two quick changes send one request.
+- Forget / Unlink / Delete from server prune the encrypted `auto` rows of that
+  sync with its safety rows (`pruneSafetyForSync`); both confirmations say so.
+  The Settings hint states that an unlinked browser's copy is not encrypted.
+- Copies live in `storage.local`: removing the extension removes them. A
+  file export to Downloads was considered and left out.
+- Tests: `tests/auto-backup.test.ts`, plus cases in `settings-screen` and
+  `manager-workflows`.
 
 ## QR linking
 

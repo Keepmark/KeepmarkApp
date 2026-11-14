@@ -129,6 +129,48 @@ side while offline reappear — the preview says so.
   nothing (a union destroys nothing). PUT on the remote base (revision CAS or
   timestamp; 409 honest).
 
+## Automatic backups
+
+`src/shared/auto-backup.ts` plus `autoBackupTick` in `src/background/core.ts`
+(0.1.63). A copy of the LOCAL bookmarks is written as a safety entry with
+operation `auto`, so listing, restore and delete are the safety-backup paths.
+
+- Settings `StoreKey.AutoBackup` `{enabled, everyDays, keep}`: default on,
+  daily, 7 kept; choices 1 or 7 days and 3 / 7 / 14 / 30 copies.
+- An hourly alarm (`AutoBackupAlarmName`) and the end of `startup()` call the
+  tick; `autoBackupDue` decides. A browser closed at the due time catches up
+  when it starts.
+- Nothing is written when the tree and the key are the ones of the last
+  automatic backup that still exists (`treeFingerprint`: an HMAC keyed by
+  the derived key, so the stored value reveals nothing about the bookmarks;
+  plain SHA-256 while unlinked, when the copy itself is plain text).
+- Manager settings stay disabled until `GetAutoBackup` answered and while a
+  change is saving, so a failed read or a double change never sends values
+  the user did not choose.
+- The tick is postponed to the next alarm while a sync job, a link change, a
+  suspend or a conflict is pending, and does nothing before `startup()` has
+  finished. The tree is read inside `withSuspended`.
+- All `SafetyIndex` writers in `safety.ts` share one lock (`indexLocked`), so
+  an automatic backup can never drop the row of a safety snapshot written at
+  the same moment.
+- Retention is two separate budgets (`retain` in `safety.ts`): `auto` entries
+  by their own limit, every other entry by `StoreKey.SafetyKeep`.
+- Encrypted with the active sync key; unlinked browsers get a plaintext entry
+  flagged `enc:null`, like any pre-link safety backup.
+- Silent. A failed run stores its reason and `GetStatus.autoBackupError`
+  shows it under the Status card until a run completes.
+- The copies live in `storage.local` and go away with the extension.
+
+## bookmarks.html export
+
+`src/shared/netscape.ts` writes a standard Netscape bookmarks file from
+Manager → Backup → "Bookmarks file (HTML)" (0.1.61). It is **not encrypted**:
+the manager shows the warning first and only "Export anyway" downloads
+`keepmark-[<sync>-]YYYYMMDD-HHmmss.html`. Nodes that are neither a folder nor
+a link are skipped, so the file matches the reported count (0.1.62). The
+extension does not import this format: use the browser's own import, or
+Keepmark for Android.
+
 ## Safety backups
 
 Every destructive step snapshots the destroyed side first (`src/shared/safety.ts`,

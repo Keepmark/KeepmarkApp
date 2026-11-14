@@ -92,6 +92,15 @@ password and bookmarks, exactly one is active, and switching is a click.
   two devices pushing at once can never silently overwrite each other.
 - **Encrypted backups you own.** Export a password-protected file at any time
   and restore it here or on Android.
+- **Automatic backups.** Once a day (or once a week) Keepmark keeps a copy of
+  this browser's bookmarks in the background, only when they have changed,
+  encrypted with your sync key (a browser with no sync linked keeps it
+  unencrypted, and says so). The newest 7 are kept, apart from the safety
+  backups, and restore the same way. Forgetting or unlinking a sync removes
+  the copies only its key could open. It stays silent unless a copy fails.
+- **A plain bookmarks file when you need one.** Export a standard
+  `bookmarks.html` that any browser can import. Keepmark warns first: that
+  file is not encrypted.
 
 ## Everyday comfort
 
@@ -111,7 +120,8 @@ password and bookmarks, exactly one is active, and switching is a click.
 | **Choose a service** | Eight public services with country, size limit and API version, plus the custom URLs that worked before |
 | **Sync** | Automatic sync of toolbar, menu and other bookmarks, plus "Sync now" |
 | **Safety backups** | Encrypted snapshot before destructive changes or syncs changing more than 10 items (newest 10 kept), grouped by day with sync name and added/removed counts; ordinary switches create none, deliberate server deletion keeps no copy |
-| **Backup** | Encrypted export and import in two compact actions, compatible with Keepmark for Android; the verified review is the only confirmation |
+| **Automatic backups** | A scheduled copy of this browser's bookmarks, daily or weekly, taken only when they changed; newest 3, 7, 14 or 30 kept apart from the safety backups; on, off and limits in Settings; a failed copy is reported in Status |
+| **Backup** | Encrypted export and import in two compact actions, compatible with Keepmark for Android; the verified review is the only confirmation. Plain `bookmarks.html` export for other browsers, warned as not encrypted |
 | **Duplicates** | Find links saved more than once, delete one by one or in bulk; the last copy is always kept |
 | **Syncs** | Several syncs saved side by side, one active at a time: switch from the popup or the manager, optionally behind a sync lock; rename, unlink (link it again later with its sync ID and password), delete from the server |
 | **Add a sync** | Create a new sync on another service or open one you already use, with one reviewed confirmation; the sync you were using stays saved |

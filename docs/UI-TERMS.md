@@ -27,6 +27,9 @@ Both apps use the same words for the same things. Keep this file identical in
 | Sync lock | Optional short password (a PIN is fine) asked before adding or switching syncs in the **extension**; it is not the sync's own password (Android uses the device unlock instead) | master password, sync password, switch password, sync-change password |
 | Backup | Encrypted file export/import (button: Export encrypted backup, Choose backup file…, Check backup, Replace with this backup…) | |
 | Safety backups | Snapshots before supported destructive actions or ordinary sync changes affecting more than 10 items (newest N kept, N set in Settings, default 10); no snapshot for ordinary linked-to-linked activation or deliberate browser server deletion | snapshot |
+| Automatic backups | Extension only: scheduled copies of this browser's bookmarks (daily or weekly, newest N kept, N set in Settings, default 7), listed with the safety backups as `Automatic backup` | scheduled backup, auto-backup, periodic snapshot |
+| Bookmarks file (HTML) | Plain `bookmarks.html` for other browsers; never encrypted, warned before export (button: `Export HTML…`, then `Export anyway`). Android also imports one, additively | Netscape file, HTML backup |
+| Tags | Android: labels on a bookmark; tags that differ only by case are one tag. A tag can be renamed, merged into another or deleted | labels, categories |
 | Copy of the removed sync | The local copy kept when a sync disappeared from the service; Android keeps it encrypted and restorable in Backup → Copies of removed syncs, the extension downloads it as a plain JSON file or dismisses it | orphan copy, orphan backup |
 | Duplicates / Duplicate bookmarks | Same URL saved more than once; one copy of each URL always stays | address, link |
 
@@ -49,7 +52,7 @@ Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
 Safety backup origins: `Downloaded server copy — Connect`, `Uploaded local bookmarks — Connect`,
 `Merged both sides — Connect`, `Created empty sync — Connect`, `Downloaded server copy — Sync switch`,
 `Imported encrypted backup`, `Changed sync password — Sync` (extension) / `Changed sync password — Syncs` (Android), `Deleted duplicates`,
-`Before safety-backup restore`, `Conflict resolved: …`, … (see code tables).
+`Before safety-backup restore`, `Conflict resolved: …`, `Automatic backup` (extension), … (see code tables).
 
 Automatic sync is the only mobile setting; `Sync now` means an explicit attempt,
 not a separate Manual mode. Browser sync includes Menu, Other and Toolbar without
@@ -92,6 +95,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Sync lock | blocco sync | verrou des syncs | bloqueo de sync | Sync-Sperre |
 | Backup | Backup | Sauvegarde | Copia de seguridad | Sicherung |
 | Safety backups | Backup di sicurezza | Sauvegardes de sécurité | Copias de seguridad preventivas | Sicherheitskopien |
+| Automatic backups | Backup automatici | Sauvegardes automatiques | Copias automáticas | Automatische Sicherungen |
 | Copy of the removed sync | Copia del sync rimosso | Copie du sync supprimé | Copia del sync eliminado | Kopie des entfernten Syncs |
 | Export / Restore | Esporta / Ripristina | Exporter / Restaurer | Exportar / Restaurar | Exportieren / Wiederherstellen |
 | Undo | Annulla modifica | Annuler la modification | Deshacer | Rückgängig |
@@ -139,6 +143,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Sync lock | blocarea sincronizării |
 | Backup | Copie de rezervă |
 | Safety backups | Copii de siguranță |
+| Automatic backups | Copii automate |
 | Copy of the removed sync | Copia sincronizării eliminate |
 | Export / Restore | Exportă / Restaurează |
 | Undo | Anulează |
@@ -185,6 +190,7 @@ Never translate: Keepmark, xBrowserSync, API, URL, PIN, file names.
 | Sync lock | 同期ロック | bloqueio de sync | блокировка синхронизации | 同步锁 |
 | Backup | バックアップ | Backup | Резервная копия | 备份 |
 | Safety backups | 安全バックアップ | Backups de segurança | Страховочные копии | 安全备份 |
+| Automatic backups | 自動バックアップ | Backups automáticos | Автоматические копии | 自动备份 |
 | Copy of the removed sync | 削除された同期のコピー | Cópia do sync removido | Копия удалённого sync | 已删除同步的副本 |
 | Undo | 元に戻す | Desfazer | Отменить | 撤销 |
 | Duplicates | 重複 | Duplicados | Дубликаты | 重复项 |
