@@ -187,6 +187,23 @@ it('one-time share: waits for the options, sends duration + code, shows code and
   expect(el('share-revoked').textContent).toBe(t('share.revoked'));
 });
 
+it('one-time share: a voucher that lands after the dialog lost focus is revoked, never shown', async () => {
+  lockSet.mockResolvedValue(false);
+  const result = { format: 2 as const, link: onceLink, expiresAt: new Date(Date.now() + 600_000).toISOString(), handoffId: 'h', serviceUrl: payload.serviceUrl, syncId: payload.id };
+  let resolve!: (value: typeof result) => void;
+  const createLink = vi.fn(() => new Promise<typeof result>((r) => { resolve = r; }));
+  const revoke = vi.fn(async () => true);
+  controller = onceController(createLink, revoke);
+  controller.updateStatus({ syncEnabled: true, serviceUrl: payload.serviceUrl, syncId: payload.id, queueLength: 0, syncing: false });
+  openShare(); await settle();
+  submit(''); await settle();
+  focus = false;
+  resolve(result); await settle();
+  focus = true;
+  expect(revoke).toHaveBeenCalledWith(result);
+  expect(el('share-link-text')).toBeNull();
+});
+
 it('one-time share: a service without vouchers falls back to the lasting link with a notice', async () => {
   lockSet.mockResolvedValue(false);
   const createLink = vi.fn(async () => ({ format: 1 as const, link: vector }));

@@ -404,6 +404,9 @@ export class ConnectQrController {
         password = undefined;
         const result = await pendingLink;
         if (!this.valid(generation)) {
+          // Nobody saw this voucher: revoke it rather than leave a live link
+          // no one can cancel (best effort; it expires anyway).
+          if (result.format === 2) void this.deps.revoke(result).catch(() => false);
           if (generation === this.generation) this.close();
           return;
         }

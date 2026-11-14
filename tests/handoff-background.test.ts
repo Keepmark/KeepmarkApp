@@ -4,7 +4,7 @@ import type { NativeAdapter } from '../src/background/adapter';
 import type { XSyncApiClient } from '../src/shared/api';
 import { deriveKey, encryptData } from '../src/shared/crypto';
 import {
-  HandoffAuthFailedException, InvalidCredentialsException, ServiceOfflineException, UnexpectedResponseException,
+  HandoffAuthFailedException, HandoffUnavailableException, InvalidCredentialsException, ServiceOfflineException, UnexpectedResponseException,
 } from '../src/shared/errors';
 import { createHandoff, parseHandoffLink, redeemRequest } from '../src/shared/handoff';
 import { t } from '../src/shared/i18n';
@@ -101,6 +101,15 @@ describe('one-time shared links in the background', () => {
     expect(made.format).toBe(1);
     expect(parseShareLink(made.link)).toEqual({ serviceUrl, id, key: ctx.derived });
     expect(ctx.api.createHandoff).not.toHaveBeenCalled();
+  });
+
+  it('never swaps chosen one-time options for a lasting link when the probe fails at create time', async () => {
+    for (const opts of [{ handoff: false }, { probeFails: true }]) {
+      const ctx = await setup(opts);
+      await expect(ctx.core.handleMessage({ command: MessageCommand.CreateShareLink, ttlSeconds: 600, withCode: false })).rejects.toThrow(HandoffUnavailableException);
+      await expect(ctx.core.handleMessage({ command: MessageCommand.CreateShareLink, withCode: true })).rejects.toThrow(HandoffUnavailableException);
+      expect(ctx.api.createHandoff).not.toHaveBeenCalled();
+    }
   });
 
   it('revokes a voucher of a saved sync and reports one already gone', async () => {

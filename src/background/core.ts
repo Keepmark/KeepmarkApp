@@ -39,6 +39,7 @@ import { compareVersions, DefaultServiceUrl, MaxSilentSyncChanges, MinApiVersion
 import {
   DataOutOfSyncException,
   HandoffAuthFailedException,
+  HandoffUnavailableException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   ServiceOfflineException,
@@ -1738,6 +1739,10 @@ export class BackgroundCore {
     const prepared = await this.prepareConnectQr(switchPassword, target);
     const mode = await this.shareLinkMode({ serviceUrl: prepared.serviceUrl, syncId: prepared.id });
     if (!mode.oneTime) {
+      // The user chose one-time options (dialog probed the capability): a
+      // failed or changed probe now must not hand out a lasting credential
+      // instead. Reopening the dialog offers the v1 link with its notice.
+      if (ttlSeconds !== undefined || withCode) throw new HandoffUnavailableException(t('handoff.unavailable'));
       return { format: 1, link: buildShareLink({ serviceUrl: prepared.serviceUrl, id: prepared.id, key: prepared.key }) };
     }
     const max = mode.maxTtlSeconds ?? 600;
