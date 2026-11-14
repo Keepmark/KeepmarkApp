@@ -7,6 +7,10 @@ import type { LangSetting } from './i18n.js';
 import {
   DailyNewSyncLimitException,
   DataOutOfSyncException,
+  HandoffAuthFailedException,
+  HandoffLimitException,
+  HandoffNotFoundException,
+  HandoffUnavailableException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,
@@ -32,6 +36,10 @@ export enum MessageCommand {
   GetServices = 'get-services',
   ProbeService = 'probe-service',
   PrepareConnectQr = 'prepare-connect-qr',
+  GetShareLinkMode = 'get-share-link-mode',
+  CreateShareLink = 'create-share-link',
+  RevokeShareLink = 'revoke-share-link',
+  RedeemShareLink = 'redeem-share-link',
   SyncBookmarks = 'sync-bookmarks',
   RestoreBookmarks = 'restore-bookmarks',
   ConnectNew = 'connect-new',
@@ -279,6 +287,38 @@ export interface DuplicateGroup {
 
 export type { ConnectQrPayload } from './connect-qr.js';
 
+/** What "Share sync" can offer for one sync's service. */
+export interface ShareLinkMode {
+  /** True when the service keeps one-time links (format 2). */
+  oneTime: boolean;
+  /** Longest one-time link the service accepts, in seconds. */
+  maxTtlSeconds?: number;
+}
+
+/** A link ready to hand over: format 1 (lasting) or 2 (one-time voucher). */
+export type ShareLinkResult =
+  | { format: 1; link: string }
+  | {
+      format: 2;
+      link: string;
+      /** Six digits to pass on apart from the link; absent without a code. */
+      code?: string;
+      /** ISO time the voucher stops working. */
+      expiresAt: string;
+      /** Needed to revoke it while the dialog is open. */
+      handoffId: string;
+      serviceUrl: string;
+      syncId: string;
+    };
+
+/** A redeemed one-time link: the same material a format-1 link carries. */
+export interface RedeemedShareLink {
+  serviceUrl: string;
+  id: string;
+  key: string;
+  label?: string;
+}
+
 /** Multi-sync list + which row is the active link (absent = unlinked). */
 export interface SavedSyncsResponse {
   syncs: SavedSync[];
@@ -314,6 +354,13 @@ export type MessagePayload =
   | { command: MessageCommand.ProbeService; serviceUrl: string }
   /** `switchPassword` only when a sync lock is set (it gates the code). */
   | { command: MessageCommand.PrepareConnectQr; switchPassword?: string; target?: ConnectQrTarget }
+  | { command: MessageCommand.GetShareLinkMode; target?: ConnectQrTarget }
+  /** Manager only. `ttlSeconds`/`withCode` apply to a one-time link. */
+  | { command: MessageCommand.CreateShareLink; switchPassword?: string; target?: ConnectQrTarget; ttlSeconds?: number; withCode?: boolean }
+  /** Manager only: a voucher this browser just made, of one saved sync. */
+  | { command: MessageCommand.RevokeShareLink; serviceUrl: string; syncId: string; handoffId: string }
+  /** Uses a format-2 link up (single use) and returns its key. */
+  | { command: MessageCommand.RedeemShareLink; link: string; code?: string }
   | { command: MessageCommand.SyncBookmarks; sync: SyncRequest }
   | { command: MessageCommand.RestoreBookmarks; bookmarks: BookmarkNode[] }
   | {
@@ -412,6 +459,10 @@ export type MessageResponse =
 const registry: Record<string, new (message: string) => Error> = {
   DataOutOfSyncException,
   DailyNewSyncLimitException,
+  HandoffAuthFailedException,
+  HandoffLimitException,
+  HandoffNotFoundException,
+  HandoffUnavailableException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   InvalidServiceException,

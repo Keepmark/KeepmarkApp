@@ -13,6 +13,10 @@
 import { ApiVersion, ApiVersion12, DefaultHttpTimeoutMs, SyncClientVersion } from './constants.js';
 import {
   errorForStatus,
+  HandoffAuthFailedException,
+  HandoffLimitException,
+  HandoffNotFoundException,
+  HandoffUnavailableException,
   ServiceOfflineException,
   UnexpectedResponseException,
   UnsupportedVersionException,
@@ -353,6 +357,86 @@ export class XSyncApiClient {
       const dto = ((await res.json().catch(() => ({}))) ?? {}) as T;
       if (!dto || !valid(dto)) throw new UnexpectedResponseException(tr('ErrUnexpectedResponse'));
       return dto;
+    } catch (err) {
+      if (err instanceof XbsException) throw err;
+      throw this.toOffline(label, err);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** v1.2 one-time link: stores the client's ciphertext under `handoffId`. */
+  async createHandoff(
+    syncId: string,
+    body: { handoffId: string; payload: string; ttlSeconds?: number; authHash?: string },
+  ): Promise<{ expiresAt: string; codeRequired: boolean }> {
+    const res = await this.handoffRequest('POST', `bookmarks/${syncId}/handoffs`, sanitizePath('POST bookmarks/{id}/handoffs', syncId), body);
+    const dto = res.body as { expiresAt?: unknown; codeRequired?: unknown };
+    if (typeof dto?.expiresAt !== 'string' || typeof dto.codeRequired !== 'boolean') {
+      throw new UnexpectedResponseException(tr('ErrUnexpectedResponse'));
+    }
+    return { expiresAt: dto.expiresAt, codeRequired: dto.codeRequired };
+  }
+
+  /**
+   * v1.2 one-time link redeem. A 200 consumes the voucher: never retried.
+   * 403 → HandoffAuthFailedException (`attemptsLeft` from the header),
+   * 404 → HandoffNotFoundException or, when the service has no handoffs,
+   * HandoffUnavailableException.
+   */
+  async redeemHandoff(handoffId: string, auth?: string): Promise<string> {
+    const res = await this.handoffRequest('POST', `handoffs/${handoffId}/redeem`, 'POST handoffs/{handoff}/redeem', auth ? { auth } : {});
+    const payload = (res.body as { payload?: unknown })?.payload;
+    if (typeof payload !== 'string' || !payload) throw new UnexpectedResponseException(tr('ErrUnexpectedResponse'));
+    return payload;
+  }
+
+  /** v1.2 revoke one voucher of this sync; false when it was no longer live. */
+  async revokeHandoff(syncId: string, handoffId: string): Promise<boolean> {
+    try {
+      await this.handoffRequest('DELETE', `bookmarks/${syncId}/handoffs/${handoffId}`, sanitizePath('DELETE bookmarks/{id}/handoffs/{handoff}', syncId));
+      return true;
+    } catch (err) {
+      if (err instanceof HandoffNotFoundException) return false;
+      throw err;
+    }
+  }
+
+  /** Handoff routes: their own log label (the voucher ID is a secret too),
+   *  their own error codes, exactly one attempt. */
+  private async handoffRequest(method: string, path: string, label: string, body?: unknown): Promise<{ body: unknown }> {
+    const started = Date.now();
+    this.log.log(XbsLogLevel.Info, 'net', `→ START ${label}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchFn(this.baseUrl + path, {
+        method,
+        headers: {
+          'Accept-Version': ApiVersion12,
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal,
+      });
+      this.log.log(XbsLogLevel.Info, 'net', `← END ${label} ${res.status} in ${Date.now() - started}ms`);
+      if (res.ok) return { body: await res.json().catch(() => ({})) };
+      const data = (await res.json().catch(() => ({}))) as { code?: unknown; message?: unknown };
+      const code = typeof data?.code === 'string' ? data.code : '';
+      if (res.status === 403 && code === 'HandoffAuthFailedException') {
+        const left = Number.parseInt(res.headers.get('X-Handoff-Attempts-Left') ?? '', 10);
+        const attemptsLeft = Number.isInteger(left) && left >= 0 ? left : 0;
+        if (attemptsLeft === 0) throw new HandoffNotFoundException(t('handoff.notFound'));
+        throw new HandoffAuthFailedException(t('handoff.wrongCode', { left: attemptsLeft }));
+      }
+      if (res.status === 404) {
+        throw code === 'HandoffNotFoundException'
+          ? new HandoffNotFoundException(t('handoff.notFound'))
+          : new HandoffUnavailableException(t('handoff.unavailable'));
+      }
+      if (res.status === 406 && code === 'HandoffLimitExceededException') throw new HandoffLimitException(t('handoff.limit'));
+      if (res.status === 412) throw new HandoffUnavailableException(t('handoff.unavailable'));
+      throw errorForStatus(res.status, typeof data?.message === 'string' ? data.message : '', tr);
     } catch (err) {
       if (err instanceof XbsException) throw err;
       throw this.toOffline(label, err);

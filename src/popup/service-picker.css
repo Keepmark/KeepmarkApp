@@ -20,3 +20,11 @@
 .service-picker-feedback small { display: block; margin-top: 5px; color: var(--muted); white-space: pre-wrap; }
 .service-picker-error { color: var(--danger); }
 .service-picker .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* One-time shared link (ShareLinkField): offered before it is redeemed. */
+.share-once { margin: .4rem 0; }
+.share-once .notice { margin: 0 0 .4rem; }
+.share-once-entry { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; }
+.share-once-entry label { display: flex; flex-direction: column; gap: .2rem; }
+.share-once-entry label[hidden] { display: none; }
+.share-code-input { width: 8ch; letter-spacing: .15em; text-align: center; }

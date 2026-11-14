@@ -61,7 +61,9 @@ async function main(): Promise<void> {
       theme.set(msg.dark);
       return undefined;
     }
-    if ((msg as MessagePayload)?.command === MessageCommand.PrepareConnectQr && !isConnectQrSender(sender, browser.runtime.id, browser.runtime.getURL('manager.html'))) {
+    const command = (msg as MessagePayload)?.command;
+    const managerOnly = command === MessageCommand.PrepareConnectQr || command === MessageCommand.CreateShareLink || command === MessageCommand.RevokeShareLink;
+    if (managerOnly && !isConnectQrSender(sender, browser.runtime.id, browser.runtime.getURL('manager.html'))) {
       return Promise.resolve({ ok: false as const, ...toWireError(new Error('Unauthorized QR request')) });
     }
     return core

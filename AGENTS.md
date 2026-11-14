@@ -457,6 +457,38 @@ around the link is ignored.
   `background-core.test.ts`. Workflow text: `docs/WORKFLOWS.md` "Shared sync
   link (both apps)" (identical in KeepmarkMobile).
 
+## One-time shared link (format 2, 0.1.66)
+
+`shared/handoff.ts` is the voucher client of KeepmarkApi `capabilities.handoff`
+(`keepmark://sync?v=2&s=…&t=<32-byte secret>[&c=1]`): HKDF-SHA256 (empty
+salt) → `handoffId`, `encKey`, `auth` (with code: ikm = secret ‖ code);
+payload `b64url(nonce12 ‖ AES-256-GCM)` with AAD
+`keepmark-handoff-v1|<handoffId>|<service>` holding `{v:1,s,id,k,l?}`.
+`tests/handoff.test.ts` pins the server reference vector byte for byte
+(identical in Android `SyncHandoffTests`); never change one side alone.
+
+- Background owns every voucher call (`api.ts` `createHandoff` /
+  `redeemHandoff` / `revokeHandoff`, one attempt, redacted log labels,
+  `Handoff*Exception` mapping: 403 + `X-Handoff-Attempts-Left`, 0 left =
+  not found; 404 without the handoff code = unavailable). Commands
+  `GetShareLinkMode`, `CreateShareLink` (manager-only; same gate + key check
+  as `PrepareConnectQr`, then a voucher or the v1 fallback),
+  `RevokeShareLink` (manager-only, saved rows only), `RedeemShareLink`
+  (returns `{serviceUrl,id,key,label?}`, links nothing). The key reaches a
+  page only inside a v1 link or after a redeem.
+- Manager share dialog (`manager/connect-qr.ts`): with `oneTime` it waits for
+  the options (`#share-ttl` 10 min / 1 h ≤ `maxTtlSeconds`, `#share-code` off by
+  default), then shows link + `#share-code-value` + `#share-valid-until` +
+  `#share-revoke`. Closing does not revoke. Fallback adds `#share-mode-note`.
+- Receiver (`popup/share-link-field.ts`): a v2 paste is only offered
+  (`<prefix>-share-once`: service, code field when `c=1`, `Open link`); the
+  redeem runs on click. Wrong code keeps it, offline keeps it, anything else
+  drops it. `label(url,id)` proposes the sender's name (popup
+  `updateConnectName`, manager `suggestLinkName`) unless taken.
+- Tests: `handoff.test.ts`, `handoff-background.test.ts`,
+  `api-handoff.test.ts`, v2 cases in `share-link-ui.test.ts`. Workflow:
+  `docs/WORKFLOWS.md` "One-time link" (identical in KeepmarkMobile).
+
 ## Service picker
 
 Use `popup/service-picker.ts` for every editable service URL (popup connect and

@@ -169,7 +169,10 @@ async function refreshSavedSyncs(): Promise<void> {
 function updateConnectName(): void {
   if (connectNameTouched) return;
   const url = connectService?.url;
-  input('sync-name').value = url ? suggestSavedSyncName(url, savedNames) : '';
+  // A one-time link carries the sender's name: propose it unless it is taken.
+  const label = url ? connectLink?.label(url, input('sync-id').value) : undefined;
+  const taken = !!label && savedNames.some((row) => savedSyncName(row).trim().toLocaleLowerCase() === label.toLocaleLowerCase());
+  input('sync-name').value = label && !taken ? label : url ? suggestSavedSyncName(url, savedNames) : '';
 }
 
 /** Server-removed sync: the popup only states the fact. The kept copy and its
@@ -204,7 +207,7 @@ async function initConnect(): Promise<void> {
     prefix: 'conn',
     picker: () => connectService,
     syncId: input('sync-id'),
-    onChange: () => { cancelConfirm('btn-connect'); updateKeyed(); },
+    onChange: () => { cancelConfirm('btn-connect'); updateKeyed(); updateConnectName(); },
   });
   $('conn-existing-only').prepend(connectLink.root);
   const updateMode = (): void => {

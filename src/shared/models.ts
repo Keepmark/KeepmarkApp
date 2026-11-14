@@ -52,6 +52,22 @@ export interface ApiCapabilities {
   delete?: boolean;
   /** Days an unused sync is kept before the server deletes it; 0 = forever. */
   syncExpiryDays?: number;
+  /** One-time links (KeepmarkApi v1.2 handoff vouchers); absent = not offered. */
+  handoff?: HandoffCapability;
+}
+
+export interface HandoffCapability {
+  defaultTtlSeconds?: number;
+  maxTtlSeconds?: number;
+  maxActivePerSync?: number;
+  maxAttempts?: number;
+  maxPayloadBytes?: number;
+}
+
+/** True when the service advertises usable one-time links (never trust a wire value). */
+export function supportsHandoff(capabilities: ApiCapabilities | undefined): boolean {
+  const h = capabilities?.handoff;
+  return !!h && typeof h === 'object' && Number.isInteger(h.maxTtlSeconds) && (h.maxTtlSeconds as number) >= 60;
 }
 
 /** True when the service speaks the v1.2 extended contract. */

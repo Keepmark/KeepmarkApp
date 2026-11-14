@@ -57,6 +57,20 @@ export class InvalidSwitchPasswordException extends XbsException {}
 /** Response shape is not what the API contract promises. */
 export class UnexpectedResponseException extends XbsException {}
 
+/** One-time link (handoff voucher) used, expired, revoked, locked or never
+ *  there: the service answers one uniform 404 for all of them. */
+export class HandoffNotFoundException extends XbsException {}
+
+/** Wrong (or missing) code for a code-protected one-time link; the message
+ *  says how many attempts are left. */
+export class HandoffAuthFailedException extends XbsException {}
+
+/** The service has no one-time links (legacy contract or turned off). */
+export class HandoffUnavailableException extends XbsException {}
+
+/** Too many one-time links of this sync are still waiting to be used. */
+export class HandoffLimitException extends XbsException {}
+
 /** Signal: a sync conflict (409) was captured for user resolution. Not an error —
  *  stops the queue so the UI can present choices. */
 export class ConflictCapturedException extends XbsException {

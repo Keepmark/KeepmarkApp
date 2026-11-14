@@ -77,6 +77,8 @@ import {
   type SavedSyncsResponse,
   type StatusResponse,
   type AutoBackupResponse,
+  type ShareLinkMode,
+  type ShareLinkResult,
   type SwitchLockState,
   type SyncTargetPreview,
   // Conflict resolution types
@@ -1833,7 +1835,7 @@ function initMoveSection(): void {
     prefix: 'm-link',
     picker: () => linkService,
     syncId: input('m-link-id'),
-    onChange: () => updateLinkForm(),
+    onChange: () => { updateLinkForm(); suggestLinkName(); },
   });
   $('m-link-id-row').before(linkShare.root);
   document.querySelectorAll('input[name="m-link-mode"]').forEach((el) => {
@@ -2388,7 +2390,9 @@ function linkLabelTaken(label: string): boolean {
 function suggestLinkName(): void {
   if (nameTouched) return;
   const url = input('m-link-url').value.trim();
-  input('m-link-name').value = url ? suggestSavedSyncName(url, syncsView.syncs) : '';
+  // A one-time link carries the sender's name: propose it unless it is taken.
+  const label = url ? linkShare?.label(linkService.url, input('m-link-id').value) : undefined;
+  input('m-link-name').value = label && !linkLabelTaken(label) ? label : url ? suggestSavedSyncName(url, syncsView.syncs) : '';
   updateLinkNameHint();
 }
 
@@ -2926,7 +2930,19 @@ async function init(): Promise<void> {
       ...(switchPassword !== undefined ? { switchPassword } : {}),
       ...(target ? { target } : {}),
     }),
-    { lockSet: async () => (await send<SwitchLockState | null>({ command: MessageCommand.GetSwitchLock }))?.set !== false },
+    {
+      lockSet: async () => (await send<SwitchLockState | null>({ command: MessageCommand.GetSwitchLock }))?.set !== false,
+      shareMode: (target) => send<ShareLinkMode>({ command: MessageCommand.GetShareLinkMode, ...(target ? { target } : {}) }),
+      createLink: (switchPassword, target, options) => send<ShareLinkResult>({
+        command: MessageCommand.CreateShareLink,
+        ...(switchPassword !== undefined ? { switchPassword } : {}),
+        ...(target ? { target } : {}),
+        ...options,
+      }),
+      revoke: async (link) => (await send<{ revoked: boolean }>({
+        command: MessageCommand.RevokeShareLink, serviceUrl: link.serviceUrl, syncId: link.syncId, handoffId: link.handoffId,
+      })).revoked,
+    },
     $('qr-dialog-host'),
   );
   initSidebar();

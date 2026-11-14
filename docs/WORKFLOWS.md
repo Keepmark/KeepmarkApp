@@ -401,6 +401,40 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
 - A device linked from a link (or a QR) never knew the password, so it cannot
   run `Change password` (which asks the current one).
 
+### One-time link (format 2, services with `capabilities.handoff`)
+
+```
+keepmark://sync?v=2&s=<service URL, percent-encoded>&t=<32-byte secret, base64url>[&c=1]
+```
+
+- When the sync's service advertises `capabilities.handoff` (KeepmarkApi
+  v1.2), **Share** makes a one-time link instead of the lasting one. The link
+  carries a random secret, never the key: the key travels encrypted inside a
+  voucher the service keeps and cannot read (HKDF-SHA256 + AES-256-GCM,
+  protocol in KeepmarkApi `docs/DEVELOPMENT.md`). The voucher opens once and
+  expires.
+- Before the link is made the sender chooses how long it stays valid
+  (10 minutes, the default, or 1 hour, capped by the service's
+  `maxTtlSeconds`) and whether it needs a **6-digit code** (off by default).
+  The code is shown next to the link and must be told by another channel
+  (voice, a different app): link and code together open the voucher. The
+  service counts wrong codes and deletes the voucher after `maxAttempts`.
+- The share view shows the link, the code (when chosen), the time it stays
+  valid and **Revoke link**, which deletes the voucher at once ("already used
+  or expired" when it was gone). Closing the view does not revoke it.
+- The sender's sync name travels inside the voucher and is proposed as the
+  name on the receiving device, unless that name is already taken there.
+- **Import**: a one-time link is not opened when pasted or tapped. The
+  receiver first sees which service it belongs to and, when the link needs
+  one, a code field; only **Open link** redeems it, which uses it up (also
+  when the next steps are cancelled). A wrong code keeps the link and says
+  how many attempts remain; an expired, used or revoked link says so and asks
+  for a new one. The key it returns then follows the normal verification,
+  direction choice, merge preview and safety backups, like a format-1 link.
+- A service without vouchers (any xBrowserSync API, KeepmarkApi before
+  handoffs) still gets the lasting format-1 link, with a notice that it
+  cannot be withdrawn except by changing the sync password.
+
 ## Android: organize multiple items
 
 Hold a bookmark/folder, or choose Select from its action menu. Tap more rows or All;

@@ -1,12 +1,12 @@
 import { renderConnectQr } from './render-connect-qr.js';
-import { InvalidCredentialsException, InvalidSwitchPasswordException } from '../shared/errors.js';
+import { HandoffLimitException, HandoffUnavailableException, InvalidCredentialsException, InvalidSwitchPasswordException } from '../shared/errors.js';
 import {
   serializeConnectQrPayload,
   type ConnectQrPayload,
   type ConnectQrTarget,
 } from '../shared/connect-qr.js';
 import { buildShareLink } from '../shared/share-link.js';
-import type { StatusResponse } from '../shared/messages.js';
+import type { ShareLinkMode, ShareLinkResult, StatusResponse } from '../shared/messages.js';
 import { t } from '../shared/i18n.js';
 
 interface QrDependencies {
@@ -19,6 +19,12 @@ interface QrDependencies {
   focused(): boolean;
   /** Clipboard write for the shared link (rejects when denied). */
   copy(text: string): Promise<void>;
+  /** Whether the sync's service keeps one-time links (asked on open). */
+  shareMode(target?: ConnectQrTarget): Promise<ShareLinkMode>;
+  /** Share sync: a one-time voucher where the service has them, else format 1. */
+  createLink(switchPassword: string | undefined, target: ConnectQrTarget | undefined, options: { ttlSeconds?: number; withCode?: boolean }): Promise<ShareLinkResult>;
+  /** Revokes a voucher shown in this dialog; false when it was already gone. */
+  revoke(link: Extract<ShareLinkResult, { format: 2 }>): Promise<boolean>;
 }
 
 /** What the dialog hands out: the 60-second QR for the owner's phone, or
@@ -48,6 +54,11 @@ export class ConnectQrController {
   /** Set while the lock state is being read: no submit can run meanwhile. */
   private lockPending = false;
   private canvas: HTMLCanvasElement | undefined;
+  /** Link kind only: the service keeps one-time links (options shown, no auto-create). */
+  private oneTime = false;
+  private readonly options = document.createElement('fieldset');
+  private readonly ttl = document.createElement('select');
+  private readonly withCode = document.createElement('input');
   private readonly deps: QrDependencies;
   private readonly input: HTMLInputElement;
   private readonly label: HTMLLabelElement;
@@ -78,6 +89,12 @@ export class ConnectQrController {
       now: () => performance.now(),
       focused: () => document.visibilityState === 'visible' && document.hasFocus(),
       copy: (text) => navigator.clipboard.writeText(text),
+      shareMode: () => Promise.resolve({ oneTime: false }),
+      createLink: async (switchPassword, target) => {
+        const payload = await prepare(switchPassword, target);
+        return { format: 1, link: buildShareLink({ serviceUrl: payload.serviceUrl, id: payload.id, key: payload.key }) };
+      },
+      revoke: () => Promise.resolve(false),
       ...overrides,
     };
     this.input = host.querySelector('#qr-password')!;
@@ -92,6 +109,7 @@ export class ConnectQrController {
     this.generate = host.querySelector('#qr-generate')!;
     this.closeButton = host.querySelector('#qr-close')!;
     this.open = root.querySelector('#qr-open')!;
+    this.buildOptions();
     this.input.addEventListener('input', () => {
       this.error.hidden = true;
       this.error.textContent = '';
@@ -125,6 +143,61 @@ export class ConnectQrController {
     window.addEventListener('pagehide', () => this.close());
     window.addEventListener('pageshow', () => this.close());
     this.close();
+  }
+
+  /** One-time link options (validity, optional code), inside the form so the
+   *  sync lock password and the choices are submitted together. */
+  private buildOptions(): void {
+    this.options.id = 'share-options';
+    this.options.className = 'share-options';
+    this.options.hidden = true;
+    const ttlLabel = document.createElement('label');
+    ttlLabel.htmlFor = 'share-ttl';
+    ttlLabel.id = 'share-ttl-label';
+    this.ttl.id = 'share-ttl';
+    const codeRow = document.createElement('label');
+    codeRow.className = 'check';
+    this.withCode.type = 'checkbox';
+    this.withCode.id = 'share-code';
+    const codeText = document.createElement('span');
+    codeText.id = 'share-code-label';
+    codeRow.append(this.withCode, codeText);
+    const hint = document.createElement('small');
+    hint.className = 'hint';
+    hint.id = 'share-code-hint';
+    this.withCode.setAttribute('aria-describedby', hint.id);
+    const ttlRow = document.createElement('div');
+    ttlRow.className = 'share-ttl-row';
+    ttlRow.append(ttlLabel, this.ttl);
+    this.options.append(ttlRow, codeRow, hint);
+    this.entry.before(this.options);
+  }
+
+  /** Fills and shows the options for a service that keeps one-time links. */
+  private applyShareMode(mode: ShareLinkMode | undefined): void {
+    this.oneTime = this.kind === 'link' && !!mode?.oneTime;
+    this.options.hidden = !this.oneTime;
+    if (!this.oneTime) return;
+    const max = mode?.maxTtlSeconds ?? 600;
+    const choices: [number, Parameters<typeof t>[0]][] = [[600, 'share.ttl10'], [3600, 'share.ttl60']];
+    this.ttl.replaceChildren(...choices.filter(([seconds]) => seconds <= max).map(([seconds, key]) => {
+      const option = document.createElement('option');
+      option.value = String(seconds);
+      option.textContent = t(key);
+      return option;
+    }));
+    if (!this.ttl.options.length) {
+      const option = document.createElement('option');
+      option.value = String(max);
+      option.textContent = t('qr.countdown', { seconds: max });
+      this.ttl.append(option);
+    }
+    this.ttl.value = this.ttl.options[0]!.value;
+    this.withCode.checked = false;
+    this.options.querySelector('#share-ttl-label')!.textContent = t('share.ttlLabel');
+    this.options.querySelector('#share-code-label')!.textContent = t('share.codeLabel');
+    this.options.querySelector('#share-code-hint')!.textContent = t('share.codeHint');
+    this.applyKind();
   }
 
   updateStatus(status?: StatusResponse): void {
@@ -194,14 +267,21 @@ export class ConnectQrController {
     this.generate.disabled = true;
     this.setBusy(true);
     this.lockPending = true;
-    void this.deps.lockSet().catch(() => true).then((set) => {
+    const mode = this.kind === 'link'
+      ? this.deps.shareMode(target).catch((): ShareLinkMode => ({ oneTime: false }))
+      : Promise.resolve(undefined);
+    void Promise.all([this.deps.lockSet().catch(() => true), mode]).then(([set, shareMode]) => {
       if (generation !== this.generation || this.panel.hidden) return;
       this.lockPending = false;
+      this.applyShareMode(shareMode);
       this.setBusy(false);
       this.generate.disabled = false;
       this.needsPassword = set;
       this.showPassword(set);
       if (set) this.input.focus();
+      // One-time links wait for the user's choices; the lasting link and the
+      // QR need none.
+      else if (this.oneTime) this.generate.focus();
       else void this.verify();
     });
   }
@@ -214,8 +294,8 @@ export class ConnectQrController {
       if (el) el.textContent = t(key);
     };
     text('qr-dialog-title', link ? 'share.title' : 'qr.title');
-    text('qr-instructions', link ? 'share.intro' : 'qr.scan');
-    text('qr-security-note', link ? 'share.warning' : 'qr.explanation');
+    text('qr-instructions', link ? (this.oneTime ? 'share.introOnce' : 'share.intro') : 'qr.scan');
+    text('qr-security-note', link ? (this.oneTime ? 'share.warningOnce' : 'share.warning') : 'qr.explanation');
     this.panel.classList.toggle('share-link', link);
     this.setBusy(this.busy);
   }
@@ -252,6 +332,8 @@ export class ConnectQrController {
     this.target = undefined;
     this.trigger = undefined;
     this.kind = 'qr';
+    this.oneTime = false;
+    this.options.hidden = true;
     this.showPassword(true);
     this.lockPending = false;
     this.open.disabled = !this.canPrepare();
@@ -275,9 +357,11 @@ export class ConnectQrController {
 
   private setBusy(busy: boolean): void {
     this.input.disabled = busy;
+    this.ttl.disabled = busy;
+    this.withCode.disabled = busy;
     this.generate.setAttribute('aria-busy', String(busy));
     const label = this.generate.querySelector('#qr-generate-label');
-    if (label) label.textContent = t(busy ? 'busy.checking' : this.kind === 'link' ? 'share.generate' : 'qr.generate');
+    if (label) label.textContent = t(busy ? 'busy.checking' : this.kind === 'link' ? (this.oneTime ? 'share.createOnce' : 'share.generate') : 'qr.generate');
   }
 
   private announce(message: string): void {
@@ -314,17 +398,29 @@ export class ConnectQrController {
     let json = '';
     let canvas: HTMLCanvasElement | undefined;
     try {
+      if (this.kind === 'link') {
+        const options = this.oneTime ? { ttlSeconds: Number(this.ttl.value), withCode: this.withCode.checked } : {};
+        const pendingLink = this.deps.createLink(password, target, options);
+        password = undefined;
+        const result = await pendingLink;
+        if (!this.valid(generation)) {
+          if (generation === this.generation) this.close();
+          return;
+        }
+        if (result.format === 2) {
+          this.showOnceLink(result);
+          return;
+        }
+        // The service stopped offering one-time links meanwhile: say so.
+        if (this.oneTime) { this.oneTime = false; this.options.hidden = true; this.applyKind(); }
+        this.showLink(result.link);
+        return;
+      }
       const pending = this.deps.prepare(password, target);
       password = undefined;
       payload = await pending;
       if (!this.valid(generation)) {
         if (generation === this.generation) this.close();
-        return;
-      }
-      if (this.kind === 'link') {
-        const link = buildShareLink({ serviceUrl: payload.serviceUrl, id: payload.id, key: payload.key });
-        payload = undefined;
-        this.showLink(link);
         return;
       }
       json = serializeConnectQrPayload(payload);
@@ -356,6 +452,7 @@ export class ConnectQrController {
           : error instanceof Error && error.message === t('qr.tooLarge') ? t('qr.tooLarge')
           : error instanceof Error && error.message === t('qr.httpsRequired') ? t('qr.httpsRequired')
           : error instanceof Error && error.message === t('core.connectBusy') ? t('qr.busy')
+          : error instanceof HandoffLimitException || error instanceof HandoffUnavailableException ? error.message
           : t('qr.error');
         this.error.hidden = false;
         this.input.disabled = false;
@@ -382,6 +479,80 @@ export class ConnectQrController {
    *  hidden on leave like the QR); Copy marks the clipboard item sensitive
    *  where the browser can (it cannot: say so in the warning). */
   private showLink(link: string): void {
+    const { box, copy } = this.linkBox(link);
+    const parts: HTMLElement[] = [box, copy];
+    if (this.kind === 'link' && !this.oneTime) parts.unshift(this.note('share-mode-note', t('share.noOneTime')));
+    this.output.replaceChildren(...parts);
+    this.form.hidden = true;
+    this.countdown.textContent = '';
+    box.focus();
+  }
+
+  private note(id: string, text: string): HTMLParagraphElement {
+    const p = document.createElement('p');
+    p.id = id;
+    p.className = 'notice';
+    p.textContent = text;
+    return p;
+  }
+
+  /** A one-time voucher: the link, its code (to pass on apart), when it stops
+   *  working, and Revoke while this dialog is still open. */
+  private showOnceLink(result: Extract<ShareLinkResult, { format: 2 }>): void {
+    const { box, copy } = this.linkBox(result.link);
+    const parts: HTMLElement[] = [box, copy];
+    if (result.code) {
+      const code = document.createElement('div');
+      code.id = 'share-code-box';
+      code.className = 'share-code-box';
+      const caption = document.createElement('span');
+      caption.textContent = t('share.codeCaption');
+      const digits = document.createElement('strong');
+      digits.id = 'share-code-value';
+      digits.className = 'mono';
+      digits.textContent = `${result.code.slice(0, 3)} ${result.code.slice(3)}`;
+      digits.setAttribute('aria-label', result.code.split('').join(' '));
+      const tell = document.createElement('small');
+      tell.className = 'hint';
+      tell.textContent = t('share.codeTell');
+      code.append(caption, digits, tell);
+      parts.push(code);
+    }
+    const until = new Date(result.expiresAt);
+    const time = Number.isNaN(until.getTime()) ? result.expiresAt : until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    parts.push(this.note('share-valid-until', t('share.validUntil', { time })));
+    const revoke = document.createElement('button');
+    revoke.type = 'button';
+    revoke.id = 'share-revoke';
+    revoke.className = 'danger';
+    revoke.textContent = t('share.revoke');
+    revoke.addEventListener('click', () => {
+      const generation = this.generation;
+      revoke.disabled = true;
+      copy.disabled = true;
+      void this.deps.revoke(result).then(
+        (revoked) => {
+          if (generation !== this.generation) return;
+          this.output.replaceChildren(this.note('share-revoked', t(revoked ? 'share.revoked' : 'share.alreadyGone')));
+          this.countdown.textContent = '';
+          this.closeButton.focus();
+        },
+        () => {
+          if (generation !== this.generation) return;
+          revoke.disabled = false;
+          copy.disabled = false;
+          this.countdown.textContent = t('handoff.revokeFailed');
+        },
+      );
+    });
+    parts.push(revoke);
+    this.output.replaceChildren(...parts);
+    this.form.hidden = true;
+    this.countdown.textContent = '';
+    box.focus();
+  }
+
+  private linkBox(link: string): { box: HTMLTextAreaElement; copy: HTMLButtonElement } {
     const box = document.createElement('textarea');
     box.id = 'share-link-text';
     box.readOnly = true;
@@ -407,10 +578,7 @@ export class ConnectQrController {
         },
       );
     });
-    this.output.replaceChildren(box, copy);
-    this.form.hidden = true;
-    this.countdown.textContent = '';
-    box.focus();
+    return { box, copy };
   }
 
   private tick(): void {

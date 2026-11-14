@@ -807,6 +807,16 @@ dd:last-of-type { border-bottom: 0; }
 #qr-close { display: block; margin-left: auto; }
 #share-link-text { display: block; width: 100%; box-sizing: border-box; margin: 1rem 0 .6rem; font-family: ui-monospace, monospace; font-size: .85rem; overflow-wrap: anywhere; word-break: break-all; resize: none; }
 #share-link-copy { display: block; margin: 0 auto; }
+/* One-time link: options above the gate, then code + validity + Revoke. */
+.share-options { display: grid; gap: .45rem; margin: 0; padding: 0; border: 0; }
+.share-ttl-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+#share-ttl { width: auto; min-width: 9rem; }
+.share-options .hint { color: var(--muted); }
+.share-code-box { display: grid; justify-items: center; gap: .25rem; margin: 1rem 0 .4rem; padding: .8rem 1rem; border: 1px dashed var(--border); border-radius: .9rem; background: var(--bg); text-align: center; }
+.share-code-box > span { font-size: .85rem; color: var(--muted); }
+#share-code-value { font-family: ui-monospace, monospace; font-size: 1.8rem; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+#share-valid-until, #share-mode-note, #share-revoked { margin: .8rem 0 .4rem; }
+#share-revoke { display: block; margin: .4rem auto 0; }
 @media (max-width: 480px) { #qr-panel { padding: 1rem; } .qr-card-heading { align-items: flex-start; } .qr-open { width: 100%; justify-content: center; } }
 
 /* Single password action, with contextual feedback kept inside the dialog. */

@@ -38,6 +38,7 @@ import { decryptData, deriveKey, derivedKeyId, encryptData } from '../shared/cry
 import { compareVersions, DefaultServiceUrl, MaxSilentSyncChanges, MinApiVersion, MinNewPasswordLength, PasswordTooShort, ServiceProbeTimeoutMs, SyncClientVersion } from '../shared/constants.js';
 import {
   DataOutOfSyncException,
+  HandoffAuthFailedException,
   IncompleteSyncInfoException,
   InvalidCredentialsException,
   ServiceOfflineException,
@@ -51,7 +52,7 @@ import {
 import type { IXbsLogger } from '../shared/logging.js';
 import { sanitizeSyncId, XbsLogLevel } from '../shared/logging.js';
 import type { BookmarkNode } from '../shared/models.js';
-import { validExpiryDays } from '../shared/models.js';
+import { supportsHandoff, validExpiryDays } from '../shared/models.js';
 import { ensureContainersExist, repairBookmarkIds, validateBookmarkIds } from '../shared/bookmarks.js';
 import { BookmarkContainer, type NativeNode } from '../shared/bookmarks.js';
 import { changeCounts } from '../shared/tree-diff.js';
@@ -105,7 +106,12 @@ import {
   type ConflictPreviewResponse,
   type ConflictResolutionDirection,
   type ConflictReason,
+  type RedeemedShareLink,
+  type ShareLinkMode,
+  type ShareLinkResult,
 } from '../shared/messages.js';
+import { createHandoff, generateHandoffCode, isHandoffCode, openHandoff, parseHandoffLink, redeemRequest } from '../shared/handoff.js';
+import { buildShareLink } from '../shared/share-link.js';
 import { reconcileContainer } from '../shared/reconcile.js';
 import { Store, StoreKey, type SyncInfo } from '../shared/store.js';
 import {
@@ -322,6 +328,14 @@ export class BackgroundCore {
         return this.probeService(msg.serviceUrl);
       case MessageCommand.PrepareConnectQr:
         return this.prepareConnectQr(msg.switchPassword, msg.target);
+      case MessageCommand.GetShareLinkMode:
+        return this.shareLinkMode(msg.target);
+      case MessageCommand.CreateShareLink:
+        return this.createShareLink(msg.switchPassword, msg.target, msg.ttlSeconds, msg.withCode === true);
+      case MessageCommand.RevokeShareLink:
+        return this.revokeShareLink(msg.serviceUrl, msg.syncId, msg.handoffId);
+      case MessageCommand.RedeemShareLink:
+        return this.redeemShareLink(msg.link, msg.code);
       case MessageCommand.SyncBookmarks:
         return this.queueSync(msg.sync.type, msg.sync.bookmarks);
       case MessageCommand.RestoreBookmarks:
@@ -1686,6 +1700,95 @@ export class BackgroundCore {
     }
     await check();
     return buildConnectQrPayload({ serviceUrl: info.serviceUrl ?? DefaultServiceUrl, id: info.id!, version: remote.version, key: derived });
+  }
+
+  /** Service of the sync a share would carry: the row asked for, else the active one. */
+  private async shareServiceUrl(target?: ConnectQrTarget): Promise<string> {
+    if (target) return canonicalServiceUrl(target.serviceUrl);
+    const { info } = await this.requireCreds();
+    return info.serviceUrl ?? DefaultServiceUrl;
+  }
+
+  /** One-time links need the service's handoff capability; any probe failure
+   *  means the lasting format-1 link (the user's chosen fallback). */
+  private async shareLinkMode(target?: ConnectQrTarget): Promise<ShareLinkMode> {
+    const serviceUrl = await this.shareServiceUrl(target);
+    try {
+      const info = await this.makeApi(serviceUrl, ServiceProbeTimeoutMs).checkServiceV12();
+      if (!supportsHandoff(info.capabilities)) return { oneTime: false };
+      return { oneTime: true, maxTtlSeconds: info.capabilities!.handoff!.maxTtlSeconds };
+    } catch (err) {
+      this.log.log(XbsLogLevel.Warning, 'share', `Handoff probe failed: ${(err as Error)?.name ?? 'error'}`);
+      return { oneTime: false };
+    }
+  }
+
+  /**
+   * Share sync: the same gate and read-only key check as the QR
+   * (`prepareConnectQr`), then a one-time voucher when the service keeps
+   * them, else the lasting format-1 link. The key never leaves the
+   * background except inside the link (format 1) or as ciphertext (format 2).
+   */
+  private async createShareLink(
+    switchPassword: string | undefined,
+    target: ConnectQrTarget | undefined,
+    ttlSeconds: number | undefined,
+    withCode: boolean,
+  ): Promise<ShareLinkResult> {
+    const prepared = await this.prepareConnectQr(switchPassword, target);
+    const mode = await this.shareLinkMode({ serviceUrl: prepared.serviceUrl, syncId: prepared.id });
+    if (!mode.oneTime) {
+      return { format: 1, link: buildShareLink({ serviceUrl: prepared.serviceUrl, id: prepared.id, key: prepared.key }) };
+    }
+    const max = mode.maxTtlSeconds ?? 600;
+    const ttl = ttlSeconds === undefined ? Math.min(600, max) : ttlSeconds;
+    if (!Number.isInteger(ttl) || ttl < 60 || ttl > max) throw new UnexpectedResponseException(t('handoff.ttlInvalid'));
+    const row = findSavedSync(await this.savedSyncList(), { serviceUrl: canonicalServiceUrl(prepared.serviceUrl), syncId: prepared.id });
+    const code = withCode ? generateHandoffCode() : undefined;
+    const made = await createHandoff({ serviceUrl: prepared.serviceUrl, id: prepared.id, key: prepared.key, ...(row?.label ? { label: row.label } : {}) }, code);
+    const created = await this.makeApi(prepared.serviceUrl).createHandoff(prepared.id, {
+      handoffId: made.handoffId,
+      payload: made.payload,
+      ttlSeconds: ttl,
+      ...(made.authHash ? { authHash: made.authHash } : {}),
+    });
+    this.log.log(XbsLogLevel.Info, 'share', `One-time link created for ${sanitizeSyncId(prepared.id)} (${ttl}s${code ? ', code' : ''})`);
+    return {
+      format: 2,
+      link: made.link,
+      ...(code ? { code } : {}),
+      expiresAt: created.expiresAt,
+      handoffId: made.handoffId,
+      serviceUrl: prepared.serviceUrl,
+      syncId: prepared.id,
+    };
+  }
+
+  /** Revokes a voucher of a saved sync; false when it was already gone. */
+  private async revokeShareLink(serviceUrl: string, syncId: string, handoffId: string): Promise<{ revoked: boolean }> {
+    if (typeof serviceUrl !== 'string' || typeof syncId !== 'string' || typeof handoffId !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(handoffId)) {
+      throw new UnexpectedResponseException(t('handoff.revokeFailed'));
+    }
+    const wanted: SavedSyncActive = { serviceUrl: canonicalServiceUrl(serviceUrl), syncId };
+    if (!findSavedSync(await this.savedSyncList(), wanted)) throw new UnexpectedResponseException(t('core.savedNotFound'));
+    return { revoked: await this.makeApi(serviceUrl).revokeHandoff(syncId, handoffId) };
+  }
+
+  /**
+   * Uses a one-time link up: one redeem (never retried, a 200 consumes it),
+   * then the payload must decrypt and name the link's own service. Nothing
+   * is linked here: the caller reviews and connects like a format-1 link.
+   */
+  private async redeemShareLink(link: string, code: string | undefined): Promise<RedeemedShareLink> {
+    const parsed = parseHandoffLink(link);
+    if (!parsed) throw new UnexpectedResponseException(t('link.invalid'));
+    if (parsed.codeRequired && !isHandoffCode(code)) throw new HandoffAuthFailedException(t('handoff.codeRequired'));
+    const request = await redeemRequest(parsed, parsed.codeRequired ? code : undefined);
+    const payload = await this.makeApi(parsed.serviceUrl).redeemHandoff(request.handoffId, request.auth);
+    const content = await openHandoff(parsed, payload, parsed.codeRequired ? code : undefined);
+    if (!content) throw new InvalidCredentialsException(t('handoff.damaged'));
+    this.log.log(XbsLogLevel.Info, 'share', `One-time link used for ${sanitizeSyncId(content.id)}`);
+    return content;
   }
 
   private async changePassword(
