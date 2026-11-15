@@ -72,10 +72,10 @@ Words come from `UI-TERMS.md`.
 
 ## Saved-sync list and settings layout
 
-The extension manager gives every saved sync a prominent `Activate` button,
-disabled on the active sync, whose active badge stays visible. The Android
-Syncs page keeps each row on one line: the active sync shows only its badge,
-and every other sync shows `Activate` in that same slot, so the active sync
+The extension manager gives every inactive saved sync a prominent `Activate`
+button; the active sync shows only its active tag. The Android Syncs page
+keeps each row on one line: the active sync shows only its badge, and every
+other sync shows `Activate` in that same slot. In both apps the active sync
 never offers to activate itself. Secondary commands are in the row's accessible `⋮` menu: ordinary
 commands (rename, show QR, share sync or change password where supported) first, then a
 separate final group for forgetting, unlinking and server deletion where
@@ -96,7 +96,7 @@ the recent count are segmented controls.
 | Connect: new sync | no | `Create a new sync` → service URL, password + confirm, name (prefilled with the service host) → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | `I have a shared link` (paste, or QR on Android) or `I have the sync ID and password` (service URL, sync ID, password) → verification → direction with consequences, name → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
 | Change password | yes | Syncs → `Change password` on the active sync's row → Current, New, Confirm new → `Change password` | one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. The long password belongs to the sync, so this is a row action in Syncs, never a Settings section, and the sync lock is not asked again: the saved key is re-wrapped under the previous one. |
-| Backup: export | no | Backup password + confirm → `Export encrypted backup` (extension: Backup → `Export…` opens a task dialog first) | none | The backup password is not the sync password and cannot be recovered. |
+| Backup: export | no | Backup → `Export…` (extension: a task dialog; Android: inline) → backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
 | Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. Backups of another sync (or needing a link while unlinked) cannot be restored here: they are hidden behind the `Restorable here / All` filter, shown dimmed with the reason, with no `Restore` and, when their sync is saved, `Activate <name>…` (Android: opens Syncs) instead. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
@@ -108,7 +108,7 @@ the recent count are segmented controls.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync while linked (Syncs → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual, QR or shared link) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
+| Add a sync while linked (Syncs → `+ Add a sync`) | yes | Existing sync only (manual, QR or shared link; no device unlock: nothing saved is revealed) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
 | Bookmarks file (HTML): export | no | Backup → Bookmarks file (HTML) → `Export HTML…` → warning → `Export anyway` → share sheet | the warning is the confirmation | The file is NOT encrypted. It is a hand-over copy: Keepmark deletes its own copy at the next export or start. |
 | Bookmarks file (HTML): import | no | Backup → Bookmarks file (HTML) → `Import HTML…` → choose a `.html` file → preview (bookmarks, folders, separators, skipped links, duplicates; `Skip bookmarks already saved` on by default) → `Import` | Review is the only confirmation; final button executes | Additive only: one new folder `Imported <date>` at the end of Other, nothing is replaced. A safety backup is saved first; while linked the import is uploaded. |
 | Tags: rename, merge, delete | no | Menu → `Tags` → tap a tag → rename (a name that already exists merges the two) or delete | delete: always; rename/merge: the note under the field | The change applies to every bookmark with that tag in one step; the bookmarks themselves stay. A safety backup is saved first; while linked the change is uploaded. |
@@ -428,9 +428,10 @@ the name this device already shows for that sync, else the sender's name from
 a one-time link (when free), else the service host (`host`, `host 2`, …). A
 name another saved sync already shows is refused next to the field; an empty
 name falls back to the service host (a sync this device already saved keeps
-its current name). `+ Add a sync` refuses the sync already in use, before
-any server check (`This sync is already active.`): there is nothing to add
-and nothing to leave. In the extension the name (and the
+its current name). `+ Add a sync` refuses the sync already in use before that
+sync is checked (Android: `This sync is already active.`; extension: `That
+sync is already active.`): there is nothing to add and nothing to leave. A
+one-time link is used up first, since only its redeem names the sync. In the extension the name (and the
 popup's direction choice) appear only once the link is read; on Android the
 name sits in the review, above the final button.
 
