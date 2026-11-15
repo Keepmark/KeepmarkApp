@@ -3,7 +3,7 @@ import type { MessageKey } from './en.js';
 // Plurals: tn() maps every non-"one" Russian form (few, many) to `_other`,
 // so `_other` texts use count-neutral phrasing ("Закладок: {count}").
 export const ru: Record<MessageKey, string> = {
-  'qr.scan': "В Keepmark для Android откройте Подключение → Существующая синхронизация → Сканировать QR из браузера.",
+  'qr.scan': "В Keepmark для Android откройте Подключение → У меня есть ссылка → Сканировать QR из браузера.",
   'qr.hidden': "QR-код скрыт.",
   'qr.title': "Подключите Keepmark на телефоне",
   'qr.explanation': "QR-код содержит сервис, ID синхронизации и ключ синхронизации (не ваш пароль). Любой, у кого есть копия, может читать и изменять эти закладки. Он скрывается через 60 секунд или когда вы покидаете этот экран. Установите блокировку синхронизации, чтобы сначала запрашивался пароль.",

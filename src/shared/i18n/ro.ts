@@ -4,7 +4,7 @@ import type { MessageKey } from './en.js';
 // Plural forms: `Intl.PluralRules('ro')` gives one/few/other and the app maps
 // few+other to `_other`, so `_other` is the plain plural ("2 marcaje").
 export const ro: Record<MessageKey, string> = {
-  'qr.scan': 'În Keepmark pentru Android, deschide Conectare → Sincronizare existentă → Scanează QR din browser.',
+  'qr.scan': "În Keepmark pentru Android, deschide Conectare → Am un link partajat → Scanează QR din browser.",
   'qr.hidden': "Cod QR ascuns.",
   'qr.title': 'Conectează Keepmark pe telefon',
   'qr.explanation': "Codul QR conține serviciul, ID-ul sincronizării și cheia sincronizării (nu parola ta). Oricine are o copie poate citi și modifica aceste marcaje. Este ascuns după 60 de secunde sau când părăsești această vizualizare. Setează o blocare a sincronizării ca să se ceară mai întâi o parolă.",

@@ -133,12 +133,12 @@ password and bookmarks, exactly one is active, and switching is a click.
 Already syncing on Android and want the phone on the same sync? The manager
 hands the credentials over in one scan, without typing them anywhere:
 
-1. In the manager, the Android card says **Connect Keepmark on your phone**.
-   Choose **Show connection QR**. The QR appears at once; if you set a sync
+1. In the manager, **Status → Connect another device**: choose **Show
+   connection QR**. The QR appears at once; if you set a sync
    lock, enter its password first.
-2. In Keepmark for Android, open **Connect → Existing sync → Scan QR from
-   browser**.
-3. Review the service the phone shows, tap **Connect**, then pick the direction
+2. In Keepmark for Android, open **Connect → I have a shared link → Scan QR
+   from browser** (**Syncs → + Add a sync** when a sync is already active).
+3. Review the service the phone shows, tap **Continue**, then pick the direction
    (keep the server copy, merge, or keep the phone's copy).
 
 The QR carries the service, the sync ID and the sync's derived key, never the
@@ -151,16 +151,28 @@ wizard the same QR button sits before the manual target credentials.
 
 ## Share a sync with a link
 
-To give someone else (or a device without a camera) access to a sync, use the
-share icon next to **Show QR** in **Sync**. After the sync lock password, if
-you set one, the manager shows a `keepmark://sync?…` link with **Copy**. The
-other person pastes it in **Existing sync** (popup) or **+ Add a sync → An
-existing sync** (manager), or in Keepmark for Android: no password to type.
+To give someone else (or a device without a camera) access to a sync, use
+**Status → Connect another device → Share link**, or the share icon next to
+**Show QR** on any row in **Sync**. After the sync lock password, if you set
+one, the manager shows a `keepmark://sync?…` link with **Copy**. The other
+person pastes it in **I have a shared link** (popup **Connect**, or manager
+**Sync → + Add a sync**), or in Keepmark for Android: no password to type. The
+summary that replaces the field names the service and sync ID the link
+brought; they cannot be edited, and **Use another link** clears it.
 
-Like the QR, the link carries the service, the sync ID and the sync key, never
-the password. Unlike the QR it does not expire: anyone holding it can read and
-change those bookmarks until the sync password is changed, so send it only to
-people you trust.
+**One-time links.** When the sync's service supports them (Keepmark sync
+service 1.2.1 or later), the link works once: choose 10 minutes or 1 hour, and
+optionally a 6-digit code to pass on separately. **Revoke link** cancels it
+before it is used. The receiver sees the service first and only **Open link**
+uses it up; after that, **Use another link** asks before dropping the key,
+because the link cannot be opened again. Other services get the lasting link
+with a notice.
+
+The lasting link, like the QR, carries the service, the sync ID and the sync
+key, never the password. Unlike the QR it does not expire: anyone holding it
+can read and change those bookmarks until the sync password is changed, so send
+it only to people you trust. A one-time link carries only a random secret: the
+key travels encrypted on the service, which cannot read it.
 
 ## Screenshots
 

@@ -1,7 +1,7 @@
 // English catalog: source of truth for keys. Other languages must match
 // keys and {placeholders} exactly (tests/i18n.test.ts).
 export const en = {
-  'qr.scan': "In Keepmark for Android, open Connect → Existing sync → Scan QR from browser.",
+  'qr.scan': "In Keepmark for Android, open Connect → I have a shared link → Scan QR from browser.",
   'qr.hidden': "QR hidden.",
   'qr.title': "Connect Keepmark on your phone",
   'qr.explanation': "The QR contains your service, sync ID and the sync key (not your password). Anyone with a copy can read and change these bookmarks. It is hidden after 60 seconds or when you leave this view. Set a sync lock to ask a password first.",

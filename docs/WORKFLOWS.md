@@ -398,7 +398,7 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
   such text is never offered as a bookmark. On Android a valid link produces
   the same reviewed candidate as a QR (service + short ID, Continue / Cancel,
   discarded after 60 seconds, on lock or background). In the extension (popup
-  `Existing sync` and Manager `+ Add a sync` → `An existing sync`) a pasted
+  Connect and Manager `+ Add a sync`, choice `I have a shared link`) a pasted
   link is read at once and the field becomes a summary (service host · short
   ID, "Read from the link: no password needed.", `Use another link`);
   `Use another link` or switching to `I have the sync ID and password` drops

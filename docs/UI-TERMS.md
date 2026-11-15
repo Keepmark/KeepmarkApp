@@ -12,7 +12,7 @@ Both apps use the same words for the same things. Keep this file identical in
 | Local bookmarks / this device | The bookmarks in this browser or app | native bookmarks, local tree, local side |
 | Item(s) | Bookmarks + folders + separators (counts) | nodes |
 | Connect | Link this device to a new or existing sync | |
-| New sync / Existing sync | The two connect modes | Use existing, … here |
+| I have a shared link / I have the sync ID and password / Create a new sync | The three connect choices | Existing sync, Use existing, … here |
 | Syncs | The list of saved syncs on this device (manager Sync section, popup card) | saved syncs, saved list, registry |
 | Add a sync (`+ Add a sync`) | Link this device to a new or existing sync without losing the current one (extension: final button `Connect`, result `Sync linked`; Android: direction review with `Continue`, then `Connect and use the server copy` / `Connect and merge` / `Connect and use this device`, restating the outcome); Android offers only an existing sync while linked, the extension also creates a new sync from this browser's bookmarks | Move service, Move to another service, Switch service |
 | Activate | Make an inactive saved sync the active one; this device then shows that sync's bookmarks | Open, Load |
@@ -46,7 +46,7 @@ safety origins are gone too: those backups now read `— Sync switch`. Never cop
 that wording into new text.
 
 Confirmation buttons: `Yes, download` · `Yes, upload` · `Yes, merge` · `Yes, unlink` · `Yes, forget` · `Yes, create empty` · `Yes, unlink and keep a copy` · `Yes, change password` · `Yes, restore` · `Yes, delete` · `Yes, clear` (extension server delete: `Yes, delete for good`), always with `Cancel`.
-The two connect modes are `New sync` / `Existing sync`, shown as two cards in Android Connect; the extension's Add a sync form uses `A new sync` / `An existing sync`. While a sync is linked, Android `+ Add a sync` offers only `Existing sync`.
+Connect and `+ Add a sync` offer three choices in this order: `I have a shared link` (paste a link; Android also scans the browser QR), `I have the sync ID and password`, `Create a new sync` (cards on Android, radio options in the extension). While a sync is linked, Android `+ Add a sync` offers only the first two. After a link is read, its summary offers `Use another link` (never `Change`: the service and ID come from the link and are not editable).
 Workflow steps, buttons and implication lines: see `WORKFLOWS.md` (identical in both repos).
 Busy labels: `Checking…` · `Connecting…` · `Downloading…` · `Uploading…` · `Merging…` · `Changing…` · `Exporting…` · `Importing…`.
 Password rule text: "at least 8 characters"; mismatch: "Passwords do not match."
