@@ -37,12 +37,17 @@
       </dialog>
     </div>
     <h2 data-i18n="popup.connect.title">Connect this browser</h2>
-    <div class="seg" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="popup.connect.modeLabel">
-      <label class="seg-opt"><input type="radio" name="conn-mode" value="new" checked /><span data-i18n="popup.connect.modeNew">New sync</span></label>
-      <label class="seg-opt"><input type="radio" name="conn-mode" value="existing" /><span data-i18n="popup.connect.modeExisting">Existing sync</span></label>
-    </div>
-    <p class="hint mode-hint mode-new" data-i18n="popup.connect.hintNew">Create a sync on the service and upload this browser's bookmarks.</p>
-    <p class="hint mode-hint mode-existing" data-i18n="popup.connect.hintExisting">Link this browser to a sync ID from your other device.</p>
+    <!-- One question first: how. Each answer shows only its own fields. -->
+    <fieldset class="options connect-method" role="radiogroup">
+      <legend data-i18n="connect.methodLegend">How do you want to connect it?</legend>
+      <label class="check option"><input type="radio" name="conn-mode" value="link" checked />
+        <span><b data-i18n="connect.methodLink">I have a shared link</b><small data-i18n="connect.methodLinkDesc">Paste it: it brings the service, sync ID and key.</small></span></label>
+      <label class="check option"><input type="radio" name="conn-mode" value="creds" />
+        <span><b data-i18n="connect.methodCreds">I have the sync ID and password</b><small data-i18n="connect.methodCredsDesc">Find them on the device that already uses the sync.</small></span></label>
+      <label class="check option"><input type="radio" name="conn-mode" value="new" />
+        <span><b data-i18n="connect.methodNew">Create a new sync</b><small data-i18n="connect.methodNewDesc">Upload this browser's bookmarks to a new sync.</small></span></label>
+    </fieldset>
+    <div id="conn-link-slot"></div>
     <label><span data-i18n="common.serviceUrl">Service URL</span>
       <input id="service-url" type="url" placeholder="https://api.xbrowsersync.org" />
     </label>
@@ -51,10 +56,7 @@
         <input id="sync-id" type="text" class="mono" placeholder="Sync ID from your other device" data-i18n-placeholder="popup.connect.syncIdPlaceholder" />
       </label>
     </div>
-    <label><span data-i18n="popup.connect.nameLabel">Name (optional)</span>
-      <input id="sync-name" type="text" maxlength="40" autocomplete="off" />
-    </label>
-    <label><span data-i18n="common.password">Password</span>
+    <label id="conn-password-row"><span data-i18n="common.password">Password</span>
       <input id="password" type="password" autocomplete="current-password" />
     </label>
     <div id="conn-new-only">
@@ -63,6 +65,9 @@
       </label>
       <p class="hint" data-i18n="popup.connect.passwordHint">At least 8 characters. It encrypts everything and cannot be recovered — lose it and the sync is unreadable.</p>
     </div>
+    <label id="conn-name-row"><span data-i18n="popup.connect.nameLabel">Name (optional)</span>
+      <input id="sync-name" type="text" maxlength="40" autocomplete="off" />
+    </label>
     <div id="conn-switch-locked" hidden>
       <label><span data-i18n="popup.saved.changePasswordLabel">Sync lock password</span>
         <input id="conn-switch-password" type="password" autocomplete="off" />

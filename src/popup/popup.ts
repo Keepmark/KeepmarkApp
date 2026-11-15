@@ -30,6 +30,7 @@ import { cancelConfirm, clearMessages, confirmInline, showError } from './flow.j
 import { SavedSyncsPanel, type SavedSyncsChange } from './saved-syncs.js';
 import {
   isActiveSavedSync,
+  sameSavedSync,
   savedSyncName,
   suggestSavedSyncName,
   type SavedSync,
@@ -136,9 +137,11 @@ async function refreshAll(pickView = false): Promise<void> {
   // the suggested default would be saved. Focus the first visible field with
   // its suggestion selected, so typing replaces it.
   if (pickView && !status?.syncEnabled) {
-    // A handed-over draft already holds the choices: go straight to the
-    // password, the one field the tab never receives.
-    if (resumedDraft) focusFirstVisible([input('password')]);
+    // "Shared link" (fresh or handed over): the link never travels, so its
+    // field comes first. Otherwise a handed-over draft already holds the
+    // choices: go straight to the password, the one field the tab never receives.
+    if (connectMethod() === 'link') connectLink.focus();
+    else if (resumedDraft) focusFirstVisible([input('password')]);
     else focusFirstVisible([input('service-url'), input('sync-name')], true);
   }
 }
@@ -170,9 +173,21 @@ function updateConnectName(): void {
   if (connectNameTouched) return;
   const url = connectService?.url;
   // A one-time link carries the sender's name: propose it unless it is taken.
-  const label = url ? connectLink?.label(url, input('sync-id').value) : undefined;
+  const syncId = input('sync-id').value.trim();
+  const label = url ? connectLink?.label(url, syncId) : undefined;
+  // A sync this browser already saved keeps the name it has here.
+  const saved =
+    url && syncId && connectMode() === 'existing'
+      ? savedNames.find((row) => sameSavedSync(row, { serviceUrl: url, syncId }))
+      : undefined;
   const taken = !!label && savedNames.some((row) => savedSyncName(row).trim().toLocaleLowerCase() === label.toLocaleLowerCase());
-  input('sync-name').value = label && !taken ? label : url ? suggestSavedSyncName(url, savedNames) : '';
+  input('sync-name').value = saved
+    ? savedSyncName(saved)
+    : label && !taken
+      ? label
+      : url
+        ? suggestSavedSyncName(url, savedNames)
+        : '';
 }
 
 /** Server-removed sync: the popup only states the fact. The kept copy and its
@@ -184,24 +199,50 @@ function refreshRemovedCard(): void {
 
 /** A link key replaces the password: its row is hidden while it applies. */
 function updateKeyed(): void {
-  const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
-  const keyed = mode === 'existing' && !!connectLink?.key(connectService.url, input('sync-id').value);
-  (input('password').closest('label') as HTMLElement).hidden = keyed;
-  if (keyed) input('password').value = '';
+  const method = connectMethod();
+  const keyed = method !== 'new' && !!connectLink?.key(connectService.url, input('sync-id').value);
+  // "Shared link" never asks a password: the link brings the key.
+  ($('conn-password-row') as HTMLElement).hidden = keyed || method === 'link';
+  if (keyed || method === 'link') input('password').value = '';
+  // Until a link is read there is nothing to name or to keep: only the paste
+  // field is on screen. The name (prefilled from the link) and the copy to
+  // keep appear with the link's summary.
+  const waiting = method === 'link' && !keyed;
+  ($('conn-name-row') as HTMLElement).hidden = waiting;
+  ($('conn-existing-direction') as HTMLElement).hidden = method === 'new' || waiting;
+  updateConnectReady();
+}
+
+/** How this browser is connected: a shared link, ID and password, or a new sync. */
+function connectMethod(): 'link' | 'creds' | 'new' {
+  // Read the checked property, not :checked (which can match the default
+  // checked attribute in some DOMs after the user changed the choice).
+  const value = [...document.querySelectorAll<HTMLInputElement>('input[name="conn-mode"]')].find((r) => r.checked)?.value;
+  return value === 'creds' || value === 'new' ? value : 'link';
+}
+
+/** What the background sees: a link and credentials both open an existing sync. */
+function connectMode(): 'new' | 'existing' {
+  return connectMethod() === 'new' ? 'new' : 'existing';
+}
+
+/** Connect needs a ready service and, with "shared link", a link already read. */
+function updateConnectReady(): void {
+  if (connecting || !connectService) return;
+  const keyed = !!connectLink?.key(connectService.url, input('sync-id').value);
+  ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready || (connectMethod() === 'link' && !keyed);
 }
 
 async function initConnect(): Promise<void> {
   connectService = new ServicePicker({
     input: input('service-url'),
-    mode: () => (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as 'new' | 'existing',
+    mode: connectMode,
     onChange: () => {
       cancelConfirm('btn-connect');
       updateConnectName();
       connectLink?.refresh();
     },
-    onState: () => {
-      if (!connecting) ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
-    },
+    onState: () => updateConnectReady(),
   });
   connectLink = new ShareLinkField({
     prefix: 'conn',
@@ -209,13 +250,21 @@ async function initConnect(): Promise<void> {
     syncId: input('sync-id'),
     onChange: () => { cancelConfirm('btn-connect'); updateKeyed(); updateConnectName(); },
   });
-  $('conn-existing-only').prepend(connectLink.root);
+  $('conn-link-slot').append(connectLink.root);
+  let lastMethod = connectMethod();
   const updateMode = (): void => {
-    const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+    const method = connectMethod();
+    // Leaving "shared link" drops its key: credentials are typed, never
+    // inherited from a link the user can no longer see.
+    if (method !== lastMethod && method !== 'link') connectLink.reset();
+    lastMethod = method;
     updateKeyed();
-    ($('conn-existing-only') as HTMLElement).hidden = mode !== 'existing';
-    ($('conn-existing-direction') as HTMLElement).hidden = mode !== 'existing';
-    ($('conn-new-only') as HTMLElement).hidden = mode !== 'new';
+    // A link names its own service and ID: only its field (then its summary).
+    connectService.setHidden(method === 'link');
+    connectLink.root.hidden = method !== 'link';
+    ($('conn-existing-only') as HTMLElement).hidden = method !== 'creds';
+    ($('conn-new-only') as HTMLElement).hidden = method !== 'new';
+    updateConnectName();
     updateDirection();
     connectService.updateMode();
   };
@@ -223,7 +272,7 @@ async function initConnect(): Promise<void> {
     const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement).value;
     cancelConfirm('btn-connect');
     // Say what the click does: "Connect" alone hid create vs link-and-overwrite.
-    const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value;
+    const mode = connectMode();
     $('btn-connect').textContent =
       mode === 'new'
         ? t('popup.connect.createSync')
@@ -281,9 +330,7 @@ function openManager(section?: string): void {
  */
 async function submitConnect(): Promise<void> {
   clearMessages();
-  const mode = (document.querySelector('input[name="conn-mode"]:checked') as HTMLInputElement).value as
-    | 'new'
-    | 'existing';
+  const mode = connectMode();
   const direction = (document.querySelector('input[name="conn-direction"]:checked') as HTMLInputElement)
     .value as Direction;
   if (!connectService.ready) return;
@@ -382,7 +429,7 @@ async function submitConnect(): Promise<void> {
   });
   connecting = false;
   connectService.setBusy(false);
-  ($('btn-connect') as HTMLButtonElement).disabled = !connectService.ready;
+  updateConnectReady();
 }
 
 function initMain(): void {

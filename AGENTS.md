@@ -136,7 +136,8 @@ toolchain is system node). `build/` and `dist/` are gitignored.
   informational only (the fact, no backup wording, no actions): the kept copy
   lives in the manager's Backup section, where the user goes on their own.
   "Open in a full tab" (`popup.html?fullpage=1`) hands the connect form over
-  via `handover.ts`: mode, direction, service, sync ID and name under
+  via `handover.ts`: method (`link`/`creds`/`new`; a legacy `existing` draft
+  reads as `creds`), direction, service, sync ID and name under
   `StoreKey.ConnectDraft` (storage.session when present, 60 s TTL, removed on
   first read); passwords are never handed over, the tab focuses the password.
   Layout (`popup.css`): the page is the only scroller (no inner scrolling
@@ -442,13 +443,23 @@ around the link is ignored.
   no new background command. Read-only textarea + Copy (`deps.copy`), warning
   `share.warning`; no 60 s timer (the link is a lasting credential) but it is
   removed on close, blur, hide and identity change like the QR.
-- Import: `popup/share-link-field.ts` (`ShareLinkField`) is the `Shared link`
-  entry in popup `Existing sync` and Manager `An existing sync`. A paste (or
-  `Use link`) clears the field, fills the sync ID, `ServicePicker.select(url,
-  true, probeCustom=true)`, and keeps the key in memory bound to that service
-  + ID: `key(url, id)` returns it only while both still match, so any edit
-  drops it. While keyed the password row is hidden and `validateConnect` /
-  `validateSwitch` take `keyed`.
+- Import: `popup/share-link-field.ts` (`ShareLinkField`) is the whole
+  `I have a shared link` method (0.1.71) of popup Connect (`conn-mode`) and
+  Manager `+ Add a sync` (`m-link-mode`): three flat radio choices
+  `link` (default) / `creds` / `new`, mapped to the background `existing` /
+  `new` modes (`connectMode()` / `linkMode()`; read each radio's `.checked`,
+  happy-dom's `:checked` can match the default attribute). In `link` the
+  service picker (`ServicePicker.setHidden`), sync ID and password are hidden;
+  Connect / Continue stay disabled until a key is read. A paste (or `Use
+  link`) fills the hidden sync ID, `ServicePicker.select(url, true,
+  probeCustom=true)`, keeps the key in memory bound to that service + ID
+  (`key(url, id)`), and swaps the paste row for a summary card
+  (`<prefix>-share-summary`: host · short ID, `link.acquired`, `Change` =
+  `startOver()`). Name (last field, prefilled by `suggestLinkName` /
+  `updateConnectName`: saved row's name, else one-time sender label, else host)
+  and the popup direction appear only once keyed. Leaving `link` resets the
+  field (drops the key). While keyed `validateConnect` / `validateSwitch` take
+  `keyed`.
 - Background: `ConnectExisting` / `PreviewMerge` accept `derivedKey` (password
   then `''`), `LinkSync` already had `newDerivedKey`; `sharedLinkKey()` refuses
   a non-canonical key before anything runs. Pull, merge and push all use it.

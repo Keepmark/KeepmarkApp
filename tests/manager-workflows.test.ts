@@ -28,12 +28,14 @@ const openAdd = async () => {
   (el('m-btn-add-sync') as HTMLButtonElement).click();
   await settle();
 };
-const chooseExisting = async () => {
-  const existing = document.querySelector<HTMLInputElement>('input[name="m-link-mode"][value="existing"]')!;
-  existing.checked = true;
-  existing.dispatchEvent(new Event('change'));
+const chooseMethod = async (value: 'link' | 'creds' | 'new') => {
+  const radio = document.querySelector<HTMLInputElement>(`input[name="m-link-mode"][value="${value}"]`)!;
+  radio.checked = true;
+  radio.dispatchEvent(new Event('change'));
   await settle();
 };
+const chooseExisting = () => chooseMethod('creds');
+const chooseNew = () => chooseMethod('new');
 
 beforeEach(async () => {
   vi.resetModules();
@@ -179,6 +181,7 @@ it('changes the active sync password from its row, without the switch lock', asy
 
 it('creates a new sync from the live bookmarks and reports the uploaded count', async () => {
   await openAdd();
+  await chooseNew();
   field('m-link-password', 'password123');
   field('m-link-confirm', 'password123');
   el('m-btn-link-direct').click(); await settle();
@@ -190,16 +193,12 @@ it('creates a new sync from the live bookmarks and reports the uploaded count', 
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.CheckSyncTarget)).toBe(false);
 });
 
-it('focuses the name field when a remembered service hides the URL input', async () => {
-  // The picker hides the custom-URL label (not the input): focusing the URL
-  // would leave the caret on the page body, so a name typed right after
-  // opening the form would silently go nowhere and the host would be saved.
+it('opens on "shared link" with the paste field focused; a new sync keeps the typed name', async () => {
   (el('m-link-url').closest('label') as HTMLElement).hidden = true;
   await openAdd();
-  const name = el('m-link-name') as HTMLInputElement;
-  expect(document.activeElement).toBe(name);
-  // The suggestion is selected: typing replaces it instead of appending.
-  expect(name.selectionEnd).toBe(name.value.length);
+  expect(document.querySelector<HTMLInputElement>('input[name="m-link-mode"]:checked')!.value).toBe('link');
+  expect(document.activeElement).toBe(el('m-link-share-link'));
+  await chooseNew();
   field('m-link-name', 'Casa mia');
   field('m-link-password', 'password123');
   field('m-link-confirm', 'password123');
@@ -226,12 +225,77 @@ it('warns about a pending conflict but still creates the sync', async () => {
   });
   el('m-btn-refresh').click(); await settle();
   await openAdd();
+  await chooseNew();
   expect(el('m-link-conflict').hidden).toBe(false);
   expect((el('m-btn-link-direct') as HTMLButtonElement).disabled).toBe(false);
   field('m-link-password', 'password123');
   field('m-link-confirm', 'password123');
   el('m-btn-link-direct').click(); await settle();
   expect(harness.send.mock.calls.some(([m]) => m.command === MessageCommand.ConnectNew)).toBe(true);
+});
+
+it('shared link: only the paste field, then a summary with Change; no password, no service picker', async () => {
+  const vector = 'keepmark://sync?v=1&s=https%3A%2F%2Fapi.example.test%2Fsync&id=0123456789abcdef0123456789abcdef&k=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+  await openAdd();
+  const picker = el('m-link-url-label').closest('.service-picker') as HTMLElement;
+  expect(picker.hidden).toBe(true);
+  expect(el('m-link-id-row').hidden).toBe(true);
+  expect(el('m-link-password-row').hidden).toBe(true);
+  expect(el('m-link-confirm-row').hidden).toBe(true);
+  expect(el('m-link-share-link-row').hidden).toBe(false);
+  expect((el('m-btn-link-check') as HTMLButtonElement).disabled).toBe(true);
+  field('m-link-share-link', vector);
+  el('m-link-share-link-use').click(); await settle();
+  expect(el('m-link-share-summary').hidden).toBe(false);
+  expect(el('m-link-share-summary').textContent).toContain('api.example.test/sync · 01234567…');
+  expect(el('m-link-share-link').closest('.share-link-entry')!.hasAttribute('hidden')).toBe(true);
+  expect(el('m-link-password-row').hidden).toBe(true);
+  expect((el('m-btn-link-check') as HTMLButtonElement).disabled).toBe(false);
+  // The name stays editable (and is the last field before the action).
+  field('m-link-name', 'Ufficio');
+  expect((el('m-link-name') as HTMLInputElement).value).toBe('Ufficio');
+  el('m-link-share-change').click(); await settle();
+  expect(el('m-link-share-summary').hidden).toBe(true);
+  expect((el('m-btn-link-check') as HTMLButtonElement).disabled).toBe(true);
+  expect(document.activeElement).toBe(el('m-link-share-link'));
+});
+
+it('a link to a sync already saved here proposes the name it has here', async () => {
+  harness.send.mockImplementation(async (msg) => {
+    if (msg.command === MessageCommand.GetSavedSyncs) {
+      return {
+        syncs: [{ serviceUrl: 'https://api.example.test/sync', syncId: '0123456789abcdef0123456789abcdef', label: 'Casa' }],
+        switchLockSet: false,
+      };
+    }
+    return null;
+  });
+  el('m-btn-refresh').click(); await settle();
+  await openAdd();
+  // Before a link is read, only its paste field is on screen.
+  expect(el('m-link-name-row').hidden).toBe(true);
+  field('m-link-share-link', 'keepmark://sync?v=1&s=https%3A%2F%2Fapi.example.test%2Fsync&id=0123456789abcdef0123456789abcdef&k=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8');
+  el('m-link-share-link-use').click(); await settle();
+  expect(el('m-link-name-row').hidden).toBe(false);
+  expect((el('m-link-name') as HTMLInputElement).value).toBe('Casa');
+  expect(el('m-link-name-hint').hidden).toBe(true);
+});
+
+it('switching from a read link to ID and password drops the key and asks the password', async () => {
+  const vector = 'keepmark://sync?v=1&s=https%3A%2F%2Fapi.example.test%2Fsync&id=0123456789abcdef0123456789abcdef&k=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+  await openAdd();
+  field('m-link-share-link', vector);
+  el('m-link-share-link-use').click(); await settle();
+  await chooseExisting();
+  const picker = el('m-link-url-label').closest('.service-picker') as HTMLElement;
+  expect(picker.hidden).toBe(false);
+  expect(el('m-link-id-row').hidden).toBe(false);
+  expect(el('m-link-password-row').hidden).toBe(false);
+  expect(el('m-link-share-link-row').hidden).toBe(true);
+  // Back to "shared link": the old link is gone, the paste field is offered again.
+  await chooseMethod('link');
+  expect(el('m-link-share-summary').hidden).toBe(true);
+  expect((el('m-btn-link-check') as HTMLButtonElement).disabled).toBe(true);
 });
 
 it('runs the existing-sync review while linked and executes from it', async () => {

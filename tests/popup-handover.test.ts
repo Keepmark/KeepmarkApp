@@ -33,7 +33,7 @@ class FakeArea implements DraftArea {
 }
 
 function fillPopup(): void {
-  radio('conn-mode', 'existing').checked = true;
+  radio('conn-mode', 'creds').checked = true;
   radio('conn-direction', 'merge').checked = true;
   field('service-url').value = ' https://sync.example.test ';
   field('sync-id').value = syncId;
@@ -50,7 +50,7 @@ describe('connect form handover', () => {
     fillPopup();
     const draft = captureConnectDraft(document, true, 1000);
     expect(draft).toEqual({
-      mode: 'existing', direction: 'merge', serviceUrl: 'https://sync.example.test',
+      mode: 'creds', direction: 'merge', serviceUrl: 'https://sync.example.test',
       syncId, name: 'Home', nameTouched: true, savedAt: 1000,
     });
     const json = JSON.stringify(draft);
@@ -67,7 +67,7 @@ describe('connect form handover', () => {
     const draft = await takeConnectDraft(area);
     expect(draft).toBeDefined();
     applyConnectDraft(document, draft!);
-    expect(radio('conn-mode', 'existing').checked).toBe(true);
+    expect(radio('conn-mode', 'creds').checked).toBe(true);
     expect(radio('conn-direction', 'merge').checked).toBe(true);
     expect(field('service-url').value).toBe('https://sync.example.test');
     expect(field('sync-id').value).toBe(syncId);
@@ -97,6 +97,9 @@ describe('connect form handover', () => {
     const ok = parseConnectDraft({ mode: 'new', direction: 'pull', savedAt: now, name: 'x'.repeat(99), syncId: 5 }, now);
     expect(ok?.name).toHaveLength(40);
     expect(ok?.syncId).toBe('');
+    // Pre-0.1.71 drafts said 'existing' for both link and credentials.
+    expect(parseConnectDraft({ mode: 'existing', direction: 'pull', savedAt: now }, now)?.mode).toBe('creds');
+    expect(parseConnectDraft({ mode: 'link', direction: 'pull', savedAt: now }, now)?.mode).toBe('link');
   });
 
   it('a storage failure never blocks the tab', async () => {

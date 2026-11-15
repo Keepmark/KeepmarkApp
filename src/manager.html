@@ -365,24 +365,28 @@
           <h2 id="m-link-add-title" data-i18n="manager.syncs.addTitle">Add a sync</h2>
           <button id="m-btn-add-cancel" class="mini" type="button" data-i18n="common.cancel">Cancel</button>
         </div>
-        <p class="hint" data-i18n="manager.syncs.addHint">Create a new sync or open one you already use on another device. Adding a sync
-          while another is active switches this browser to it; the old sync stays in the list.</p>
-        <label><span data-i18n="manager.syncs.targetUrl">Service URL</span> <input id="m-link-url" type="url" /></label>
-        <fieldset class="options" role="radiogroup" aria-label="Sync mode" data-i18n-aria-label="manager.syncs.modeLabel">
-          <legend data-i18n="manager.syncs.modeLegend">Which sync?</legend>
-          <label class="check option"><input type="radio" name="m-link-mode" value="new" checked />
-            <span><b data-i18n="manager.syncs.modeNew">A new sync</b><small data-i18n="manager.syncs.modeNewDesc">Create it on the target service and upload the bookmarks currently in this browser.</small></span></label>
-          <label class="check option"><input type="radio" name="m-link-mode" value="existing" />
-            <span><b data-i18n="manager.syncs.modeExisting">An existing sync</b><small data-i18n="manager.syncs.modeExistingDesc">You already sync on the target service: open it with its sync ID and password.</small></span></label>
+        <p id="m-link-add-hint" class="hint" data-i18n="manager.syncs.addHint">Adding a sync switches this browser to it; the active one stays in the list.</p>
+        <!-- One question first: how. Each answer shows only its own fields
+             (a link brings service, ID and key; credentials need all three;
+             a new sync needs a service and a new password). -->
+        <fieldset class="options connect-method" role="radiogroup">
+          <legend data-i18n="connect.methodLegend">How do you want to connect it?</legend>
+          <label class="check option"><input type="radio" name="m-link-mode" value="link" checked />
+            <span><b data-i18n="connect.methodLink">I have a shared link</b><small data-i18n="connect.methodLinkDesc">Paste it: it brings the service, sync ID and key.</small></span></label>
+          <label class="check option"><input type="radio" name="m-link-mode" value="creds" />
+            <span><b data-i18n="connect.methodCreds">I have the sync ID and password</b><small data-i18n="connect.methodCredsDesc">Find them on the device that already uses the sync.</small></span></label>
+          <label class="check option"><input type="radio" name="m-link-mode" value="new" />
+            <span><b data-i18n="connect.methodNew">Create a new sync</b><small data-i18n="connect.methodNewDesc">Upload this browser's bookmarks to a new sync.</small></span></label>
         </fieldset>
+        <div id="m-link-share-slot"></div>
+        <label><span data-i18n="manager.syncs.targetUrl">Service URL</span> <input id="m-link-url" type="url" /></label>
         <label id="m-link-id-row" hidden><span data-i18n="common.syncId">Sync ID</span> <input id="m-link-id" type="text" class="mono" /></label>
-        <label id="m-link-name-row"><span data-i18n="manager.syncs.nameLabel">Name (optional)</span>
-          <input id="m-link-name" type="text" maxlength="40" autocomplete="off" /></label>
-        <p id="m-link-name-hint" class="hint" hidden data-i18n="manager.syncs.nameHint">Another sync already uses this name: choose a different one.</p>
-        <div id="m-link-existing-pw-slot"></div>
         <label id="m-link-password-row"><span id="m-link-password-label" data-i18n="manager.syncs.newPassword">New password</span> <input id="m-link-password" type="password" autocomplete="new-password" /></label>
         <label id="m-link-confirm-row"><span id="m-link-confirm-label" data-i18n="common.confirmPassword">Confirm password</span> <input id="m-link-confirm" type="password" autocomplete="new-password" /></label>
         <p id="m-link-pw-hint" class="hint" data-i18n="manager.syncs.pwHintNew">At least 8 characters. It encrypts the new sync and cannot be recovered.</p>
+        <label id="m-link-name-row"><span data-i18n="manager.syncs.nameLabel">Name (optional)</span>
+          <input id="m-link-name" type="text" maxlength="40" autocomplete="off" /></label>
+        <p id="m-link-name-hint" class="hint" hidden data-i18n="manager.syncs.nameHint">Another sync already uses this name: choose a different one.</p>
         <p id="m-link-new-note" class="hint" data-i18n="manager.syncs.newNote">The new sync starts with the bookmarks currently in this browser.
           The sync you are using now stays in the list.</p>
         <p id="m-link-conflict" class="notice" hidden data-i18n="manager.syncs.newConflict">There is an unresolved conflict: the new sync will start from
@@ -391,8 +395,6 @@
         <div class="row" id="m-link-direct" hidden><button id="m-btn-link-direct" class="primary" data-i18n="manager.syncs.createUpload">Create and upload</button></div>
         <div id="link-error" class="error" role="alert" hidden></div>
         <div id="link-preview" class="preview" hidden></div>
-        <p id="link-gate-hint" class="hint" data-i18n="manager.syncs.gateHint">Confirm opens once the check passes, and only for these exact inputs —
-          change anything and check again.</p>
         <div id="link-step2" hidden>
           <h3 data-i18n="manager.syncs.step2">2. Confirm</h3>
           <div id="m-link-direction-row" hidden>

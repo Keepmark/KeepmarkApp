@@ -1209,3 +1209,14 @@ button.info-btn svg {
   stroke-width: 2;
   stroke-linecap: round;
 }
+
+/* Shared-link field: the paste box and its button on one line, then (once a
+   link is read) a summary card of what it brought, with Change on its right. */
+.share-link-entry { display: flex; align-items: flex-end; gap: 8px; }
+.share-link-entry > label { flex: 1 1 auto; min-width: 0; margin: 0; }
+.share-link-entry > button { flex: none; height: 38px; }
+.share-link-summary { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.share-link-summary-head { display: flex; align-items: center; gap: 12px; }
+.share-link-summary-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.share-link-summary .hint { margin: 4px 0 0; }
+.share-once { margin-top: 8px; }

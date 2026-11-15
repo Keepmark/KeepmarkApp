@@ -88,8 +88,8 @@ immediately before `Save`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Connect: new sync | no | Service URL, password + confirm → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
-| Connect: existing sync | no | Service URL, sync ID, password → verification → direction with consequences → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
+| Connect: new sync | no | `Create a new sync` → service URL, password + confirm, name (prefilled with the service host) → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
+| Connect: existing sync | no | `I have a shared link` (paste, or QR on Android) or `I have the sync ID and password` (service URL, sync ID, password) → verification → direction with consequences, name → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
 | Change password | yes | Syncs → `Change password` on the active sync's row → Current, New, Confirm new → `Change password` | one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. The long password belongs to the sync, so this is a row action in Syncs, never a Settings section, and the sync lock is not asked again: the saved key is re-wrapped under the previous one. |
 | Backup: export | no | Backup → `Export…` (opens a task dialog) → backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
@@ -117,7 +117,7 @@ immediately before `Save`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync (manager → Sync → `+ Add a sync`) | no | Modal task: sync lock password when set (same dialog, first step) → destination, `A new sync` / `An existing sync`, credentials → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The previous sync stays available and other devices keep using it until moved. A new sync is created from the bookmarks currently in this browser and reports the uploaded count. Save the new sync ID and password. |
+| Add a sync (manager → Sync → `+ Add a sync`) | no | Modal task: sync lock password when set (same dialog, first step) → `I have a shared link` (default) / `I have the sync ID and password` / `Create a new sync`, then only that method's fields and the name (last) → `Continue` (verifies, no writes) → direction and review → `Connect` | Review is the only confirmation; final button executes | The previous sync stays available and other devices keep using it until moved. A new sync is created from the bookmarks currently in this browser and reports the uploaded count. Save the new sync ID and password. |
 | Activate a saved sync (popup or manager) | no (unlinked) / yes (linked) | `Syncs` list → `Activate` → modal with the confirmation and, when set, the sync lock password → apply | none beyond the dialog | The password is proved first (it unwraps the row's key, then a read-only version gate + GET + decrypt); only then is the sync that is active right now saved (`fail-closed`: a pending conflict cancels the switch). The sync's own long password is never asked at activation. Without a sync lock the dialog is a plain confirmation. |
 | Forget or unlink a saved sync (manager) | manager only | Manager → Sync → `Forget…` (inactive) / `Unlink this device…` (active) → confirmation in the row modal | always | Inactive: only the row is forgotten and the server copy stays; safety backups and (extension) automatic backups only that key could open are deleted with it. Active: this device is unlinked and the row disappears; its bookmarks stay and the sync plus its server copy stay for the other devices. Deleting it for everyone is `Delete from server…`. |
 | Delete sync from server (service v1.2) | yes | Manager → Sync → `Delete from server…` on the active row → confirmation in the row modal | once | The server copy is gone for every device; they stop syncing at their next sync. No undelete, and this browser keeps no copy: local bookmarks stay, no safety backup is taken or kept, and the manager reports the outcome. |
@@ -336,8 +336,8 @@ accepts `https` and plain `http` only for `localhost` / `127.0.0.1` / `[::1]`.
   (with password). Display ends after 60 seconds, close, Escape, navigation,
   hidden, blur or pagehide; returning never restores it. A captured copy remains
   reusable: this is a display timeout, not credential expiry.
-- Android Connect (first link, and `+ Add a sync` while linked) offers a
-  QR icon button before manual service/ID/password entry. Scan QR requests camera
+- Android Connect (first link, and `+ Add a sync` while linked) offers the
+  QR icon button inside `I have a shared link`, above the paste field. Scan QR requests camera
   permission only after the user chooses scanning. First scan stops the camera.
   Validation is local; the service and abbreviated ID are shown before any
   network request. The acquired-credentials review replaces manual fields,
@@ -385,22 +385,46 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
   (Android marks the clip sensitive) and, on Android, the system share sheet.
   It is held in memory only, never stored or logged, and is cleared on close,
   lock or leaving the view.
-- **Import** — one more entry of "existing sync", beside the QR and the manual
-  fields: a `Shared link` field (paste, then `Use link`). On Android a tapped
+- **Import** — the `I have a shared link` choice of Connect / Add a sync (see
+  "Connect methods"): a `Shared link` field (paste, then `Use link`). On Android a tapped
   `keepmark://sync` link and text shared to Keepmark that contains one open
   Syncs → `+ Add a sync` with the link already read (after the app lock);
   such text is never offered as a bookmark. On Android a valid link produces
   the same reviewed candidate as a QR (service + short ID, Continue / Cancel,
   discarded after 60 seconds, on lock or background). In the extension (popup
   `Existing sync` and Manager `+ Add a sync` → `An existing sync`) a pasted
-  link is read at once: it selects the service, fills the sync ID, hides the
-  password and says the key was read; editing the service or the ID drops the
-  key (the password is asked again). Both then run the normal verification,
+  link is read at once and the field becomes a summary (service host · short
+  ID, "Read from the link: no password needed.", `Change`); `Change` or
+  switching to `I have the sync ID and password` drops the key, so the password
+  is asked again. Both then run the normal verification,
   direction choice, merge preview and safety backups. A key that no longer
   opens the sync reports "ask for a new link". The extension accepts a plain
   `http` link only for loopback hosts, like any service URL.
 - A device linked from a link (or a QR) never knew the password, so it cannot
   run `Change password` (which asks the current one).
+
+### Connect methods (both apps)
+
+Connect (first link) and `+ Add a sync` start with three flat choices, in
+this order: `I have a shared link`, `I have the sync ID and password`,
+`Create a new sync` (the extension preselects the first one; Android shows
+them as cards; while linked Android offers the first two, a new sync being a
+first-link flow there). Each choice shows only its own fields:
+
+| Choice | Fields shown |
+|---|---|
+| Shared link | paste field (Android: also `Scan QR from browser`); no service picker, no ID, no password. After the link is read: its summary with `Change`, then the name |
+| Sync ID and password | service, sync ID, password, then the name |
+| New sync | service, new password + confirm, then the name |
+
+The name is always the last field and always editable. It is prefilled with
+the name this device already shows for that sync, else the sender's name from
+a one-time link (when free), else the service host (`host`, `host 2`, …). A
+name another saved sync already shows is refused next to the field; an empty
+name falls back to the service host (a sync this device already saved keeps
+its current name). In the extension the name (and the
+popup's direction choice) appear only once the link is read; on Android the
+name sits in the review, above the final button.
 
 ### One-time link (format 2, services with `capabilities.handoff`)
 

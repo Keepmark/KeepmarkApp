@@ -25,6 +25,12 @@ export class ShareLinkField {
   private readonly input = document.createElement('input');
   private readonly use = document.createElement('button');
   private readonly note = document.createElement('p');
+  /** Paste row (field + Use link): hidden once a link was read. */
+  private readonly entry = document.createElement('div');
+  /** What the link brought ("service · ID") with Change, in place of the entry. */
+  private readonly summary = document.createElement('div');
+  private readonly summaryText = document.createElement('strong');
+  private readonly change = document.createElement('button');
   private readonly error = document.createElement('div');
   private bound: { serviceUrl: string; syncId: string; key: string; label?: string } | undefined;
   private generation = 0;
@@ -64,21 +70,29 @@ export class ShareLinkField {
     this.use.id = `${prefix}-share-link-use`;
     this.use.className = 'mini';
     this.use.textContent = t('link.use');
-    const row = document.createElement('div');
-    row.className = 'share-link-entry';
-    row.append(label, this.use);
-    const hint = document.createElement('small');
-    hint.className = 'hint';
-    hint.textContent = t('link.hint');
+    this.entry.className = 'share-link-entry';
+    this.entry.append(label, this.use);
     this.note.id = `${prefix}-share-link-note`;
-    this.note.className = 'notice';
-    this.note.hidden = true;
+    this.note.className = 'hint';
+    this.summary.id = `${prefix}-share-summary`;
+    this.summary.className = 'share-link-summary';
+    this.summary.hidden = true;
+    this.summaryText.className = 'share-link-summary-text';
+    this.change.type = 'button';
+    this.change.id = `${prefix}-share-change`;
+    this.change.className = 'mini';
+    this.change.textContent = t('link.change');
+    const head = document.createElement('div');
+    head.className = 'share-link-summary-head';
+    head.append(this.summaryText, this.change);
+    this.summary.append(head, this.note);
+    this.change.addEventListener('click', () => this.startOver());
     this.error.id = `${prefix}-share-link-error`;
     this.error.className = 'error';
     this.error.setAttribute('role', 'alert');
     this.error.hidden = true;
     this.buildOnce(prefix);
-    this.root.append(row, hint, this.once, this.note, this.error);
+    this.root.append(this.entry, this.summary, this.once, this.error);
     this.use.addEventListener('click', () => void this.apply());
     this.input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') { event.preventDefault(); void this.apply(); }
@@ -139,7 +153,7 @@ export class ShareLinkField {
     const bound = this.bound;
     if (bound && !this.key(this.config.picker().url, this.config.syncId.value)) {
       this.bound = undefined;
-      this.note.hidden = true;
+      this.showEntry();
       this.config.onChange();
     }
   }
@@ -149,9 +163,43 @@ export class ShareLinkField {
     this.bound = undefined;
     this.dropOnce();
     this.input.value = '';
-    this.note.hidden = true;
+    this.showEntry();
     this.error.hidden = true;
     this.error.textContent = '';
+  }
+
+  /** True while a link was read or a one-time link waits to be opened. */
+  get engaged(): boolean {
+    return !!this.bound || !!this.pending;
+  }
+
+  /** Focus target when the field is shown. */
+  focus(): void {
+    (this.entry.hidden ? this.change : this.input).focus();
+  }
+
+  /** "Change": forget the link (and its key) and offer the paste field again. */
+  private startOver(): void {
+    const had = !!this.bound;
+    this.reset();
+    if (had) this.config.onChange();
+    this.input.focus();
+  }
+
+  private showEntry(): void {
+    this.entry.hidden = false;
+    this.summary.hidden = true;
+    this.note.textContent = '';
+    this.note.hidden = true;
+  }
+
+  /** Replaces the paste row with what the link brought. */
+  private showSummary(serviceUrl: string, syncId: string | undefined, note: string): void {
+    this.entry.hidden = true;
+    this.summaryText.textContent = syncId ? `${hostOf(serviceUrl)} · ${syncId.slice(0, 8)}…` : hostOf(serviceUrl);
+    this.note.textContent = note;
+    this.note.hidden = !note;
+    this.summary.hidden = false;
   }
 
   private fail(message: string): void {
@@ -174,10 +222,11 @@ export class ShareLinkField {
   /** Shows a parsed one-time link: nothing is sent until "Open link". */
   private offerOnce(parsed: HandoffSecret): void {
     this.generation++;
-    if (this.bound) { this.bound = undefined; this.note.hidden = true; this.config.onChange(); }
+    if (this.bound) { this.bound = undefined; this.showEntry(); this.config.onChange(); }
     this.dropOnce();
     this.pending = parsed;
     this.error.hidden = true;
+    this.showSummary(parsed.serviceUrl, undefined, '');
     this.onceNote.textContent = t('link.onceNote', { service: parsed.serviceUrl });
     this.codeRow.hidden = !parsed.codeRequired;
     this.once.hidden = false;
@@ -231,6 +280,7 @@ export class ShareLinkField {
         this.failOnce(message, this.openOnce);
       } else {
         this.dropOnce();
+        this.showEntry();
         this.failOnce(message, this.input);
       }
     }
@@ -241,8 +291,7 @@ export class ShareLinkField {
     this.error.hidden = true;
     this.config.syncId.value = parsed.id;
     this.bound = { serviceUrl: parsed.serviceUrl, syncId: parsed.id, key: parsed.key, ...(parsed.label ? { label: parsed.label } : {}) };
-    this.note.textContent = note;
-    this.note.hidden = false;
+    this.showSummary(parsed.serviceUrl, parsed.id, note);
     this.config.onChange();
     await this.config.picker().select(parsed.serviceUrl, true, true);
     if (generation !== this.generation) return;
@@ -276,6 +325,10 @@ export class ShareLinkField {
     this.dropOnce();
     await this.adopt(parsed, t('link.acquired', { id: `${parsed.id.slice(0, 8)}…` }), generation);
   }
+}
+
+function hostOf(serviceUrl: string): string {
+  try { return new URL(serviceUrl).host + new URL(serviceUrl).pathname.replace(/\/+$/, ''); } catch { return serviceUrl; }
 }
 
 function sameService(a: string, b: string): boolean {

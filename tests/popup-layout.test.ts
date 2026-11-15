@@ -39,3 +39,21 @@ describe('popup.css layout', () => {
     expect(doc.querySelector('#view-main > .row.actions #btn-sync-now')).not.toBeNull();
   });
 });
+
+describe('connect form structure', () => {
+  const html = readFileSync('src/popup.html', 'utf8');
+  const doc = document.implementation.createHTMLDocument('');
+  doc.body.innerHTML = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'));
+
+  it('asks how first: shared link (default), ID and password, new sync', () => {
+    const radios = [...doc.querySelectorAll<HTMLInputElement>('#view-connect input[name="conn-mode"]')];
+    expect(radios.map((r) => r.value)).toEqual(['link', 'creds', 'new']);
+    expect(radios.find((r) => r.hasAttribute('checked'))?.value).toBe('link');
+  });
+
+  it('the name is the last field before the action bar choices', () => {
+    const order = [...doc.querySelectorAll('#view-connect input')].map((i) => i.id).filter(Boolean);
+    expect(order.indexOf('sync-name')).toBeGreaterThan(order.indexOf('confirm-password'));
+    expect(order.indexOf('sync-name')).toBeGreaterThan(order.indexOf('password'));
+  });
+});

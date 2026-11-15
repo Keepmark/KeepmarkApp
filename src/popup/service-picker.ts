@@ -141,6 +141,9 @@ export class ServicePicker {
 
   updateMode(): void { this.renderFeedback(); this.notify(); }
 
+  /** Hides the whole picker (a shared link names the service itself). */
+  setHidden(hidden: boolean): void { this.root.hidden = hidden; }
+
   setBusy(value: boolean): void {
     this.busy = value;
     if (value) this.menu.open = false;

@@ -147,11 +147,15 @@ it('paste field: a link fills service and ID, keeps the key until either changes
   expect(id.value).toBe(payload.id);
   expect(picker.select).toHaveBeenCalledWith('https://api.example.test/sync', true, true);
   expect(field.key('https://api.example.test/sync/', id.value)).toBe(key);
+  // The paste row gives way to a summary of what the link brought.
+  expect(el('t-share-summary').hidden).toBe(false);
+  expect(el('t-share-summary').textContent).toContain('api.example.test/sync · 01234567…');
   expect(el('t-share-link-note').hidden).toBe(false);
   id.value = 'other';
   id.dispatchEvent(new Event('input'));
   expect(field.key(picker.url, id.value)).toBeUndefined();
-  expect(el('t-share-link-note').hidden).toBe(true);
+  expect(el('t-share-summary').hidden).toBe(true);
+  expect(input.closest('.share-link-entry')!.hasAttribute('hidden')).toBe(false);
 });
 
 it('paste field: a different service drops the key; reset clears everything', async () => {

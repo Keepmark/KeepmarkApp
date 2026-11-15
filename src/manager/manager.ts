@@ -158,7 +158,9 @@ function prefillLinkUrl(): void {
 }
 function updateLinkServiceGate(): void {
   if (!linkService || checkingTarget || linking) return;
-  const ready = linkService.ready && !linkLabelTaken(input('m-link-name').value);
+  // With "shared link" there is nothing to send until a link was read.
+  const ready = linkService.ready && !linkLabelTaken(input('m-link-name').value)
+    && (linkMethod() !== 'link' || !!linkKey());
   const wizard = linkMode() === 'existing' && !!status?.syncEnabled;
   ($('m-btn-link-check') as HTMLButtonElement).disabled = !ready || !wizard;
   ($('m-btn-link-direct') as HTMLButtonElement).disabled = !ready;
@@ -1265,10 +1267,17 @@ function initDuplicatesSection(): void {
   });
 }
 
+/** How the sync is added: a shared link, its ID and password, or a new one. */
+function linkMethod(): 'link' | 'creds' | 'new' {
+  // Read the checked property, not :checked (which can match the default
+  // checked attribute in some DOMs after the user changed the choice).
+  const value = [...document.querySelectorAll<HTMLInputElement>('input[name="m-link-mode"]')].find((r) => r.checked)?.value;
+  return value === 'creds' || value === 'new' ? value : 'link';
+}
+
+/** What the background sees: a link and credentials both open an existing sync. */
 function linkMode(): 'new' | 'existing' {
-  return (document.querySelector('input[name="m-link-mode"]:checked') as HTMLInputElement).value as
-    | 'new'
-    | 'existing';
+  return linkMethod() === 'new' ? 'new' : 'existing';
 }
 
 function linkDirection(): 'push' | 'pull' | 'merge' {
@@ -1286,17 +1295,23 @@ function updateLinkForm(): void {
   // is created directly from the live bookmarks. Only an existing sync, with
   // an active one to compare against, goes through the check/review wizard.
   const wizard = mode === 'existing' && linked;
+  const method = linkMethod();
   linkService?.updateMode();
-  ($('m-link-id-row') as HTMLElement).hidden = mode !== 'existing';
-  if (linkShare) linkShare.root.hidden = mode !== 'existing';
+  // A link names its own service and ID: only the paste field (then its
+  // summary) is shown. Credentials need the service, the ID and the password.
+  linkService?.setHidden(method === 'link');
+  ($('m-link-id-row') as HTMLElement).hidden = method !== 'creds';
+  if (linkShare) linkShare.root.hidden = method !== 'link';
   // A link key replaces the password of the existing sync it names.
   const keyed = !!linkKey();
-  ($('m-link-password-row') as HTMLElement).hidden = keyed;
-  if (keyed) input('m-link-password').value = '';
+  ($('m-link-password-row') as HTMLElement).hidden = keyed || method === 'link';
+  if (keyed || method === 'link') input('m-link-password').value = '';
+  // Until a link is read only its paste field is on screen; the name
+  // (prefilled from the link, still editable) appears with its summary.
+  ($('m-link-name-row') as HTMLElement).hidden = method === 'link' && !keyed;
   ($('m-link-direction-row') as HTMLElement).hidden = mode !== 'existing';
   ($('m-link-check-row') as HTMLElement).hidden = !wizard;
   ($('m-link-direct') as HTMLElement).hidden = wizard;
-  ($('link-gate-hint') as HTMLElement).hidden = !wizard;
   $('m-btn-link-direct').textContent = mode === 'new'
     ? t('manager.syncs.createUpload')
     : t('manager.syncs.connect');
@@ -1489,7 +1504,6 @@ function setLinkGate(ok: boolean): void {
   ($('link-step2') as HTMLElement).hidden = !ok;
   // One primary action at a time: once step 2 is open, Move is the main one.
   $('m-btn-link-check').classList.toggle('primary', !ok);
-  ($('link-gate-hint') as HTMLElement).hidden = ok;
 }
 
 async function submitLink(): Promise<void> {
@@ -1595,10 +1609,6 @@ async function submitLink(): Promise<void> {
     box.scrollIntoView({ block: 'nearest' });
     box.focus({ preventScroll: true });
     await refreshStatus();
-  } else {
-    // Failed: the still-valid preview keeps the button unlocked, so keep
-    // the gate hint in sync with the button (hint shown only while locked).
-    ($('link-gate-hint') as HTMLElement).hidden = !($('m-btn-link') as HTMLButtonElement).disabled;
   }
 }
 
@@ -1737,8 +1747,9 @@ function openAddSync(): void {
  *  takes the dialog. Nothing is closed and reopened: the task never flickers
  *  and the opener keeps its focus target for when the task ends. */
 function openAddWizard(opener?: HTMLElement): void {
-  // Every open starts on "a new sync": that is what the button promises.
-  (document.querySelector('input[name="m-link-mode"][value="new"]') as HTMLInputElement).checked = true;
+  // Every open starts on "a shared link": the common case (the sync already
+  // exists on another device), and the one with nothing to type.
+  (document.querySelector('input[name="m-link-mode"][value="link"]') as HTMLInputElement).checked = true;
   (document.querySelector('input[name="m-link-direction"][value="pull"]') as HTMLInputElement).checked = true;
   ($('m-link-gate') as HTMLElement).hidden = true;
   ($('m-link-form') as HTMLElement).hidden = false;
@@ -1755,7 +1766,8 @@ function openAddWizard(opener?: HTMLElement): void {
   // opening the form would silently go nowhere and the host default would be
   // saved. Focus the first field the user can see and select it, so typing
   // replaces the suggestion instead of appending to it.
-  focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
+  if (linkMethod() === 'link' && linkShare) linkShare.focus();
+  else focusFirstVisible([input('m-link-url'), input('m-link-name')], true);
 }
 
 /** Gate submit: prove the sync lock password (read-only, nothing changes) and
@@ -1837,9 +1849,15 @@ function initMoveSection(): void {
     syncId: input('m-link-id'),
     onChange: () => { updateLinkForm(); suggestLinkName(); },
   });
-  $('m-link-id-row').before(linkShare.root);
+  $('m-link-share-slot').append(linkShare.root);
   document.querySelectorAll('input[name="m-link-mode"]').forEach((el) => {
-    el.addEventListener('change', updateLinkForm);
+    el.addEventListener('change', () => {
+      // Leaving "shared link" drops its key: credentials are typed, never
+      // inherited from a link the user can no longer see.
+      if (linkMethod() !== 'link') linkShare?.reset();
+      updateLinkForm();
+      suggestLinkName();
+    });
   });
   document.querySelectorAll('input[name="m-link-direction"]').forEach((el) => {
     el.addEventListener('change', () => {
@@ -2391,8 +2409,20 @@ function suggestLinkName(): void {
   if (nameTouched) return;
   const url = input('m-link-url').value.trim();
   // A one-time link carries the sender's name: propose it unless it is taken.
-  const label = url ? linkShare?.label(linkService.url, input('m-link-id').value) : undefined;
-  input('m-link-name').value = label && !linkLabelTaken(label) ? label : url ? suggestSavedSyncName(url, syncsView.syncs) : '';
+  const syncId = input('m-link-id').value.trim();
+  const label = url ? linkShare?.label(linkService.url, syncId) : undefined;
+  // Linking a sync this browser already saved keeps the name it has here.
+  const saved =
+    url && syncId && linkMode() === 'existing'
+      ? syncsView.syncs.find((row) => sameSavedSync(row, { serviceUrl: url, syncId }))
+      : undefined;
+  input('m-link-name').value = saved
+    ? savedSyncName(saved)
+    : label && !linkLabelTaken(label)
+      ? label
+      : url
+        ? suggestSavedSyncName(url, syncsView.syncs)
+        : '';
   updateLinkNameHint();
 }
 

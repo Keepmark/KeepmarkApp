@@ -10,7 +10,9 @@ import { StoreKey } from '../shared/store.js';
 export const ConnectDraftTtlMs = 60_000;
 
 export interface ConnectDraft {
-  mode: 'new' | 'existing';
+  /** How the form connects: shared link, sync ID + password, or a new sync.
+   *  The link itself (and its key) never travels: the tab asks for it again. */
+  mode: 'link' | 'creds' | 'new';
   direction: 'pull' | 'merge' | 'push';
   serviceUrl: string;
   syncId: string;
@@ -27,7 +29,7 @@ export interface DraftArea {
   remove(key: string): Promise<void>;
 }
 
-const modes = ['new', 'existing'] as const;
+const modes = ['link', 'creds', 'new'] as const;
 const directions = ['pull', 'merge', 'push'] as const;
 
 function checked(root: ParentNode, name: string): string | undefined {
@@ -43,7 +45,7 @@ export function captureConnectDraft(root: ParentNode, nameTouched: boolean, now 
   const mode = checked(root, 'conn-mode');
   const direction = checked(root, 'conn-direction');
   return {
-    mode: mode === 'existing' ? 'existing' : 'new',
+    mode: mode === 'creds' || mode === 'new' ? mode : 'link',
     direction: direction === 'merge' || direction === 'push' ? direction : 'pull',
     serviceUrl: field(root, 'service-url')?.value.trim() ?? '',
     syncId: field(root, 'sync-id')?.value.trim() ?? '',
@@ -57,14 +59,16 @@ export function captureConnectDraft(root: ParentNode, nameTouched: boolean, now 
 export function parseConnectDraft(value: unknown, now = Date.now()): ConnectDraft | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const v = value as Record<string, unknown>;
-  if (!modes.includes(v.mode as ConnectDraft['mode'])) return undefined;
+  // 'existing' is the pre-0.1.71 value (one choice for link and credentials).
+  const mode = v.mode === 'existing' ? 'creds' : v.mode;
+  if (!modes.includes(mode as ConnectDraft['mode'])) return undefined;
   if (!directions.includes(v.direction as ConnectDraft['direction'])) return undefined;
   if (typeof v.savedAt !== 'number' || now - v.savedAt > ConnectDraftTtlMs || v.savedAt - now > ConnectDraftTtlMs) {
     return undefined;
   }
   const text = (x: unknown, max: number): string => (typeof x === 'string' ? x.slice(0, max) : '');
   return {
-    mode: v.mode as ConnectDraft['mode'],
+    mode: mode as ConnectDraft['mode'],
     direction: v.direction as ConnectDraft['direction'],
     serviceUrl: text(v.serviceUrl, 2048),
     syncId: text(v.syncId, 256),
