@@ -422,7 +422,9 @@ the name this device already shows for that sync, else the sender's name from
 a one-time link (when free), else the service host (`host`, `host 2`, …). A
 name another saved sync already shows is refused next to the field; an empty
 name falls back to the service host (a sync this device already saved keeps
-its current name). In the extension the name (and the
+its current name). `+ Add a sync` refuses the sync already in use, before
+any server check (`This sync is already active.`): there is nothing to add
+and nothing to leave. In the extension the name (and the
 popup's direction choice) appear only once the link is read; on Android the
 name sits in the review, above the final button.
 

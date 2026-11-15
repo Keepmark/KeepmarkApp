@@ -2879,6 +2879,13 @@ export class BackgroundCore {
     syncId?: string,
   ): Promise<SyncTargetPreview> {
     const { info } = await this.requireCreds();
+    // Adding the sync this browser already uses: nothing to add, nothing to
+    // leave. Refused before any network call, like activating it again.
+    const active = await this.activeSavedSync();
+    if (mode === 'existing' && syncId && active
+      && sameSavedSync(active, { serviceUrl: canonicalServiceUrl(newServiceUrl), syncId })) {
+      throw new UnexpectedResponseException(t('core.savedAlreadyActive'));
+    }
     const localCount = await this.countCached(info).catch(() => undefined);
     const api = this.makeApi(newServiceUrl, ServiceProbeTimeoutMs);
     let service;

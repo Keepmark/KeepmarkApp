@@ -1127,6 +1127,16 @@ describe('background core', () => {
     expect(info!.serviceUrl).toBe('https://x.test/');
   });
 
+  it('switch preview refuses the sync this browser already uses', async () => {
+    const { core } = await linkedCore(baseState());
+    await expect(core.handleMessage({
+      command: MessageCommand.CheckSyncTarget,
+      newServiceUrl: 'https://x.test',
+      mode: 'existing',
+      syncId: SYNC_ID,
+    })).rejects.toThrow('That sync is already active.');
+  });
+
   it('switch preview reports unreachable target', async () => {    const store = new Store(new MemoryBackend());
     const ports = makePorts();
     const down = async (): Promise<never> => {
