@@ -72,17 +72,22 @@ Words come from `UI-TERMS.md`.
 
 ## Saved-sync list and settings layout
 
-The extension manager and Android Syncs page give every saved sync a prominent
-`Activate` button. It is disabled on the active sync, whose active badge stays
-visible. Secondary commands are in the row's accessible `⋮` menu: ordinary
-commands (rename, show QR or change password where supported) first, then a
+The extension manager gives every saved sync a prominent `Activate` button,
+disabled on the active sync, whose active badge stays visible. The Android
+Syncs page keeps each row on one line: the active sync shows only its badge,
+and every other sync shows `Activate` in that same slot, so the active sync
+never offers to activate itself. Secondary commands are in the row's accessible `⋮` menu: ordinary
+commands (rename, show QR, share sync or change password where supported) first, then a
 separate final group for forgetting, unlinking and server deletion where
 supported. A menu opens only that row's existing task; confirmations and stable
 sync identity checks still apply. Only one menu is open at a time; Escape and
 clicking outside close it. The extension popup remains a minimal activation list.
 
-On Android, Settings places the complete log block after all other preferences,
-immediately before `Save`.
+On Android, Settings places the complete log block after all other preferences.
+There is no `Save`: every setting (Settings and Settings → Security) applies the
+moment it changes. Lowering the safety-backup limit confirms inline first;
+weakening the app lock asks for the device PIN and reverts on refusal. Theme and
+the recent count are segmented controls.
 
 ## Shared workflows
 
@@ -91,9 +96,9 @@ immediately before `Save`.
 | Connect: new sync | no | `Create a new sync` → service URL, password + confirm, name (prefilled with the service host) → `Create sync` | none | The password cannot be recovered. After success the full sync ID is shown with `Copy sync ID`. |
 | Connect: existing sync | no | `I have a shared link` (paste, or QR on Android) or `I have the sync ID and password` (service URL, sync ID, password) → verification → direction with consequences, name → apply | Android: apply executes; extension popup: one inline confirmation | Download: unsynced edits on this device are lost. Upload: changes from other devices are lost. Merge: items deleted on one side come back. |
 | Change password | yes | Syncs → `Change password` on the active sync's row → Current, New, Confirm new → `Change password` | one inline confirmation | Other devices stop syncing until they are unlinked and linked again with the new password. Unsynced local edits are uploaded now. Older backup files keep their own password. The long password belongs to the sync, so this is a row action in Syncs, never a Settings section, and the sync lock is not asked again: the saved key is re-wrapped under the previous one. |
-| Backup: export | no | Backup → `Export…` (opens a task dialog) → backup password + confirm → `Export encrypted backup` | none | The backup password is not the sync password and cannot be recovered. |
+| Backup: export | no | Backup password + confirm → `Export encrypted backup` (extension: Backup → `Export…` opens a task dialog first) | none | The backup password is not the sync password and cannot be recovered. |
 | Backup: import | yes (extension) / no (Android) | `Choose backup file…` → password of that backup → `Check backup` (dry run: item count, nothing changes) → consequences → `Restore backup` | Review is the only confirmation; final button executes | Replaces local bookmarks and, while linked, the server copy; the other devices receive it at their next sync. A wrong password clears only the password; the file stays chosen. |
-| Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. Backups of another sync (or needing a link while unlinked) cannot be restored here: they are hidden behind the `Restorable here / All` filter, shown dimmed with the reason, with no `Restore` and, when their sync is saved, `Activate <name>…` instead. |
+| Safety backup: restore | no | `Restore` | always | What is replaced (local bookmarks or server copy) and that a pre-restore backup is taken. Backups of another sync (or needing a link while unlinked) cannot be restored here: they are hidden behind the `Restorable here / All` filter, shown dimmed with the reason, with no `Restore` and, when their sync is saved, `Activate <name>…` (Android: opens Syncs) instead. |
 | Safety backup: delete | no | `Delete` | always | There is no undo. |
 | Unlink this device | yes | `Unlink this device…` | always | Local bookmarks stay. Linking again needs the sync ID and password. Edits not yet synced stay only on this device. Undo is cleared. |
 | Sync conflict | conflict | direction with consequences → apply | Android: apply executes; extension: one inline confirmation | Same direction text as Connect. |
@@ -103,12 +108,13 @@ immediately before `Save`.
 
 | Workflow | Needs link | Steps | Confirmation | Implication line (required) |
 |---|---|---|---|---|
-| Add a sync while linked (Syncs → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual or QR) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
+| Add a sync while linked (Syncs → `+ Add a sync`) | yes | Device unlock when app lock is set → existing sync only (manual, QR or shared link) → verification → direction with consequences → apply | apply executes | The sync just added becomes active; the previous one stays in the Syncs list with its server copy. Unsynced edits on this device are pushed first: a pending conflict, a missing connection, a sync that no longer exists on the server or a failed push cancels the switch and changes nothing, and the message names that exact cause. A brand-new sync requires unlinking first (bookmarks stay). |
 | Bookmarks file (HTML): export | no | Backup → Bookmarks file (HTML) → `Export HTML…` → warning → `Export anyway` → share sheet | the warning is the confirmation | The file is NOT encrypted. It is a hand-over copy: Keepmark deletes its own copy at the next export or start. |
 | Bookmarks file (HTML): import | no | Backup → Bookmarks file (HTML) → `Import HTML…` → choose a `.html` file → preview (bookmarks, folders, separators, skipped links, duplicates; `Skip bookmarks already saved` on by default) → `Import` | Review is the only confirmation; final button executes | Additive only: one new folder `Imported <date>` at the end of Other, nothing is replaced. A safety backup is saved first; while linked the import is uploaded. |
 | Tags: rename, merge, delete | no | Menu → `Tags` → tap a tag → rename (a name that already exists merges the two) or delete | delete: always; rename/merge: the note under the field | The change applies to every bookmark with that tag in one step; the bookmarks themselves stay. A safety backup is saved first; while linked the change is uploaded. |
 | Pull to refresh (Explore) | yes | With the list at the top, drag down past the threshold and release | none | Same as `Sync now`. Silent when nothing moved; a short `Synced` when bookmarks were received or sent; errors, conflicts and offline report as usual. |
 | Syncs: Activate | no | Syncs → `Activate` → confirmation → device unlock when app lock is set → apply | once, plus device unlock when configured | Read-only check first (service/version gate + download + decrypt with the key saved in the row); only then the active side is saved and this device adopts the chosen sync's copy — with no safety backup when it was linked to another sync (that copy is on the server); an unlinked device keeps the usual `switch-take-remote` backup. If that save cannot happen the switch is cancelled with the real reason (pending conflict, no connection, sync gone from the server, push failed) and nothing is replaced. The sync you leave stays in the list. The sync's own long password is never asked. |
+| Explore: quick switch (2+ saved syncs) | no | Explore bar shows the active sync's name with a chevron → bottom sheet of ribbons (colour from the sync ID, initial, name, active state or last use, host · short ID) → tap a row → inline confirmation in that row → device unlock when app lock is set → apply | once, plus device unlock when configured | Same activation as Syncs → `Activate` (read-only check, fail-closed save of the active side). Errors stay inside the failed row and the sheet stays open; success closes it, returns to the root and clears search/undo. With one sync the bar keeps "Keepmark" and has no chevron. |
 | Syncs: Forget / Unlink | no | Syncs → `Forget…` (inactive) / `Unlink this device…` (active) | always | Inactive: only the row is forgotten; bookmarks, the server copy and the other rows stay. Active: this device is unlinked and the row disappears; the bookmarks stay and the sync plus its server copy stay for the other devices. Dormant rows survive an unlink. Forgetting also drops that key's safety-master wrap when no other saved sync uses it; safety backups and copies of removed syncs stay. |
 | Removed sync (401) | shown while linked | Home/Status notice → `Try again` / `Unlink and keep a copy…` / `Cancel` | always for the unlink; retry and cancel execute at once | The service no longer has this sync (expiry or another device's deletion). Nothing happens automatically and local bookmarks are untouched. Unlinking keeps a verified local copy of this device's tree, restorable from Backup → `Copies of removed syncs` and never pruned; `Cancel` keeps the notice quiet for that sync until an explicit retry. |
 | Removed-sync copy | no | Backup → `Copies of removed syncs` → `Restore` / `Delete` | always | Restore takes a `pre-restore` safety backup first and replaces the local bookmarks (pushed at the next sync while linked). While a sync is linked the restore is refused until that sync has saved its pending edits, so nothing unsaved is replaced silently. Delete removes only that copy; there is no undo. Copies are never pruned automatically; a copy list that cannot be read says so instead of looking empty. |
