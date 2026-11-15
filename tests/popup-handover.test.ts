@@ -7,6 +7,7 @@ import {
   applyConnectDraft,
   captureConnectDraft,
   ConnectDraftTtlMs,
+  defaultConnectMode,
   parseConnectDraft,
   saveConnectDraft,
   takeConnectDraft,
@@ -109,5 +110,22 @@ describe('connect form handover', () => {
       remove: async () => undefined,
     };
     expect(await takeConnectDraft(broken)).toBeUndefined();
+  });
+});
+
+describe('first connect default', () => {
+  it('starts on "Create a new sync" only while no sync is saved in this browser', () => {
+    expect(defaultConnectMode(0)).toBe('new');
+    expect(defaultConnectMode(1)).toBe('link');
+    expect(defaultConnectMode(3)).toBe('link');
+  });
+
+  it('is settled before the connect view shows and never over a user or draft choice', () => {
+    const src = readFileSync('src/popup/popup.ts', 'utf8');
+    const pick = src.slice(src.indexOf('if (pickView) {'));
+    expect(pick.indexOf('settleConnectMode()')).toBeLessThan(pick.indexOf('showView('));
+    const settle = src.slice(src.indexOf('async function settleConnectMode'));
+    expect(settle).toMatch(/if \(connectModeSettled \|\| resumedDraft\) return;/);
+    expect(src).toMatch(/addEventListener\('change', \(\) => \{\s*connectModeSettled = true;/);
   });
 });

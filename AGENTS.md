@@ -446,7 +446,9 @@ around the link is ignored.
 - Import: `popup/share-link-field.ts` (`ShareLinkField`) is the whole
   `I have a shared link` method (0.1.71) of popup Connect (`conn-mode`) and
   Manager `+ Add a sync` (`m-link-mode`): three flat radio choices
-  `link` (default) / `creds` / `new`, mapped to the background `existing` /
+  `link` (default) / `creds` / `new` (popup only: `new` when no sync is saved
+  yet, set by `settleConnectMode()` via `defaultConnectMode()` before the view
+  shows, never over a user click or handed-over draft), mapped to the background `existing` /
   `new` modes (`connectMode()` / `linkMode()`; read each radio's `.checked`,
   happy-dom's `:checked` can match the default attribute). In `link` the
   service picker (`ServicePicker.setHidden`), sync ID and password are hidden;

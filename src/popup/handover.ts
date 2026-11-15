@@ -30,6 +30,13 @@ export interface DraftArea {
 }
 
 const modes = ['link', 'creds', 'new'] as const;
+
+/** The choice a fresh popup Connect form starts on. With no sync saved in this
+ *  browser the likely first step is creating one; once a sync exists, the
+ *  browser usually joins one, most often from a shared link. */
+export function defaultConnectMode(savedSyncs: number): ConnectDraft['mode'] {
+  return savedSyncs === 0 ? 'new' : 'link';
+}
 const directions = ['pull', 'merge', 'push'] as const;
 
 function checked(root: ParentNode, name: string): string | undefined {

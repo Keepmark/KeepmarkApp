@@ -39,6 +39,7 @@ import { type Direction, directionConfirm } from './texts.js';
 import {
   applyConnectDraft,
   captureConnectDraft,
+  defaultConnectMode,
   saveConnectDraft,
   takeConnectDraft,
   type DraftArea,
@@ -86,6 +87,9 @@ let savedNames: SavedSync[] = [];
 let connectNameTouched = false;
 /** The full tab was opened from the popup with a connect draft applied. */
 let resumedDraft = false;
+/** The connect choice is settled: picked by the user, by a draft, or by the
+ *  first saved-syncs answer (`defaultConnectMode`). Never changed after. */
+let connectModeSettled = false;
 
 /** `pickView`: choose connect vs main as soon as GetStatus answers, before
  * the slower service ping (the popup opens with both views hidden). */
@@ -100,6 +104,8 @@ async function refreshAll(pickView = false): Promise<void> {
   }
   if (my !== refreshSeq) return;
   if (pickView) {
+    if (!status?.syncEnabled) await settleConnectMode();
+    if (my !== refreshSeq) return;
     showView(status?.syncEnabled ? 'main' : 'connect');
     if (!status?.syncEnabled) void connectService.load();
   }
@@ -143,6 +149,29 @@ async function refreshAll(pickView = false): Promise<void> {
     if (connectMethod() === 'link') connectLink.focus();
     else if (resumedDraft) focusFirstVisible([input('password')]);
     else focusFirstVisible([input('service-url'), input('sync-name')], true);
+  }
+}
+
+/** First Connect in this browser (nothing saved yet): start on "Create a new
+ *  sync". Runs before the connect view is shown, so the choice never flips
+ *  under the user; only from a real registry answer, once, and never over a
+ *  choice the user or a handed-over draft already made. */
+async function settleConnectMode(): Promise<void> {
+  if (connectModeSettled || resumedDraft) return;
+  let saved: number;
+  try {
+    saved = (await send<SavedSyncsResponse>({ command: MessageCommand.GetSavedSyncs })).syncs.length;
+  } catch {
+    return;
+  }
+  if (connectModeSettled) return;
+  connectModeSettled = true;
+  const radio = document.querySelector<HTMLInputElement>(
+    `input[name="conn-mode"][value="${defaultConnectMode(saved)}"]`,
+  );
+  if (radio && !radio.checked) {
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
   }
 }
 
@@ -284,6 +313,11 @@ async function initConnect(): Promise<void> {
   };
   document.querySelectorAll('input[name="conn-mode"], input[name="conn-direction"]').forEach((el) => {
     el.addEventListener('change', updateMode);
+  });
+  document.querySelectorAll('input[name="conn-mode"]').forEach((el) => {
+    el.addEventListener('change', () => {
+      connectModeSettled = true;
+    });
   });
   updateMode();
   // Editing the form while the confirm is open drops it: never connect with

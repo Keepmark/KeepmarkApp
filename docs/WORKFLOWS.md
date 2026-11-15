@@ -416,7 +416,8 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
 
 Connect (first link) and `+ Add a sync` start with three flat choices, in
 this order: `I have a shared link`, `I have the sync ID and password`,
-`Create a new sync` (the extension preselects the first one; Android shows
+`Create a new sync` (the extension preselects the first one, except the popup
+Connect in a browser with no saved sync, which starts on `Create a new sync`; Android shows
 them as cards; while linked Android offers the first two, a new sync being a
 first-link flow there). Each choice shows only its own fields:
 
