@@ -400,9 +400,12 @@ keepmark://sync?v=1&s=<service URL, percent-encoded>&id=<sync ID>&k=<derived key
   discarded after 60 seconds, on lock or background). In the extension (popup
   `Existing sync` and Manager `+ Add a sync` → `An existing sync`) a pasted
   link is read at once and the field becomes a summary (service host · short
-  ID, "Read from the link: no password needed.", `Change`); `Change` or
-  switching to `I have the sync ID and password` drops the key, so the password
-  is asked again. Both then run the normal verification,
+  ID, "Read from the link: no password needed.", `Use another link`);
+  `Use another link` or switching to `I have the sync ID and password` drops
+  the key, so the password is asked again. The service and ID come from the
+  link and are never editable: another target means another link. On Android
+  the verified link summary has the same `Use another link`; after `I have
+  the sync ID and password` it is `Edit`, which reopens the fields. Both then run the normal verification,
   direction choice, merge preview and safety backups. A key that no longer
   opens the sync reports "ask for a new link". The extension accepts a plain
   `http` link only for loopback hosts, like any service URL.
@@ -419,7 +422,7 @@ first-link flow there). Each choice shows only its own fields:
 
 | Choice | Fields shown |
 |---|---|
-| Shared link | paste field (Android: also `Scan QR from browser`); no service picker, no ID, no password. After the link is read: its summary with `Change`, then the name |
+| Shared link | paste field (Android: also `Scan QR from browser`); no service picker, no ID, no password. After the link is read: its summary with `Use another link`, then the name |
 | Sync ID and password | service, sync ID, password, then the name |
 | New sync | service, new password + confirm, then the name |
 
@@ -468,6 +471,9 @@ keepmark://sync?v=2&s=<service URL, percent-encoded>&t=<32-byte secret, base64ur
   how many attempts remain; an expired, used or revoked link says so and asks
   for a new one. The key it returns then follows the normal verification,
   direction choice, merge preview and safety backups, like a format-1 link.
+  Because the link cannot be opened again, `Use another link` after a
+  one-time link asks first ("already used up: … a new link from the person
+  who shared it", `Discard` / `Cancel`).
 - A service without vouchers (any xBrowserSync API, KeepmarkApi before
   handoffs) still gets the lasting format-1 link, with a notice that it
   cannot be withdrawn except by changing the sync password.

@@ -27,12 +27,16 @@ export class ShareLinkField {
   private readonly note = document.createElement('p');
   /** Paste row (field + Use link): hidden once a link was read. */
   private readonly entry = document.createElement('div');
-  /** What the link brought ("service · ID") with Change, in place of the entry. */
+  /** What the link brought ("service · ID") with "Use another link", in place of the entry. */
   private readonly summary = document.createElement('div');
   private readonly summaryText = document.createElement('strong');
   private readonly change = document.createElement('button');
+  /** Asks before dropping a key that came from a one-time link (used up). */
+  private readonly discard = document.createElement('div');
+  private readonly discardYes = document.createElement('button');
+  private readonly discardNo = document.createElement('button');
   private readonly error = document.createElement('div');
-  private bound: { serviceUrl: string; syncId: string; key: string; label?: string } | undefined;
+  private bound: { serviceUrl: string; syncId: string; key: string; label?: string; once?: boolean } | undefined;
   private generation = 0;
   /** A parsed one-time link waiting for "Open link" (nothing redeemed yet). */
   private pending: HandoffSecret | undefined;
@@ -85,7 +89,8 @@ export class ShareLinkField {
     const head = document.createElement('div');
     head.className = 'share-link-summary-head';
     head.append(this.summaryText, this.change);
-    this.summary.append(head, this.note);
+    this.buildDiscard(prefix);
+    this.summary.append(head, this.note, this.discard);
     this.change.addEventListener('click', () => this.startOver());
     this.error.id = `${prefix}-share-link-error`;
     this.error.className = 'error';
@@ -101,6 +106,36 @@ export class ShareLinkField {
     // A pasted link is applied at once: no extra click for the common case.
     this.input.addEventListener('paste', () => setTimeout(() => { if (looksLikeShareLink(this.input.value)) void this.apply(); }, 0));
     config.syncId.addEventListener('input', () => this.refresh());
+  }
+
+  private buildDiscard(prefix: string): void {
+    this.discard.id = `${prefix}-share-discard`;
+    this.discard.className = 'confirm danger';
+    this.discard.setAttribute('role', 'group');
+    this.discard.hidden = true;
+    const text = document.createElement('p');
+    text.textContent = t('link.onceDiscard');
+    this.discardYes.type = 'button';
+    this.discardYes.id = `${prefix}-share-discard-yes`;
+    this.discardYes.className = 'danger';
+    this.discardYes.textContent = t('link.onceDiscardYes');
+    this.discardNo.type = 'button';
+    this.discardNo.id = `${prefix}-share-discard-cancel`;
+    this.discardNo.textContent = t('common.cancel');
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(this.discardYes, this.discardNo);
+    this.discard.append(text, row);
+    this.discard.setAttribute('aria-label', t('link.onceDiscard'));
+    this.discardYes.addEventListener('click', () => this.startOver(true));
+    this.discardNo.addEventListener('click', () => this.hideDiscard(true));
+  }
+
+  private hideDiscard(refocus = false): void {
+    if (this.discard.hidden) return;
+    this.discard.hidden = true;
+    this.change.disabled = false;
+    if (refocus) this.change.focus();
   }
 
   private buildOnce(prefix: string): void {
@@ -153,6 +188,7 @@ export class ShareLinkField {
     const bound = this.bound;
     if (bound && !this.key(this.config.picker().url, this.config.syncId.value)) {
       this.bound = undefined;
+      this.hideDiscard();
       this.showEntry();
       this.config.onChange();
     }
@@ -163,6 +199,7 @@ export class ShareLinkField {
     this.bound = undefined;
     this.dropOnce();
     this.input.value = '';
+    this.hideDiscard();
     this.showEntry();
     this.error.hidden = true;
     this.error.textContent = '';
@@ -178,8 +215,16 @@ export class ShareLinkField {
     (this.entry.hidden ? this.change : this.input).focus();
   }
 
-  /** "Change": forget the link (and its key) and offer the paste field again. */
-  private startOver(): void {
+  /** "Use another link": forget the link (and its key) and offer the paste
+   *  field again. A key from a one-time link cannot be read again (the link
+   *  is used up), so that case asks first. */
+  private startOver(confirmed = false): void {
+    if (this.bound?.once && !confirmed) {
+      this.discard.hidden = false;
+      this.change.disabled = true;
+      this.discardNo.focus();
+      return;
+    }
     const had = !!this.bound;
     this.reset();
     if (had) this.config.onChange();
@@ -264,7 +309,7 @@ export class ShareLinkField {
       const result = await redeem(link, pending.codeRequired ? code : undefined);
       if (generation !== this.generation) return;
       this.dropOnce();
-      await this.adopt(result, t('link.acquiredOnce', { id: `${result.id.slice(0, 8)}…` }), generation);
+      await this.adopt(result, t('link.acquiredOnce', { id: `${result.id.slice(0, 8)}…` }), generation, true);
     } catch (error) {
       if (generation !== this.generation) return;
       this.redeeming = false;
@@ -287,10 +332,10 @@ export class ShareLinkField {
   }
 
   /** Binds a key (from either format) to its service and ID. */
-  private async adopt(parsed: RedeemedShareLink, note: string, generation: number): Promise<void> {
+  private async adopt(parsed: RedeemedShareLink, note: string, generation: number, once = false): Promise<void> {
     this.error.hidden = true;
     this.config.syncId.value = parsed.id;
-    this.bound = { serviceUrl: parsed.serviceUrl, syncId: parsed.id, key: parsed.key, ...(parsed.label ? { label: parsed.label } : {}) };
+    this.bound = { serviceUrl: parsed.serviceUrl, syncId: parsed.id, key: parsed.key, ...(parsed.label ? { label: parsed.label } : {}), ...(once ? { once } : {}) };
     this.showSummary(parsed.serviceUrl, parsed.id, note);
     this.config.onChange();
     await this.config.picker().select(parsed.serviceUrl, true, true);

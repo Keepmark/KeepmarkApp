@@ -454,7 +454,7 @@ around the link is ignored.
   link`) fills the hidden sync ID, `ServicePicker.select(url, true,
   probeCustom=true)`, keeps the key in memory bound to that service + ID
   (`key(url, id)`), and swaps the paste row for a summary card
-  (`<prefix>-share-summary`: host · short ID, `link.acquired`, `Change` =
+  (`<prefix>-share-summary`: host · short ID, `link.acquired`, `Use another link` (`link.change`; after a one-time redeem it asks first, `<prefix>-share-discard`) =
   `startOver()`). Name (last field, prefilled by `suggestLinkName` /
   `updateConnectName`: saved row's name, else one-time sender label, else host)
   and the popup direction appear only once keyed. Leaving `link` resets the

@@ -302,3 +302,42 @@ it('paste field: a wrong code keeps the link; a used-up link drops it', async ()
   expect(el('t-share-once').hidden).toBe(true);
   expect(field.key(payload.serviceUrl, payload.id)).toBeUndefined();
 });
+
+it('paste field: "Use another link" drops a lasting link at once', async () => {
+  const { field, id } = fieldFixture();
+  (el('t-share-link') as HTMLInputElement).value = vector;
+  el('t-share-link-use').click(); await settle();
+  expect(el('t-share-change').textContent).toBe(t('link.change'));
+  el('t-share-change').click(); await settle();
+  expect(el('t-share-discard').hidden).toBe(true);
+  expect(field.key(payload.serviceUrl, id.value)).toBeUndefined();
+  expect(el('t-share-summary').hidden).toBe(true);
+  expect(document.activeElement).toBe(el('t-share-link'));
+});
+
+it('paste field: a key from a one-time link is dropped only after a confirmation', async () => {
+  const redeem = vi.fn(async () => ({ serviceUrl: payload.serviceUrl, id: payload.id, key }));
+  const { field } = onceField(redeem);
+  (el('t-share-link') as HTMLInputElement).value = onceLink;
+  el('t-share-link-use').click(); await settle();
+  (el('t-share-code') as HTMLInputElement).value = '123456';
+  el('t-share-open').click(); await settle();
+  expect(field.key(payload.serviceUrl, payload.id)).toBe(key);
+  el('t-share-change').click(); await settle();
+  // Asks first: the link is used up and cannot bring the key back.
+  expect(el('t-share-discard').hidden).toBe(false);
+  expect(el('t-share-discard').textContent).toContain(t('link.onceDiscard'));
+  expect((el('t-share-change') as HTMLButtonElement).disabled).toBe(true);
+  expect(field.key(payload.serviceUrl, payload.id)).toBe(key);
+  el('t-share-discard-cancel').click(); await settle();
+  expect(el('t-share-discard').hidden).toBe(true);
+  expect((el('t-share-change') as HTMLButtonElement).disabled).toBe(false);
+  expect(field.key(payload.serviceUrl, payload.id)).toBe(key);
+  el('t-share-change').click(); await settle();
+  el('t-share-discard-yes').click(); await settle();
+  expect(field.key(payload.serviceUrl, payload.id)).toBeUndefined();
+  expect(el('t-share-discard').hidden).toBe(true);
+  expect(el('t-share-summary').hidden).toBe(true);
+  expect((el('t-share-change') as HTMLButtonElement).disabled).toBe(false);
+  expect(redeem).toHaveBeenCalledTimes(1);
+});
